@@ -1,0 +1,17 @@
+# Node.js
+node_modules/
+
+# Variables de Entorno y Secretos
+.env
+*.env
+
+# Archivos compilados de C++ / Arduino
+*.bin
+*.elf
+*.hex
+*.uf2
+build/
+
+# Logs y SO
+*.log
+.DS_Store
