@@ -39,6 +39,5 @@ Gracias a su diseño modular, basta con modificar el archivo de configuración e
 2. **Agroindustria:** Control de humedad de suelo y encendido automático de electroválvulas de riego.
 3. **Smart Pharma:** Alertas críticas en milisegundos para desviaciones térmicas en congeladores de vacunas.
 
----
 
 
