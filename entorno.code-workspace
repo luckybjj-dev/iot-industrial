@@ -1,0 +1,13 @@
+{
+  "folders": [
+    {
+      "name": "⚙️ 1. ESP32_EDGE (C++)",
+      "path": "edge_esp32"
+    },
+    {
+      "name": "🌐 2. BACKEND (Node.js)",
+      "path": "backend_node"
+    }
+  ],
+  "settings": {}
+}
