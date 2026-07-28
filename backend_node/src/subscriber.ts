@@ -1,184 +1,231 @@
 // ====================================================================
 // BACKEND NODE.JS - CEREBRO CENTRAL (PMV CÁMARA FUNGI)
 // ====================================================================
-import * as mqtt from 'mqtt'; // Importa la librería MQTT para Node.js (Actúa como radar TCP/IP)
-import { InfluxDB, Point } from '@influxdata/influxdb-client'; // Importa el inyector y el formato de datos para nuestra TSDB
-import * as dotenv from 'dotenv'; // Importa la caja fuerte para leer nuestras contraseñas ocultas
+import * as mqtt from 'mqtt'; // Importa la librería MQTT para Node.js
+import { InfluxDB, Point } from '@influxdata/influxdb-client';
+import * as dotenv from 'dotenv';
+import express, { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
 
 // --------------------------------------------------------------------
 // 1. CONFIGURACIÓN DE ENTORNO Y CREDENCIALES
 // --------------------------------------------------------------------
-dotenv.config(); // Carga en memoria las variables del archivo .env para no exponerlas en código plano
+dotenv.config();
 
-// Extraemos las credenciales desde el archivo secreto .env (Con valores por defecto como plan B)
-const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || 'mqtt://broker.hivemq.com';       // URL del broker MQTT (ej. HiveMQ, Mosquitto, etc.)
-const MQTT_TOPIC_TELEMETRIA = process.env.MQTT_TOPIC || 'proyecto_iot/edge/telemetria';  // Canal de telemetría donde el ESP32 publica sus datos de sensores y actuadores
-const MQTT_TOPIC_ESTADOS = process.env.MQTT_TOPIC_ESTADOS || 'proyecto_iot/edge/estado'; // Canal de estados donde el ESP32 publica su estado de salud
+const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || 'mqtt://broker.hivemq.com';
+const MQTT_TOPIC_WILDCARD = process.env.MQTT_TOPIC_WILDCARD || 'proyecto_iot/edge/#'; 
 
-// Extraemos las credenciales de InfluxDB desde el archivo secreto .env (Con valores por defecto como plan B)
-const INFLUX_URL = process.env.INFLUX_URL || '';        // URL de la bóveda InfluxDB (ej. https://us-east-1-1.aws.cloud2.influxdata.com) 
-const INFLUX_TOKEN = process.env.INFLUX_TOKEN || '';    // Token de acceso a la bóveda InfluxDB (ej. 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef)
-const INFLUX_ORG = process.env.INFLUX_ORG || '';        //  Nombre de la organización en InfluxDB (ej. mi_empresa)
-const INFLUX_BUCKET = process.env.INFLUX_BUCKET || '';  // Nombre del bucket (base de datos) en InfluxDB (ej. proyecto_iot)
+const INFLUX_URL = process.env.INFLUX_URL || '';
+const INFLUX_TOKEN = process.env.INFLUX_TOKEN || '';
+const INFLUX_ORG = process.env.INFLUX_ORG || '';
+const INFLUX_BUCKET = process.env.INFLUX_BUCKET || '';
+
+// 🚀 NUEVO: API Key para asegurar los endpoints de comandos
+const API_KEY_SECRETA = process.env.API_KEY || 'fungi_secreto_123';
 
 // --------------------------------------------------------------------
-// 2. BLINDAJE DE DATOS Y MEMORIA DE ESTADO (TIPADO ESTRICTO)
+// 2. BLINDAJE DE DATOS Y MEMORIA DE ESTADO (MULTICÁMARA)
 // --------------------------------------------------------------------
-// Interface crítica: Define la estructura exacta (Contrato) que debe tener el JSON del ESP32.
-// Si llega un dato distinto (ej: texto en lugar de número), TypeScript y el servidor lo rechazarán.
-interface TelemetriaFungi {     // Contrato de telemetría que el ESP32 debe cumplir
-    temp_ambiente: number;     // Temperatura general del aire en grados Celsius
-    humedad: number;           // Humedad relativa del aire en porcentaje
-    temp_sustrato: number;     // Termogénesis del micelio (Dato más crítico) en grados Celsius
-    humidificador_on: boolean; // Feedback del actuador: true = encendido, false = apagado
-    ventilador_on: boolean;    // Feedback del FAE: true = encendido, false = apagado
+interface TelemetriaFungi {
+    temp_ambiente: number;
+    humedad: number;
+    temp_sustrato: number;
+    humidificador_on: boolean;
+    ventilador_on: boolean;
 }
 
-// Memoria de estado volátil: Guarda el último estado conocido del ESP32 para mostrarlo en consola
-let estadoActualEdge = "DESCONOCIDO (Esperando actualización...)";
+// 🚀 NUEVO: Mapas para soportar N cantidad de Cámaras Fungi simultáneamente
+const estadosEdge = new Map<string, string>();
+const telemetriaRecibida = new Map<string, TelemetriaFungi>();
+const temporizadoresLatidos = new Map<string, NodeJS.Timeout>();
 
 // --------------------------------------------------------------------
 // 3. INICIALIZACIÓN DE LA BÓVEDA (INFLUXDB)
 // --------------------------------------------------------------------
-const influxDB = new InfluxDB({ url: INFLUX_URL, token: INFLUX_TOKEN }); // Abre la conexión con la base de datos
-const writeApi = influxDB.getWriteApi(INFLUX_ORG, INFLUX_BUCKET, 'ns'); // Prepara la tubería de escritura con precisión de nanosegundos
+const influxDB = new InfluxDB({ url: INFLUX_URL, token: INFLUX_TOKEN });
+const writeApi = influxDB.getWriteApi(INFLUX_ORG, INFLUX_BUCKET, 'ns');
+// 🚀 NUEVO: Optimizamos InfluxDB configurando el flush automático interno
+// No usaremos flush manual por cada mensaje para evitar cuellos de botella de red
 
 // --------------------------------------------------------------------
-// 4. SISTEMA DE ALARMA DE DESCONEXIÓN (HEARTBEAT & LWT)
+// 4. SISTEMA DE ALARMA DE DESCONEXIÓN (MULTICÁMARA)
 // --------------------------------------------------------------------
-let temporizadorLatidos: NodeJS.Timeout; // Variable global que guardará la cuenta regresiva
-const TIEMPO_MAXIMO_LATENCIA = 60000; // 60 segundos sin telemetría dispara la alarma crítica
+const TIEMPO_MAXIMO_LATENCIA = 60000;
 
-// Función de supervivencia: Se llama cada vez que llega un mensaje sano. Si el ESP32 se calla, el temporizador estalla.
-function reiniciarLatidos() {
-    clearTimeout(temporizadorLatidos); // Frena la bomba actual
-    temporizadorLatidos = setTimeout(() => { // Planta una nueva bomba de 60 segundos
-        // Actualizamos la memoria de estado directamente a alerta roja por latencia vencida
-        estadoActualEdge = "🔴 OFFLINE (Latidos Perdidos)";
-        
-        // Imprimimos el cambio de estado de manera inmediata en la terminal para total transparencia visual
+function reiniciarLatidos(deviceId: string) {
+    const timerActual = temporizadoresLatidos.get(deviceId);
+    if (timerActual) clearTimeout(timerActual);
+
+    const nuevoTimer = setTimeout(() => {
+        estadosEdge.set(deviceId, "🔴 OFFLINE (Latidos Perdidos)");
         console.log(`\n======================================================`);
-        console.log(`🚨 [ALERTA CRÍTICA NUBE] Pérdida de comunicación con el Nodo Edge.`);
-        console.log(`📡 ESTADO ACTUALIZADO: ${estadoActualEdge}`);
-        console.log(`⏱️ Han pasado más de 60 segundos sin recibir datos de la Cámara Fungi.`);
-        console.log(`⚠️ Posibles causas: Corte eléctrico, Failsafe fallido o ESP32 dañado.`);
+        console.log(`🚨 [ALERTA CRÍTICA] Pérdida de comunicación con el Nodo: ${deviceId}`);
+        console.log(`📡 ESTADO ACTUALIZADO: OFFLINE`);
         console.log(`======================================================\n`);
     }, TIEMPO_MAXIMO_LATENCIA);
+    
+    temporizadoresLatidos.set(deviceId, nuevoTimer);
 }
 
 // --------------------------------------------------------------------
-// 5. INICIALIZACIÓN DEL CLIENTE MQTT Y ENLACE DE RED
+// 5. INICIALIZACIÓN DE SERVIDOR EXPRESS Y CLIENTE MQTT
 // --------------------------------------------------------------------
-console.log('\n[SISTEMA] Iniciando Cerebro Central IoT Fungi...'); 
+console.log('\n[SISTEMA] Iniciando Cerebro Central IoT Fungi...');
 console.log(`[INFLUXDB] Bóveda detectada en: ${INFLUX_URL}`);
-const client = mqtt.connect(MQTT_BROKER_URL); // Dispara la solicitud de conexión asíncrona hacia HiveMQ
 
-// Callback que se dispara automáticamente cuando se logra el enlace de red
+const app = express();
+const PORT = 3000;
+app.use(cors());
+app.use(express.json());
+
+// Middleware de Autenticación para proteger las rutas críticas
+const apiKeyMiddleware = (req: Request, res: Response, next: NextFunction) => {
+    // Busca la API key en los headers o como parámetro en la URL
+    const key = req.headers['x-api-key'] || req.query.api_key;
+    if (key === API_KEY_SECRETA) {
+        next();
+    } else {
+        res.status(401).json({ error: 'No autorizado. API Key inválida.' });
+    }
+};
+
+const client = mqtt.connect(MQTT_BROKER_URL);
+
 client.on('connect', () => {
-    console.log('✅ [MQTT] Conexión exitosa al Broker en la Nube.'); 
-    
-    // El servidor Node se "suscribe" (sintoniza) a nuestros dos canales vitales
-    client.subscribe(MQTT_TOPIC_TELEMETRIA); // Sintoniza el canal de sensores
-    client.subscribe(MQTT_TOPIC_ESTADOS);    // Sintoniza el canal de estados y LWT
-    
-    console.log(`📡 [MQTT] Radares activos. Escuchando telemetría y estados...`);
-    reiniciarLatidos(); // Arranca el reloj de control de latidos por primera vez
+    console.log('✅ [MQTT] Conexión exitosa al Broker en la Nube.');
+    // 🚀 NUEVO: Nos suscribimos con un comodín (#) para escuchar a TODAS las cámaras dinámicamente
+    client.subscribe(MQTT_TOPIC_WILDCARD);
+    console.log(`📡 [MQTT] Radares activos escuchando en ${MQTT_TOPIC_WILDCARD}...`);
 });
 
 // --------------------------------------------------------------------
-// 6. MANEJO DE EVENTO: RECEPCIÓN DE PAQUETES (EL CORAZÓN DEL BACKEND)
+// 6. MANEJO DE EVENTO: RECEPCIÓN DE PAQUETES
 // --------------------------------------------------------------------
-client.on('message', (topic, message) => { // Se dispara milisegundos después de que el ESP32 publica algo
-    
-    // --- BLINDAJE INDUSTRIAL DE RED (NORMALIZACIÓN DE CADENAS) ---
-    const payloadCrudo = message.toString(); // Convierte los Bytes crudos a Texto Legible (String)
-    const payloadLimpio = payloadCrudo.trim(); // 1. Borra espacios, enter (\n) o retornos de carro (\r) invisibles
-    const payloadUpper = payloadLimpio.toUpperCase(); // 2. Convierte todo a MAYÚSCULAS para evitar errores de case-sensitivity
+client.on('message', (topic, message) => {
+    // Extracción dinámica de DeviceID del Topic 
+    // Formato esperado: proyecto_iot/edge/[DEVICE_ID]/telemetria
+    const partesTopic = topic.split('/');
+    let deviceId = "Camara_Legacy"; // Fallback por si la cámara tiene el firmware viejo
+    let tipoMensaje = "";
 
-    // ENRUTADOR DE ESTADOS: Alarmas, Failsafe, Modo Supervivencia o Last Will
-    if (topic === MQTT_TOPIC_ESTADOS) {
-        
-        // Evaluamos sobre la cadena normalizada. Detecta "OFFLINE", "RESCATE", "PERDIDA", etc.
+    if (partesTopic.length >= 4) {
+        deviceId = partesTopic[2];
+        tipoMensaje = partesTopic[3];
+    } else if (partesTopic.length === 3) {
+        tipoMensaje = partesTopic[2]; // Compatibilidad con Fase 1 (firmware antiguo)
+    } else {
+        return; // Ignorar tópicos desconocidos
+    }
+
+    const payloadCrudo = message.toString();
+    const payloadLimpio = payloadCrudo.trim();
+    const payloadUpper = payloadLimpio.toUpperCase();
+
+    // ENRUTADOR DE ESTADOS
+    if (tipoMensaje === "estado") {
         const esAlerta = payloadUpper.includes("OFFLINE") || payloadUpper.includes("RESCATE") || payloadUpper.includes("PERDIDA");
-
-        if (esAlerta) {
-            estadoActualEdge = `🔴 ${payloadLimpio}`; // Forzamos formato rojo para fallos
-            console.log(`\n======================================================`);
-            console.log(`🚨 [ALERTA ESTADO EDGE] -> El equipo reporta anomalía: ${payloadLimpio}`);
-            console.log(`📡 ESTADO ACTUALIZADO: ${estadoActualEdge}`);
-            console.log(`======================================================\n`);
-        } else {
-            estadoActualEdge = `🟢 ${payloadLimpio}`; // Si es un mensaje sano (ej. ONLINE), va en verde
-            console.log(`\n======================================================`);
-            console.log(`🔄 [NUEVO EVENTO EDGE] -> El equipo reporta: ${payloadLimpio}`); 
-            console.log(`📡 ESTADO ACTUALIZADO: ${estadoActualEdge}`);
-            console.log(`======================================================\n`);
-        }
+        const estadoFinal = esAlerta ? `🔴 ${payloadLimpio}` : `🟢 ${payloadLimpio}`;
+        
+        estadosEdge.set(deviceId, estadoFinal);
+        console.log(`\n🔄 [ESTADO EDGE - ${deviceId}] -> ${estadoFinal}`);
     } 
-    // ENRUTADOR DE TELEMETRÍA: Sensores y Actuadores en tiempo real
-    else if (topic === MQTT_TOPIC_TELEMETRIA) {
-        try { // Bloque Try-Catch: Previene que el servidor colapse si llega basura por mal internet
-            reiniciarLatidos(); // ¡El ESP32 sigue vivo! Reiniciamos la cuenta regresiva del Watchdog
+    // ENRUTADOR DE TELEMETRÍA
+    else if (tipoMensaje === "telemetria") {
+        try {
+            reiniciarLatidos(deviceId); // Reinicia el watchdog solo para ESTA cámara
             
-            // --- AUTO-SANACIÓN DE ESTADO ---
-            // Si la memoria quedó en OFFLINE por una falsa alarma pero llegan datos reales, nos recuperamos a ONLINE.
-            if (estadoActualEdge.includes("OFFLINE")) {
-                estadoActualEdge = "🟢 ONLINE (Auto-Recuperado por Telemetría)";
+            const estadoActual = estadosEdge.get(deviceId) || "";
+            if (estadoActual.includes("OFFLINE")) {
+                estadosEdge.set(deviceId, "🟢 ONLINE (Auto-Recuperado por Telemetría)");
+                console.log(`\n======================================================`);
+                console.log(`✅ [RECUPERACIÓN] El nodo ${deviceId} ha vuelto a enviar datos.`);
+                console.log(`📡 ESTADO ACTUALIZADO: 🟢 ONLINE (Auto-Recuperado)`);
+                console.log(`======================================================\n`);
             }
 
-            // Desempaqueta el JSON limpio y lo fuerza a cumplir con el contrato TelemetriaFungi
             const datos: TelemetriaFungi = JSON.parse(payloadLimpio);
+            telemetriaRecibida.set(deviceId, datos);
             
-            // IMPRESIÓN DEL ESTADO EN MEMORIA EN CADA LECTURA
-            console.log(`\n[NUBE] 📦 Nuevo paquete recibido | 📡 ESTADO DE RED: ${estadoActualEdge}`);
-            
-            // RENDERIZADO VISUAL (Ergonomía de Depuración para el Desarrollador)
-            console.log(`  🌡️  Temp Ambiente: ${datos.temp_ambiente.toFixed(1)} °C`); 
-            console.log(`  💧  Humedad:       ${datos.humedad.toFixed(1)} %`);
-            console.log(`  🍄  Temp Sustrato: ${datos.temp_sustrato.toFixed(1)} °C`); 
-            
-            const estadoHum = datos.humidificador_on ? 'ON' : 'OFF';
-            const estadoVen = datos.ventilador_on ? 'ON' : 'OFF';
-            console.log(`  ⚙️  Actuadores:    Humidificador [${estadoHum}] | Ventilador FAE [${estadoVen}]`);
+            console.log(`📦 [TELEMETRÍA - ${deviceId}] Temp: ${datos.temp_ambiente.toFixed(1)}°C | Sus: ${datos.temp_sustrato.toFixed(1)}°C | Hum: ${datos.humedad.toFixed(1)}%`);
 
-            // --- INYECCIÓN EN INFLUXDB ---
-            // Creamos un punto de telemetría con la estructura que InfluxDB espera. Cada campo es un dato que queremos guardar.
-            // 1. Preparamos el paquedte de datos con la clase Point. 2. Lo enviamos a la bóveda con writeApi.writePoint(). 3. Forzamos a Influx a vaciar su buffer con writeApi.flush().   
-            const puntoMetrica = new Point('fructificacion_01') // Nombre de la medición (measurement) en InfluxDB
-                .floatField('temperatura_ambiente', datos.temp_ambiente) // Este dato viene del ESP32 y es un número decimal    
-                .floatField('humedad_relativa', datos.humedad) // Este dato viene del ESP32 y es un número decimal la humedad relativa
-                .floatField('temperatura_sustrato', datos.temp_sustrato)    // Temperatura del micelio (dato crítico) en grados Celsius
-                .booleanField('estado_humidificador', datos.humidificador_on)   // estado del actuador: true = encendido, false = apagado
-                .booleanField('estado_ventilador', datos.ventilador_on);    // Estado del FAE: true = encendido, false = apagado. Ventilador de aire forzado para control de CO2 y humedad
+            // INYECCIÓN EN INFLUXDB
+            const puntoMetrica = new Point('fructificacion_01')
+                .tag('dispositivo', deviceId) // Agregamos la etiqueta multicámara a la BD
+                .floatField('temperatura_ambiente', datos.temp_ambiente)
+                .floatField('humedad_relativa', datos.humedad)
+                .floatField('temperatura_sustrato', datos.temp_sustrato)
+                .booleanField('estado_humidificador', datos.humidificador_on)
+                .booleanField('estado_ventilador', datos.ventilador_on);
 
-            // 2. Metemos la carta en el buzón interno de Node.js
-            writeApi.writePoint(puntoMetrica);  // Enviamos el paquete a la bóveda de InfluxDB (buffer interno)
-            // 3. ¡EL LÁTIGO! Le ordenamos a Node.js que envíe la carta AHORA MISMO por internet y que InfluxDB la guarde en disco de manera inmediata. Si falla, lo atrapamos con un catch.
-            writeApi.flush()                    // Forzamos a InfluxDB a vaciar su buffer y guardar los datos en disco de manera inmediata
-                .then(() => {                   // Promesa resuelta: InfluxDB aceptó el paquete y lo guardó en disco
-                    console.log(`  💾  [INFLUXDB] Datos guardados exitosamente en la bóveda.`); // Mensaje de confirmación
-                })
-                .catch(error => {               // Promesa rechazada: InfluxDB rechazó el paquete por algún motivo (ej. token inválido, bucket inexistente, etc.)
-                    console.error(`\n❌ [INFLUXDB ERROR] InfluxDB rechazó el paquete: ${error.message}\n`);
-                });
+            writeApi.writePoint(puntoMetrica); 
+            // 🚀 ELIMINADO: writeApi.flush(). Dejamos que Influx agrupe los datos (Batching) para mayor rendimiento.
 
-        } catch (error) { // Atrapa la excepción si el paquete llegó corrupto o no es un JSON válido
-            console.error('\n❌ [ERROR] Paquete corrupto o no es JSON válido:', payloadCrudo);
+        } catch (error) {
+            console.error(`❌ [ERROR ${deviceId}] JSON inválido:`, payloadCrudo);
         }
     }
 });
 
 // --------------------------------------------------------------------
-// 7. MANEJO DE EVENTOS: ERRORES Y APAGADO SEGURO
+// 7. RUTAS DE LA API REST (PUENTE HACIA REACT)
 // --------------------------------------------------------------------
-client.on('error', (error) => {     // Se dispara si hay un fallo crítico de conexión al broker MQTT
+
+app.get('/api/health', (req: Request, res: Response) => {
+    res.json({
+        estado: 'OK',
+        mensaje: 'Cerebro Central Fungi operativo (Arquitectura Multicámara).',
+        dispositivos_conectados: estadosEdge.size
+    });
+});
+
+app.get('/api/cultivo/estado', (req: Request, res: Response) => {
+    // 🚀 NUEVO: Mapeamos el diccionario a un Array para que React pueda hacer render de cada cámara
+    const dispositivos = Array.from(telemetriaRecibida.entries()).map(([id, datos]) => ({
+        id,
+        conexion: estadosEdge.get(id) || "DESCONOCIDO",
+        datos_actuales: datos
+    }));
+
+    res.json({ dispositivos });
+});
+
+// Ruta protegida por API KEY (Middleware en acción)
+app.post('/api/cultivo/modo', apiKeyMiddleware, (req: Request, res: Response) => {
+    const { nuevoModo, deviceId } = req.body;
+    
+    if (!nuevoModo || !deviceId) {
+        return res.status(400).json({ error: 'Faltan parámetros obligatorios (nuevoModo, deviceId)' });
+    }
+
+    const payloadComando = JSON.stringify({ comando: 'set_modo', valor: nuevoModo });
+    const topicoEspecifico = `proyecto_iot/edge/${deviceId}/comandos`; // Mandamos la orden solo a la cámara seleccionada
+    
+    client.publish(topicoEspecifico, payloadComando, (err) => {
+        if (err) {
+            console.error(`❌ [API] Error MQTT a ${deviceId}`, err);
+            return res.status(500).json({ error: 'Falla al enviar comando MQTT al hardware' });
+        }
+        console.log(`🚀 [API] Comando enviado a ${deviceId}: MODO = ${nuevoModo}`);
+        res.json({ mensaje: `Orden explícita '${nuevoModo}' enviada a ${deviceId} exitosamente.` });
+    });
+});
+
+// --------------------------------------------------------------------
+// 8. ARRANQUE DEL SERVIDOR Y APAGADO SEGURO
+// --------------------------------------------------------------------
+
+const server = app.listen(PORT, () => {
+    console.log(`🚀 [API REST] Motor Express encendido. Escuchando peticiones web en http://localhost:${PORT}`);
+});
+
+client.on('error', (error) => {
     console.error('❌ [MQTT ERROR] Fallo crítico de conexión al broker:', error);
 });
 
-// Cierre elegante: Captura cuando oprimimos Ctrl+C para detener el servidor Node
-process.on('SIGINT', async () => {      //
-    console.log('\n[SISTEMA] Apagando Cerebro Central... Guardando últimos datos en InfluxDB...');
-    await writeApi.close(); // Fuerza a Influx a vaciar su buffer y guardar lo que falte
-    client.end(); // Desconecta el cliente MQTT
-    process.exit(0); // Mata el proceso limpiamente
+process.on('SIGINT', async () => {      
+    console.log('\n[SISTEMA] Apagando Cerebro Central... Forzando Flush Final en InfluxDB...');
+    await writeApi.close(); // Aquí sí usamos close/flush para no perder datos cacheados al apagar
+    client.end();
+    server.close();
+    process.exit(0);
 });

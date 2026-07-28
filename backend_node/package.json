@@ -18,6 +18,8 @@
     "mqtt": "^5.15.2"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/mqtt": "^0.0.34",
     "@types/node": "^26.1.1",
     "ts-node": "^10.9.2",

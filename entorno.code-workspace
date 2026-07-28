@@ -7,7 +7,17 @@
     {
       "name": "🌐 2. BACKEND (Node.js)",
       "path": "backend_node"
+    },
+    {
+      "name": "🎨 3. Interfaz Gráfica (React - Frontend)",
+      "path": "frontend_react"
     }
   ],
-  "settings": {}
+  "settings": {
+    // Configuraciones globales para evitar colisiones de linter entre entornos
+    "typescript.suggest.completeFunctionCalls": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit"
+    }
+  }
 }
