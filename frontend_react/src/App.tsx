@@ -66,27 +66,44 @@ function App() {
 
               {camara.telemetria ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <MetricCard
-                    title="Temp. Ambiente"
-                    value={camara.telemetria.temp_ambiente.toFixed(1)}
-                    unit="°C"
-                    icon={Thermometer}
-                    colorClass="text-amber-400"
-                  />
-                  <MetricCard
-                    title="Temp. Sustrato"
-                    value={camara.telemetria.temp_sustrato.toFixed(1)}
-                    unit="°C"
-                    icon={Leaf}
-                    colorClass="text-emerald-400"
-                  />
-                  <MetricCard
-                    title="Humedad Relativa"
-                    value={camara.telemetria.humedad.toFixed(1)}
-                    unit="%"
-                    icon={Droplets}
-                    colorClass="text-cyan-400"
-                  />
+                  {camara.telemetria.dht_ok ? (
+                    <>
+                      <MetricCard
+                        title="Temp. Ambiente"
+                        value={camara.telemetria.temp_ambiente?.toFixed(1) || '0.0'}
+                        unit="°C"
+                        icon={Thermometer}
+                        colorClass="text-amber-400"
+                      />
+                      <MetricCard
+                        title="Humedad Relativa"
+                        value={camara.telemetria.humedad?.toFixed(1) || '0.0'}
+                        unit="%"
+                        icon={Droplets}
+                        colorClass="text-cyan-400"
+                      />
+                    </>
+                  ) : (
+                    <div className="col-span-1 md:col-span-2 bg-red-500/10 border border-red-500/50 text-red-400 px-6 py-4 rounded-xl flex items-center space-x-3 justify-center h-full">
+                      <Activity size={24} />
+                      <span className="font-semibold text-lg">⚠️ DHT22 Desconectado</span>
+                    </div>
+                  )}
+
+                  {camara.telemetria.ntc_ok ? (
+                    <MetricCard
+                      title="Temp. Sustrato"
+                      value={camara.telemetria.temp_sustrato?.toFixed(1) || '0.0'}
+                      unit="°C"
+                      icon={Leaf}
+                      colorClass="text-emerald-400"
+                    />
+                  ) : (
+                    <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-6 py-4 rounded-xl flex items-center space-x-3 justify-center h-full">
+                      <Activity size={24} />
+                      <span className="font-semibold text-lg">⚠️ Sonda NTC Desconectada</span>
+                    </div>
+                  )}
                   
                   <div className="glass-card flex flex-col justify-center space-y-4">
                     <div className="flex items-center justify-between">
@@ -99,6 +116,12 @@ function App() {
                       <span className="text-neutral-400 text-sm font-medium uppercase">Ventilador</span>
                       <span className={`px-3 py-1 rounded-full text-xs font-bold ${camara.telemetria.ventilador_on ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-neutral-500'}`}>
                         {camara.telemetria.ventilador_on ? 'ON' : 'OFF'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-neutral-400 text-sm font-medium uppercase">Manta Calef.</span>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${camara.telemetria.manta_on ? 'bg-amber-500/20 text-amber-400' : 'bg-white/5 text-neutral-500'}`}>
+                        {camara.telemetria.manta_on ? 'ON' : 'OFF'}
                       </span>
                     </div>
                   </div>

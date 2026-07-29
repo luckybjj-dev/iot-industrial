@@ -27,11 +27,14 @@ const API_KEY_SECRETA = process.env.API_KEY || 'fungi_secreto_123';
 // 2. BLINDAJE DE DATOS Y MEMORIA DE ESTADO (MULTICÁMARA)
 // --------------------------------------------------------------------
 interface TelemetriaFungi {
-    temp_ambiente: number;
-    humedad: number;
-    temp_sustrato: number;
+    temp_ambiente: number | null;
+    humedad: number | null;
+    temp_sustrato: number | null;
     humidificador_on: boolean;
     ventilador_on: boolean;
+    manta_on: boolean;
+    dht_ok: boolean;
+    ntc_ok: boolean;
 }
 
 // 🚀 NUEVO: Mapas para soportar N cantidad de Cámaras Fungi simultáneamente
@@ -146,16 +149,26 @@ client.on('message', (topic, message) => {
             const datos: TelemetriaFungi = JSON.parse(payloadLimpio);
             telemetriaRecibida.set(deviceId, datos);
             
-            console.log(`📦 [TELEMETRÍA - ${deviceId}] Temp: ${datos.temp_ambiente.toFixed(1)}°C | Sus: ${datos.temp_sustrato.toFixed(1)}°C | Hum: ${datos.humedad.toFixed(1)}%`);
+            const tempAmb = datos.temp_ambiente !== null ? `${datos.temp_ambiente.toFixed(1)}°C` : 'N/A';
+            const tempSus = datos.temp_sustrato !== null ? `${datos.temp_sustrato.toFixed(1)}°C` : 'N/A';
+            const hum = datos.humedad !== null ? `${datos.humedad.toFixed(1)}%` : 'N/A';
+            
+            console.log(`📦 [TELEMETRÍA - ${deviceId}] Temp: ${tempAmb} | Sus: ${tempSus} | Hum: ${hum}`);
 
             // INYECCIÓN EN INFLUXDB
             const puntoMetrica = new Point('fructificacion_01')
                 .tag('dispositivo', deviceId) // Agregamos la etiqueta multicámara a la BD
-                .floatField('temperatura_ambiente', datos.temp_ambiente)
-                .floatField('humedad_relativa', datos.humedad)
-                .floatField('temperatura_sustrato', datos.temp_sustrato)
                 .booleanField('estado_humidificador', datos.humidificador_on)
-                .booleanField('estado_ventilador', datos.ventilador_on);
+                .booleanField('estado_ventilador', datos.ventilador_on)
+                .booleanField('estado_manta', datos.manta_on);
+
+            if (datos.temp_ambiente !== null && datos.humedad !== null) {
+                puntoMetrica.floatField('temperatura_ambiente', datos.temp_ambiente);
+                puntoMetrica.floatField('humedad_relativa', datos.humedad);
+            }
+            if (datos.temp_sustrato !== null) {
+                puntoMetrica.floatField('temperatura_sustrato', datos.temp_sustrato);
+            }
 
             writeApi.writePoint(puntoMetrica); 
             // 🚀 ELIMINADO: writeApi.flush(). Dejamos que Influx agrupe los datos (Batching) para mayor rendimiento.
@@ -213,6 +226,12 @@ app.post('/api/cultivo/modo', apiKeyMiddleware, (req: Request, res: Response) =>
 // --------------------------------------------------------------------
 // 8. ARRANQUE DEL SERVIDOR Y APAGADO SEGURO
 // --------------------------------------------------------------------
+
+setInterval(() => {
+    if (client.connected) {
+        client.publish('proyecto_iot/servidor/latido', JSON.stringify({ status: 'alive' }));
+    }
+}, 10000);
 
 const server = app.listen(PORT, () => {
     console.log(`🚀 [API REST] Motor Express encendido. Escuchando peticiones web en http://localhost:${PORT}`);
