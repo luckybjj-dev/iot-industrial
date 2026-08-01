@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Untitled Document.md</title>
+  <style>
+  @import url("https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.9.0-alpha2/katex.min.css");
+
+  body {
+    font-family: Georgia, Cambria, serif;
+    font-size: 14px;
+    line-height: 1.7;
+    color: #373D49;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Source Sans Pro", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 600;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+  }
+  h1 { font-size: 2em; }
+  h2 { font-size: 1.5em; }
+  h3 { font-size: 1.25em; }
+  a { color: #35D7BB; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    font-family: "Ubuntu Mono", Monaco, monospace;
+    background: #F5F7FA;
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+  }
+  pre {
+    background: #F5F7FA;
+    padding: 1em;
+    border-radius: 3px;
+    overflow-x: auto;
+  }
+  .hljs {
+    display: block;
+    overflow-x: auto;
+    padding: 0;
+    color: #333;
+  }
+  pre code { background: none; padding: 0; }
+  blockquote {
+    border-left: 3px solid #A0AABF;
+    padding-left: 1em;
+    margin-left: 0;
+    font-style: italic;
+    color: #666;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  th, td {
+    border: 1px solid #E8E8E8;
+    padding: 0.5em;
+    text-align: left;
+  }
+  th {
+    background: #F5F7FA;
+    font-weight: 600;
+  }
+  #preview .table {
+    width: auto;
+  }
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+  .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+</style>
+</head>
+<body id="preview">
+<h1 class="code-line has-line-data" data-line-start="0" data-line-end="1"><a id="Informe_Tcnico_de_Avance_Hardware_Backend_y_Base_de_Datos_Fases_0_a_4_0"></a>📄 Informe Técnico de Avance: Hardware, Backend y Base de Datos (Fases 0 a 4)</h1>
+<p class="has-line-data" data-line-start="2" data-line-end="4"><strong>Proyecto:</strong> Sistema de Monitoreo Predictivo Industrial (Correa Transportadora)<br>
+<strong>Estado del Pipeline:</strong> 100% Operativo (Edge ➡️ Nube ➡️ API)</p>
+<h2 class="code-line has-line-data" data-line-start="5" data-line-end="6"><a id="Fase_0_Prerrequisitos_y_Configuracin_Crtica_del_Entorno_WiFi_5"></a>Fase 0: Prerrequisitos y Configuración Crítica del Entorno (WiFi)</h2>
+<p class="has-line-data" data-line-start="7" data-line-end="8">Antes de iniciar el desarrollo en C++ para el microcontrolador, se configuró el entorno de Arduino IDE para soportar la arquitectura ESP32.</p>
+<p class="has-line-data" data-line-start="9" data-line-end="11"><strong>Detalle Técnico de la Librería WiFi:</strong><br>
+Es un error común en la industria intentar descargar librerías externas llamadas “WiFi” (como WiFiNINA), lo cual genera conflictos de compilación. Para el ESP32, la librería <code>WiFi.h</code> es <strong>nativa y viene incrustada</strong> en el paquete base del fabricante (Espressif).</p>
+<ul>
+<li class="has-line-data" data-line-start="12" data-line-end="13"><strong>Paso 1:</strong> Se agregó el repositorio oficial (<code>https://dl.espressif.com/dl/package_esp32_index.json</code>) en las Preferencias del IDE.</li>
+<li class="has-line-data" data-line-start="13" data-line-end="14"><strong>Paso 2:</strong> Se descargó el Core “esp32 by Espressif Systems” desde el Gestor de Tarjetas.</li>
+<li class="has-line-data" data-line-start="14" data-line-end="16"><strong>Paso 3:</strong> Al compilar, la directiva <code>#include &lt;WiFi.h&gt;</code> localiza automáticamente los archivos de red ocultos en el Core, garantizando una conexión estable sin dependencias de terceros.</li>
+</ul>
+<h2 class="code-line has-line-data" data-line-start="16" data-line-end="17"><a id="Fase_1_Implementacin_de_Hardware_Real_El_Edge_16"></a>Fase 1: Implementación de Hardware Real (El Edge)</h2>
+<p class="has-line-data" data-line-start="18" data-line-end="19">Se abandonó la simulación de datos para dar paso a la adquisición física. Se realizó una auditoría de la placa <strong>WeMos D1 R32</strong>, descubriendo que su serigrafía utiliza la nomenclatura real de los GPIO del chip en lugar de las etiquetas genéricas de Arduino (“D1, D2…”).</p>
+<p class="has-line-data" data-line-start="20" data-line-end="21"><strong>Tabla de Conexiones Físicas:</strong></p>
+<table class="table table-striped table-bordered">
+<thead>
+<tr>
+<th>Componente Físico</th>
+<th>Función en el Monitoreo</th>
+<th>Pin en Placa</th>
+<th>GPIO Código</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Sensor DHT22</strong></td>
+<td>Lectura de temperatura y humedad ambiental del motor</td>
+<td><code>IO27</code></td>
+<td>27</td>
+</tr>
+<tr>
+<td><strong>Sensor KY-002</strong></td>
+<td>Detección binaria de choques o vibraciones anómalas</td>
+<td><code>IO25</code></td>
+<td>25</td>
+</tr>
+<tr>
+<td><strong>Alimentación</strong></td>
+<td>Voltaje lógico para los sensores (No usar 5V)</td>
+<td><code>3V3</code> / <code>GND</code></td>
+<td>N/A</td>
+</tr>
+</tbody>
+</table>
+<h2 class="code-line has-line-data" data-line-start="28" data-line-end="29"><a id="Fase_2_Construccin_del_Backend_Nodejs_y_MQTT_28"></a>Fase 2: Construcción del Backend (Node.js y MQTT)</h2>
+<p class="has-line-data" data-line-start="30" data-line-end="31">Se desarrolló un servidor en Node.js que actúa como el “cerebro central” de recepción de datos.</p>
+<ul>
+<li class="has-line-data" data-line-start="32" data-line-end="33"><strong>Suscriptor MQTT:</strong> Se creó el script <code>subscriber.js</code> que escucha activamente el tópico <code>planta/correa_1/telemetria</code> a través del broker HiveMQ.</li>
+<li class="has-line-data" data-line-start="33" data-line-end="35"><strong>Ciberseguridad Básica:</strong> Se implementó la librería <code>dotenv</code> para ocultar las credenciales, URLs y tokens dentro de un archivo <code>.env</code>, asegurando que información sensible nunca se exponga en el código fuente.</li>
+</ul>
+<h2 class="code-line has-line-data" data-line-start="35" data-line-end="36"><a id="Fase_3_Persistencia_en_Base_de_Datos_InfluxDB_Cloud_35"></a>Fase 3: Persistencia en Base de Datos (InfluxDB Cloud)</h2>
+<p class="has-line-data" data-line-start="37" data-line-end="38">Dado el alto volumen de datos del IoT Industrial (Time-Series Data), se descartaron las bases de datos relacionales tradicionales a favor de <strong>InfluxDB Cloud</strong>.</p>
+<ul>
+<li class="has-line-data" data-line-start="39" data-line-end="40"><strong>Configuración:</strong> Se creó el bucket <code>correa_transportadora</code> y se generó un <em>All Access API Token</em> para permitir la escritura remota.</li>
+<li class="has-line-data" data-line-start="40" data-line-end="41"><strong>Ingesta de Datos:</strong> El archivo <code>subscriber.js</code> fue modificado para formatear la información recibida vía MQTT en “Puntos” (Points) e inyectarla a la nube.</li>
+<li class="has-line-data" data-line-start="41" data-line-end="43"><strong>Validación:</strong> Se comprobó exitosamente la llegada de los datos reales observando la generación de gráficas en vivo mediante el <em>Data Explorer</em> nativo de InfluxDB.</li>
+</ul>
+<h2 class="code-line has-line-data" data-line-start="43" data-line-end="44"><a id="Fase_4_Despliegue_de_la_API_REST_Segura_Express_43"></a>Fase 4: Despliegue de la API REST Segura (Express)</h2>
+<p class="has-line-data" data-line-start="45" data-line-end="46">Para que el futuro panel de control (Dashboard) pueda acceder a los datos sin tener las contraseñas de la base de datos, se construyó una API REST intermediaria.</p>
+<ul>
+<li class="has-line-data" data-line-start="47" data-line-end="48"><strong>Tecnologías:</strong> Se utilizó el framework <strong>Express</strong> para el servidor web y <strong>CORS</strong> para permitir peticiones cruzadas de forma segura.</li>
+<li class="has-line-data" data-line-start="48" data-line-end="49"><strong>Endpoint Principal:</strong> Se habilitó la ruta <code>http://localhost:3001/api/telemetria</code>.</li>
+<li class="has-line-data" data-line-start="49" data-line-end="51"><strong>Lógica de Consulta:</strong> El servidor Node.js ejecuta una consulta en lenguaje <strong>Flux</strong>, extrayendo el historial de la última hora (<code>-1h</code>) y formateándolo en un Array JSON limpio y listo para ser consumido por el Frontend.</li>
+</ul>
+<blockquote>
+<p class="has-line-data" data-line-start="51" data-line-end="52"><strong>Resumen Arquitectónico Logrado:</strong> &gt; Hardware Físico ➡️ Microcontrolador ESP32 ➡️ Wi-Fi ➡️ Broker MQTT ➡️ Backend Node.js ➡️ Base de Datos InfluxDB ➡️ API REST.</p>
+</blockquote>
+<hr>
+<p class="has-line-data" data-line-start="55" data-line-end="56">¡Disfruta tu comida! Cuando vuelvas, este documento estará aquí listo para ti, y nosotros estaremos listos para comenzar con la <strong>Fase 5: Frontend con React</strong>. Empezaremos a construir la parte visual e interactiva de tu planta. ¡Nos vemos a la vuelta!</p>
+
+</body>
+</html>
