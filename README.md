@@ -1,43 +1,56 @@
-# 🏭 Motor Core IoT Industrial (SCADA Predictivo B2B)
+# 🍄 Cámara Fungi Inteligente (Motor Core IoT Industrial 2.0)
 
 ## 📌 Descripción General
+Este repositorio contiene la arquitectura base de un **Sistema de Monitoreo Predictivo y Control Industrial basado en Internet de las Cosas (IoT)**. 
 
-Este repositorio contiene la arquitectura base (Core) de un Sistema de Monitoreo Predictivo y Control Industrial basado en Internet de las Cosas (IoT). Diseñado bajo el paradigma de **Edge Computing** y **Microservicios**, este motor es completamente agnóstico y escalable, permitiendo su despliegue rápido en diversos nichos de negocio como Minería (monitoreo de correas transportadoras), Agroindustria (invernaderos de alto rendimiento) o Logística (cadena de frío).
+Originalmente concebido como un SCADA B2B genérico para entornos industriales severos, el proyecto ha pivotado mediante la metodología **Lean Startup** hacia su primer **Producto Mínimo Viable (PMV): La Automatización de Cultivos Fungi (AgroTech)**. 
 
-A diferencia de los prototipos tradicionales, este sistema no es un simple "lector de sensores". Cuenta con un lazo de control cerrado bidireccional, actualizaciones inalámbricas, y un **Instinto de Supervivencia (Failsafe Mode)** que garantiza la integridad del proceso físico incluso si la infraestructura de red o la nube colapsan.
+A pesar de este enfoque de nicho para salir al mercado rápido, el sistema conserva un núcleo **Agnóstico y Modular (OOP)**. La placa no tiene reglas biológicas "quemadas" (hardcodeadas) en el firmware, sino que es impulsada por un Motor de Reglas dinámico (`config.json`).
 
-## 🚀 Características Críticas (Nivel Empresarial)
+### 🎓 Enfoque Educativo
+Todo el código fuente en C++ (ubicado en `edge_esp32/src/`) ha sido **documentado exhaustivamente con fines educativos**. Cada clase, método y decisión arquitectónica (como la inyección de dependencias y el uso de FreeRTOS) cuenta con bloques de comentarios detallados en español. Esto facilita el estudio, la comprensión y la escalabilidad del sistema para nuevos desarrolladores.
 
-* **🧠 Arquitectura Failsafe (Edge Computing):** El microcontrolador evalúa constantemente la salud de la red. Ante una caída del servidor central o pérdida de Wi-Fi, el sistema entra asíncronamente en "Modo Supervivencia Local", ejecutando reglas de rescate pregrabadas sobre los actuadores físicos sin intervención humana.
-* **☁️ Actualizaciones OTA (Over The Air):** Mantenimiento y reprogramación remota sin intervención de cables. La lógica de negocio en el Edge puede ser actualizada a kilómetros de distancia mediante el firmware inalámbrico.
-* **📡 Comunicación Desacoplada Bidireccional:** Uso del protocolo MQTT ligero para garantizar el flujo en tiempo real de telemetría hacia la nube, y la recepción de comandos remotos hacia los relés de estado sólido.
-* **⚙️ Lógica Asíncrona (No Bloqueante):** El código C++ en el Edge evita los cuellos de botella. El procesador escanea el entorno, maneja interrupciones y reconecta servicios caídos en hilos separados sin "congelar" la medición crítica.
+## 🚀 Filosofía de Diseño: El Master Roadmap
 
-## 🛠️ Stack Tecnológico
+El desarrollo de este producto sigue 3 pasos innegociables para alcanzar el nivel de mercado comercial:
 
-**Capa Edge (Dispositivo Físico):**
+### 1. Portal Cautivo (Plug & Play)
+Se eliminan las credenciales Wi-Fi fijas. El ESP32 arranca como su propio Punto de Acceso (AP) y ofrece un portal web asíncrono para que el cliente final introduzca su red local. Cero fricción para el usuario.
 
-* **Hardware:** ESP32 (Wemos D1 R32).
-* **Lenguaje:** C++ (Orientado a eventos y manejo de JSON en memoria).
-* **Protocolos:** Wi-Fi (2.4 GHz), MQTT, SPI (HMI Local).
+### 2. Motor Agnóstico (`config.json` en LittleFS)
+El ESP32 opera mediante un archivo de configuración universal que reside en su memoria interna. Este archivo determina el perfil de funcionamiento (ej. `FUNGI`, `INVERNADERO`, `REPOSO`) y los umbrales precisos de temperatura, humedad y CO2. Si el cultivo cambia, solo se inyecta un nuevo JSON; no hay necesidad de compilar código C++.
 
-**Capa Backend (Motor Lógico):**
+### 3. Integración Directa a Firebase (El Dashboard Innegociable)
+Dejando atrás arquitecturas puente como Node.js + InfluxDB + MQTT, el Edge node (ESP32) se conecta directamente a **Firebase (Realtime Database)**. Esto garantiza la alimentación fluida del Dashboard en React, permitiendo al cliente monitorear y controlar su cultivo desde cualquier parte del mundo.
 
-* **Entorno:** Node.js (JavaScript/TypeScript).
-* **Broker:** HiveMQ (Transporte IoT).
-* **Base de Datos:** InfluxDB (Base de datos de series temporales de alto rendimiento).
+---
 
-**Capa Frontend (Visualización):**
+## 🛠️ Stack Tecnológico (V2.0)
 
-* **Framework:** React + Vite (Dashboard gerencial dinámico). *(En desarrollo)*
+**Capa Edge (Dispositivo Físico - C++ / PlatformIO):**
+*   **Hardware:** WeMos D1 R32 (Cerebro ESP32).
+*   **Sensores:** DHT22 (Clima), NTC 10K / DS18B20 (Temperatura Núcleo), MH-Z19 (CO2 - *Future Proofing*).
+*   **Actuadores:** Módulos de relés estándar 3.3V (Lógica Directa) controlando ventiladores 12V, humidificadores ultrasónicos, calefactores y luces (fotoperiodo).
+*   **Lógica:** Programación Orientada a Objetos (OOP), FSM, Archivos LittleFS.
+*   **Protecciones:** Gatillos Térmicos Autónomos (Failsafe) y temporizadores de extracción asíncronos en caso de pérdida de conexión.
 
-## 💼 Casos de Uso (Marca Blanca)
+**Capa Cloud & Frontend (Dashboard):**
+*   **Base de Datos:** Firebase Realtime Database.
+*   **Frontend:** React + Vite + TailwindCSS.
 
-Gracias a su diseño modular, basta con modificar el archivo de configuración en el Backend para adaptar el sistema a cualquier industria:
+---
 
-1. **Minería:** Umbrales de vibración (SW-420) y temperatura para predecir fallas en motores eléctricos.
-2. **Agroindustria:** Control de humedad de suelo y encendido automático de electroválvulas de riego.
-3. **Smart Pharma:** Alertas críticas en milisegundos para desviaciones térmicas en congeladores de vacunas.
+## 🖥️ Interfaz Local (TFT UI)
+La pantalla local del dispositivo muestra en tiempo real las métricas y el estado de los actuadores (con etiquetas optimizadas en español para la interfaz):
+- **Sensores:** `Temp` (Ambiente), `Hum` (Humedad), `NTC` (Temperatura del Sustrato).
+- **Actuadores (Relés):** `CAL` (Calefactor), `EXT` (Extractor), `NBL` (Niebla/Humidificador), `LUZ` (Iluminación).
 
+---
 
+## 💼 Arquitectura Híbrida y Failsafe
+En la automatización biológica, el internet puede fallar, pero el micelio no espera.
+Si se corta la fibra óptica o se cae el router del cliente, el ESP32 entra en **Modo de Supervivencia Local (Edge Computing)**. El sistema seguirá gobernando el microclima internamente para salvar la cosecha, retomando la comunicación con Firebase solo cuando la red se restaure.
 
+## 🔮 Roadmap y Próximos Pasos (Próximo Sprint)
+- **Dashboard Web (React + Firebase):** Construcción de la interfaz web para visualización de métricas en tiempo real y control de actuadores desde la nube.
+- **Configuración Dinámica de Hardware (Portal Web):** Permitir al usuario seleccionar su configuración de hardware directamente desde un menú de configuración web inicial.

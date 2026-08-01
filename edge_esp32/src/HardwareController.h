@@ -1,59 +1,66 @@
 #pragma once
 // ============================================================
 // HardwareController.h
-// Responsabilidad: Sensores (DHT22, NTC) y Actuadores (Relés).
-// Capa 0 - Sin dependencias externas.
+// Capa Agnóstica: Sensores Universales y Relés Genéricos.
+//
+// Esta clase actúa como el núcleo de interacción con el hardware,
+// abstrayendo la lógica termodinámica y de control de los
+// periféricos físicos (sensores y actuadores) del resto del
+// sistema.
 // ============================================================
 #include <Arduino.h>
 #include <DHT.h>
+#include "FileManager.h"
 
-// --- Constantes de Hardware ---
+// --- Pines Físicos Semánticos ---
 #define DHTPIN    27
 #define DHTTYPE   DHT22
-#define PIN_NTC   34
+#define PIN_ANALOGICO 34 // NTC o Humedad de Suelo
 
-#define PIN_RELE_HUMIDIFICADOR  25
-#define PIN_RELE_VENTILADOR     26
-#define PIN_RELE_MANTA          4
+#define PIN_HEATER    32 // Control Térmico (Calefactor - No conectado)
+#define PIN_FOGGER    25 // Control Hídrico (Humidificador)
+#define PIN_EXTRACTOR 26 // Control de Gases / Aire (Ventilador)
+#define PIN_LIGHT     16 // Control de Iluminación
 
-// --- Constantes de Negocio (Umbrales Termodinámicos) ---
-constexpr float UMBRAL_HUM_MIN       = 50.0f;
-constexpr float UMBRAL_HUM_MAX       = 70.0f;
-constexpr float UMBRAL_TEMP_MAX      = 28.0f;
-constexpr float UMBRAL_TEMP_SEGURA   = 24.0f;
-constexpr float UMBRAL_MANTA_ON      = 24.0f;
-constexpr float UMBRAL_MANTA_OFF     = 26.0f;
-constexpr float UMBRAL_SUSTRATO_ALERTA = 27.0f;
-
-// Constantes NTC Steinhart-Hart
+// Constantes NTC Steinhart-Hart (por defecto)
+// Utilizadas para calcular la temperatura a partir de la resistencia del termistor NTC
 constexpr float NTC_BETA      = 3950.0f;
 constexpr float NTC_R_NOMINAL = 10000.0f;
 constexpr float NTC_T_NOMINAL = 25.0f;
 constexpr float NTC_R_SERIE   = 10000.0f;
 
-// Ciclos del ventilador FAE
-constexpr long INTERVALO_VENTILADOR = 3600000L;
-constexpr long DURACION_VENTILADOR  = 120000L;
-
 // -----------------------------------------------------------
-// Struct de datos de sensor para pasar por referencia const.
-// Este es el "bus de datos" del sistema.
+// Struct de datos de sensor
+// Almacena el estado actual de las variables climáticas.
 // -----------------------------------------------------------
 struct SensorData {
     float tempAmb      = 0.0f;
     float humAmb       = 0.0f;
-    float tempSustrato = 0.0f;
-    bool  dhtOk        = false;
-    bool  sustratoOk   = false;
+    /*
+     * VPD (Déficit de Presión de Vapor - Vapor Pressure Deficit)
+     * Es una métrica crucial en el cultivo que indica la diferencia 
+     * entre la cantidad de humedad en el aire y la cantidad máxima de 
+     * humedad que el aire puede retener cuando está saturado. 
+     * Determina la tasa de transpiración de las plantas u hongos.
+     */
+    float vpd          = 0.0f; // Déficit de Presión de Vapor (kPa)
+    float valorAnalogico= 0.0f; // Temp Sustrato o Humedad Suelo
+    int   co2          = 0;    // ppm
+    
+    bool  dhtOk        = false; // Estado de salud del sensor DHT
+    bool  analogicoOk  = false; // Estado de salud del sensor analógico
+    bool  co2Ok        = false; // Estado de salud del sensor de CO2
 };
 
 // -----------------------------------------------------------
-// Struct de estado de los actuadores.
+// Struct de estado de los actuadores semánticos
+// Máquina de estados que representa qué hardware está activo.
 // -----------------------------------------------------------
 struct ActuadorData {
-    bool humidificadorON = false;
-    bool ventiladorON    = false;
-    bool mantaON         = false;
+    bool heater_ON    = false; // Térmico (Sube temperatura)
+    bool fogger_ON    = false; // Hídrico (Sube humedad)
+    bool extractor_ON = false; // Gases (Renueva aire / baja temperatura)
+    bool light_ON     = false; // Luz (Ciclo circadiano / fotoperiodo)
 };
 
 class HardwareController {
@@ -61,31 +68,51 @@ public:
     HardwareController();
     void begin();
 
-    // Lee físicamente los sensores y actualiza el estado interno
+    // Inyectar dependencias desde LittleFS (Configuración cargada de JSON)
+    void setConfiguracion(const ConfiguracionCultivo& config);
+
+    // Lee físicamente los sensores y calcula el VPD
     void leerSensores();
 
-    // Aplica la lógica termodinámica autónoma (Failsafe) y actúa sobre los GPIO
-    void procesarLogicaDeControl(unsigned long now);
+    /*
+     * procesarLogicaDeControl: Motor termodinámico
+     * Esta es la máquina de estados principal que decide qué actuadores
+     * encender o apagar basándose en las lecturas de los sensores,
+     * las metas establecidas (targets) en la configuración, las bandas de
+     * histéresis y mecanismos de seguridad (failsafes).
+     */
+    void procesarLogicaDeControl(unsigned long now, int horaDia);
 
-    // Setters de actuadores: uso exclusivo del MqttManager para control remoto.
-    // Cada setter actualiza el estado lógico Y ejecuta el digitalWrite físico.
-    void setManta(bool estado);
-    void setHumidificador(bool estado);
-    void setVentilador(bool estado);
+    // Setters manuales (Sobrescritura por MQTT o UI Local)
+    void setHeater(bool estado);
+    void setFogger(bool estado);
+    void setExtractor(bool estado);
+    void setLight(bool estado);
     void setModoManual(bool modo);
 
-    // Acceso de solo lectura al estado (para Display y Mqtt)
+    // Getters de estado
     const SensorData&   getSensores()   const { return _sensores; }
     const ActuadorData& getActuadores() const { return _actuadores; }
+    const ConfiguracionCultivo& getConfiguracion() const { return _config; }
     bool isModoManual()                 const { return _modoManualRemoto; }
 
 private:
     DHT          _dht;
     SensorData   _sensores;
     ActuadorData _actuadores;
+    ConfiguracionCultivo _config; // El cerebro dinámico (umbrales de control)
 
-    bool  _modoManualRemoto   = false;
-    bool  _alertaCalor        = false;
-    bool  _ventiladorEnCiclo  = false;
+    bool  _modoManualRemoto = false;
+    
+    // Variables para temporizador asíncrono del extractor (Fresh Air Exchange - FAE)
     unsigned long _ultimoCicloVentilador = 0;
+    bool _ventiladorEnCiclo = false;
+    bool _alertaCalor = false;
+
+    // Métodos internos
+    /*
+     * calcularVPD: Calcula el déficit de presión de vapor utilizando la 
+     * fórmula de Tetens para obtener la presión de vapor de saturación.
+     */
+    float calcularVPD(float tempC, float humRH);
 };
