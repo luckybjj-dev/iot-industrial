@@ -1,140 +1,288 @@
 import { useEffect, useState } from 'react';
-import { fetchEstadoCultivo } from './services/apiService';
-import type { EstadoCamara } from './types/cultivo';
+import { subscribeToAllDevices, subscribeToDeviceConfig, sendCommand, sendModeCommand, sendConfigRules } from './services/firebaseService';
+import type { EstadoCamara, ConfiguracionCultivo, ReglaTermodinamica } from './types/cultivo';
 import { MetricCard } from './components/MetricCard';
-import { Thermometer, Droplets, Leaf, Activity } from 'lucide-react';
+import { HistoryChart } from './components/HistoryChart';
+import { SemaforoEstabilidad } from './components/SemaforoEstabilidad';
+import { CropProfileSelectorModal } from './components/CropProfileSelectorModal';
+import { Thermometer, Droplets, Leaf, Activity, Wind, Power, Settings2, ShieldAlert } from 'lucide-react';
 
 function App() {
   const [camaras, setCamaras] = useState<EstadoCamara[]>([]);
+  const [configs, setConfigs] = useState<{ [deviceId: string]: ConfiguracionCultivo }>({});
   const [error, setError] = useState<string | null>(null);
+  
+  // Modales
+  const [editingRulesFor, setEditingRulesFor] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const data = await fetchEstadoCultivo();
-        setCamaras(data);
-        setError(null);
-      } catch (err) {
-        setError('Error de conexión con el Cerebro Central');
-      }
-    };
+    // Suscribirse a Firebase RTDB para Telemetría
+    const unsubscribeTelemetria = subscribeToAllDevices((devices) => {
+      setCamaras(devices);
+      setError(null);
+    });
 
-    fetchData();
-    const interval = setInterval(fetchData, 5000); // Polling cada 5 segundos
-    return () => clearInterval(interval);
+    return () => unsubscribeTelemetria();
   }, []);
 
+  // Suscribirse a configuraciones por cada cámara detectada
+  useEffect(() => {
+    const unsubscribers: (() => void)[] = [];
+    
+    camaras.forEach(camara => {
+      if (!configs[camara.deviceId]) {
+        const unsub = subscribeToDeviceConfig(camara.deviceId, (config) => {
+          if (config) {
+            setConfigs(prev => ({ ...prev, [camara.deviceId]: config }));
+          }
+        });
+        unsubscribers.push(unsub);
+      }
+    });
+
+    return () => {
+      unsubscribers.forEach(unsub => unsub());
+    };
+  }, [camaras]);
+
+  const handleToggleMode = async (deviceId: string, currentMode: 'AUTO' | 'MANUAL') => {
+    try {
+      const newMode = currentMode === 'AUTO' ? 'MANUAL' : 'AUTO';
+      await sendModeCommand(deviceId, newMode);
+    } catch (err) {
+      console.error("Error al enviar comando de modo", err);
+    }
+  };
+
+  const handleToggleActuator = async (deviceId: string, actuator: string, currentState: boolean, currentMode: 'AUTO' | 'MANUAL') => {
+    if (currentMode === 'AUTO') return;
+    try {
+      await sendCommand(deviceId, actuator, !currentState);
+    } catch (err) {
+      console.error("Error al enviar comando", err);
+    }
+  };
+
+  const handleSaveRules = async (deviceId: string, rules: ReglaTermodinamica[]) => {
+    try {
+      await sendConfigRules(deviceId, { reglas: rules });
+    } catch (error) {
+      console.error("Error saving rules:", error);
+      throw error;
+    }
+  };
+
   return (
-    <div className="container mx-auto px-4 py-12 max-w-7xl">
-      <header className="mb-12 text-center md:text-left">
-        <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight">
-          Cámara Fungi <span className="text-gradient">Inteligente</span>
-        </h1>
-        <p className="text-neutral-400 text-lg max-w-2xl">
-          Ecosistema IoT de grado industrial para la optimización de fructificación del micelio. 
-          Monitoreo termodinámico en tiempo real.
-        </p>
-      </header>
+    <div className="min-h-screen bg-[#050505] text-neutral-200 font-sans selection:bg-emerald-500/30">
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        <header className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-center border-b border-white/10 pb-6">
+          <div>
+            <h1 className="text-4xl font-black mb-2 tracking-tighter uppercase text-white flex items-center gap-3">
+              SCADA <span className="text-emerald-500">Node</span>
+            </h1>
+            <p className="text-neutral-500 text-sm font-mono tracking-widest uppercase">
+              Supervisory Control & Data Acquisition
+            </p>
+          </div>
+          <div className="mt-4 md:mt-0 flex items-center gap-3">
+             <div className="h-3 w-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.7)]"></div>
+             <span className="text-sm font-bold text-neutral-400 tracking-widest uppercase">System Online</span>
+          </div>
+        </header>
 
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-6 py-4 rounded-xl mb-8 flex items-center space-x-3">
-          <Activity size={24} />
-          <span>{error}</span>
-        </div>
-      )}
+        {error && (
+          <div className="bg-red-950/50 border border-red-500/50 text-red-400 px-6 py-4 rounded-xl mb-8 flex items-center space-x-3 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
+            <Activity size={24} />
+            <span className="font-bold tracking-wide uppercase">{error}</span>
+          </div>
+        )}
 
-      {camaras.length === 0 && !error ? (
-        <div className="glass-panel p-12 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto mb-4"></div>
-          <p className="text-neutral-400 text-lg">Esperando conexión con los nodos Edge...</p>
-        </div>
-      ) : (
-        <div className="space-y-12">
-          {camaras.map((camara) => (
-            <div key={camara.deviceId} className="glass-panel p-8">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-white/10 pb-6">
-                <div>
-                  <h2 className="text-2xl font-bold flex items-center space-x-3">
-                    <span>Nodo: {camara.deviceId}</span>
-                  </h2>
-                  <p className="text-neutral-400 mt-1">Última actualización: {camara.ultima_actualizacion || 'N/A'}</p>
-                </div>
-                <div className="mt-4 md:mt-0 px-4 py-2 rounded-full bg-white/5 border border-white/10 font-medium tracking-wide">
-                  {camara.estado}
-                </div>
-              </div>
+        {camaras.length === 0 && !error ? (
+          <div className="flex flex-col items-center justify-center h-64 border border-white/5 bg-[#0a0a0a] rounded-3xl">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mb-6"></div>
+            <p className="text-neutral-500 font-mono text-sm tracking-widest uppercase">Estableciendo conexión MQTT / RTDB...</p>
+          </div>
+        ) : (
+          <div className="space-y-12">
+            {camaras.map((camara) => {
+              const modo = camara.modo_operacion || 'AUTO';
+              const config = configs[camara.deviceId];
+              const reglas = config?.reglas || [];
 
-              {camara.telemetria ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {camara.telemetria.dht_ok ? (
-                    <>
-                      <MetricCard
-                        title="Temp. Ambiente"
-                        value={camara.telemetria.temp_ambiente?.toFixed(1) || '0.0'}
-                        unit="°C"
-                        icon={Thermometer}
-                        colorClass="text-amber-400"
-                      />
-                      <MetricCard
-                        title="Humedad Relativa"
-                        value={camara.telemetria.humedad?.toFixed(1) || '0.0'}
-                        unit="%"
-                        icon={Droplets}
-                        colorClass="text-cyan-400"
-                      />
-                    </>
-                  ) : (
-                    <div className="col-span-1 md:col-span-2 bg-red-500/10 border border-red-500/50 text-red-400 px-6 py-4 rounded-xl flex items-center space-x-3 justify-center h-full">
-                      <Activity size={24} />
-                      <span className="font-semibold text-lg">⚠️ DHT22 Desconectado</span>
-                    </div>
-                  )}
+              return (
+                <div key={camara.deviceId} className="bg-[#0a0a0a] border border-white/5 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
+                  {/* Decorative background grid */}
+                  <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-5 pointer-events-none"></div>
 
-                  {camara.telemetria.ntc_ok ? (
-                    <MetricCard
-                      title="Temp. Sustrato"
-                      value={camara.telemetria.temp_sustrato?.toFixed(1) || '0.0'}
-                      unit="°C"
-                      icon={Leaf}
-                      colorClass="text-emerald-400"
-                    />
-                  ) : (
-                    <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-6 py-4 rounded-xl flex items-center space-x-3 justify-center h-full">
-                      <Activity size={24} />
-                      <span className="font-semibold text-lg">⚠️ Sonda NTC Desconectada</span>
+                  {/* Header de Nodo */}
+                  <div className="flex flex-col xl:flex-row justify-between items-start gap-6 mb-8 relative z-10">
+                    <div className="w-full xl:w-1/3">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h2 className="text-2xl font-black text-white tracking-tighter uppercase">{camara.deviceId}</h2>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black tracking-widest uppercase border ${camara.estado.includes('ONLINE') ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}>
+                          {camara.estado}
+                        </span>
+                      </div>
+                      <p className="text-neutral-500 text-xs font-mono tracking-widest">TS: {camara.ultima_actualizacion || 'N/A'}</p>
                     </div>
-                  )}
-                  
-                  <div className="glass-card flex flex-col justify-center space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-neutral-400 text-sm font-medium uppercase">Humidificador</span>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${camara.telemetria.humidificador_on ? 'bg-cyan-500/20 text-cyan-400' : 'bg-white/5 text-neutral-500'}`}>
-                        {camara.telemetria.humidificador_on ? 'ON' : 'OFF'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-neutral-400 text-sm font-medium uppercase">Ventilador</span>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${camara.telemetria.ventilador_on ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-neutral-500'}`}>
-                        {camara.telemetria.ventilador_on ? 'ON' : 'OFF'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-neutral-400 text-sm font-medium uppercase">Manta Calef.</span>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${camara.telemetria.manta_on ? 'bg-amber-500/20 text-amber-400' : 'bg-white/5 text-neutral-500'}`}>
-                        {camara.telemetria.manta_on ? 'ON' : 'OFF'}
-                      </span>
+
+                    <div className="w-full xl:w-2/3 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-end">
+                      
+                      <button
+                        onClick={() => setEditingRulesFor(camara.deviceId)}
+                        className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors text-sm font-bold tracking-widest uppercase text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]"
+                      >
+                        <Settings2 size={18} />
+                        Gestor de Perfiles
+                      </button>
+
+                      <button
+                        onClick={() => handleToggleMode(camara.deviceId, modo)}
+                        className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-black tracking-widest uppercase transition-all duration-300 shadow-xl ${
+                          modo === 'AUTO'
+                            ? 'bg-blue-600/20 border border-blue-500/50 text-blue-400 hover:bg-blue-600/30 shadow-blue-500/10'
+                            : 'bg-orange-500 border border-orange-500 text-black hover:bg-orange-400 shadow-orange-500/30 animate-pulse'
+                        }`}
+                      >
+                        {modo === 'AUTO' ? (
+                          <>MODO: AUTOMÁTICO</>
+                        ) : (
+                          <>
+                            <ShieldAlert size={18} />
+                            OVERRIDE MANUAL
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
+
+                  {camara.telemetria ? (
+                    <div className="space-y-8 relative z-10">
+                      
+                      {/* Semáforo Inteligente */}
+                      <SemaforoEstabilidad 
+                        telemetria={camara.telemetria} 
+                        reglas={reglas} 
+                        modo_operacion={modo} 
+                      />
+
+                      {/* HERO CARDS - Métricas */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <MetricCard
+                          title="Temp. Ambiente"
+                          value={camara.telemetria.temp_aire?.toFixed(1) || '--'}
+                          unit="°C"
+                          icon={Thermometer}
+                          colorClass="text-amber-400"
+                          status={!camara.telemetria.dht_ok ? 'DANGER' : 'STABLE'}
+                        />
+                        <MetricCard
+                          title="Humedad Relativa"
+                          value={camara.telemetria.humedad_aire?.toFixed(1) || '--'}
+                          unit="%"
+                          icon={Droplets}
+                          colorClass="text-cyan-400"
+                          status={!camara.telemetria.dht_ok ? 'DANGER' : 'STABLE'}
+                        />
+                        <MetricCard
+                          title="Temp. Sustrato"
+                          value={camara.telemetria.sensor_analogico?.toFixed(1) || '--'}
+                          unit="°C"
+                          icon={Leaf}
+                          colorClass="text-emerald-400"
+                          status={!camara.telemetria.analogico_ok ? 'DANGER' : 'STABLE'}
+                        />
+                        <MetricCard
+                          title="VPD (Déficit Presión)"
+                          value={camara.telemetria.vpd?.toFixed(2) || '--'}
+                          unit="kPa"
+                          icon={Activity}
+                          colorClass="text-purple-400"
+                          status={camara.telemetria.vpd && (camara.telemetria.vpd < 0.4 || camara.telemetria.vpd > 1.6) ? 'WARNING' : 'STABLE'}
+                        />
+                      </div>
+                      
+                      {/* ACTUADORES & GRAFICO */}
+                      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+                        {/* PANEL DE CONTROL DE ACTUADORES */}
+                        <div className="xl:col-span-1 bg-[#121212] border border-white/5 rounded-2xl p-6 flex flex-col space-y-6">
+                          <div className="border-b border-white/10 pb-4">
+                            <h3 className="text-sm font-black text-neutral-300 uppercase tracking-widest flex items-center gap-2">
+                              Actuadores
+                              {modo === 'MANUAL' && <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>}
+                            </h3>
+                            {modo === 'AUTO' && (
+                              <p className="text-[10px] text-blue-400 font-mono uppercase tracking-widest mt-2">
+                                Bloqueado por Rule Engine
+                              </p>
+                            )}
+                            {modo === 'MANUAL' && (
+                              <p className="text-[10px] text-orange-400 font-mono uppercase tracking-widest mt-2">
+                                T/O: {config?.max_manual_time_ms ? config.max_manual_time_ms / 60000 : 15} MINUTOS
+                              </p>
+                            )}
+                          </div>
+                          
+                          {/* Actuadores List */}
+                          {[
+                            { id: 'fogger_on', label: 'Niebla', icon: Droplets, val: camara.telemetria.fogger_on, activeBg: 'bg-cyan-500/20 text-cyan-500 border-cyan-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
+                            { id: 'extractor_on', label: 'Extractor', icon: Wind, val: camara.telemetria.extractor_on, activeBg: 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
+                            { id: 'heater_on', label: 'Calefactor', icon: Activity, val: camara.telemetria.heater_on, activeBg: 'bg-amber-500/20 text-amber-500 border-amber-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
+                            { id: 'light_on', label: 'Luz', icon: Power, val: camara.telemetria.light_on, activeBg: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
+                          ].map((act) => (
+                            <div key={act.id} className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5">
+                              <span className="text-neutral-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                                <act.icon size={14}/> {act.label}
+                              </span>
+                              <button 
+                                disabled={modo === 'AUTO'}
+                                onClick={() => handleToggleActuator(camara.deviceId, act.id, act.val, modo)}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-black tracking-widest uppercase transition-all duration-300 border ${
+                                  modo === 'AUTO'
+                                    ? act.val 
+                                      ? act.activeBg 
+                                      : 'bg-neutral-900 text-neutral-600 border-neutral-800'
+                                    : act.val 
+                                      ? act.manualBg 
+                                      : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700 border-neutral-700'
+                                }`}
+                              >
+                                {act.val ? 'ON' : 'OFF'}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* GRÁFICO HISTÓRICO UNIFICADO */}
+                        <div className="xl:col-span-3">
+                          <HistoryChart deviceId={camara.deviceId} />
+                        </div>
+                      </div>
+
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-neutral-500 font-mono text-sm uppercase tracking-widest">
+                      Esperando stream de telemetría RTDB...
+                    </div>
+                  )}
+
+                  {/* Modal de Reglas para este device */}
+                  {editingRulesFor === camara.deviceId && (
+                    <CropProfileSelectorModal
+                      deviceId={camara.deviceId}
+                      isOpen={true}
+                      onClose={() => setEditingRulesFor(null)}
+                      onSave={async (newRules) => {
+                        await handleSaveRules(camara.deviceId, newRules);
+                      }}
+                    />
+                  )}
                 </div>
-              ) : (
-                <div className="text-center py-8 text-neutral-500">
-                  Esperando telemetría de los sensores...
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

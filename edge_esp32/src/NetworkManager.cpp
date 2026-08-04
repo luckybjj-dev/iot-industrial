@@ -10,55 +10,131 @@
  * ======================================================================================
  */
 #include "NetworkManager.h" // Incluimos y enlazamos nuestra propia cabecera definida previamente
+#include <ESPmDNS.h> // Agregamos mDNS para resolución de nombres locales (fungi.local)
 
 Preferences NetworkManager::preferencias; // Reservamos formalmente la memoria para el objeto estático Preferences
 AsyncWebServer NetworkManager::servidor(80); // Instanciamos el servidor TCP Asíncrono en el puerto 80 (HTTP estándar)
 DNSServer NetworkManager::dnsServer; // Reservamos memoria en el sistema para nuestro interceptor DNS
 bool NetworkManager::modoAP = false; // Inicializamos asumiendo que NO somos AP hasta que el escaneo WiFi dictamine lo contrario
 bool NetworkManager::debeReiniciar = false; // Inicializamos en falso para evitar reboots accidentales durante la operación normal
+HardwareController* NetworkManager::_hw = nullptr; // Inicializamos el puntero en nulo
+volatile bool NetworkManager::_conexionEstable = false;
 
 const char* servidorNTP = "pool.ntp.org"; // Definimos el servidor NTP global y gratuito a utilizar por el ESP32
 const long gmtOffset_sec = -14400; // Chile Standard Time (UTC-4)
 const int daylightOffset_sec = 3600; // Horario de verano (UTC-3)
 
 const char index_html[] PROGMEM = R"rawliteral(
-<!DOCTYPE html> <!-- Declaramos que el documento es HTML5 estándar -->
-<html lang="es"> <!-- Abrimos la etiqueta HTML definiendo el idioma español -->
-<head> <!-- Inicio de los metadatos invisibles de la página -->
-    <meta charset="UTF-8"> <!-- Forzamos codificación UTF-8 para soportar acentos nativos (ñ, á) -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Aplicamos viewport Mobile-First para celulares -->
-    <title>Configuración Fungi</title> <!-- Título visible en la pestaña del navegador del cliente -->
-    <style> /* Inicio de la inyección de la hoja de estilos CSS (Vanilla CSS para ahorro de memoria) */
-        /* Body: Aplicamos un tema oscuro (Dark Mode) industrial con Flexbox para centrado perfecto */
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #121212; color: #e0e0e0; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        /* Container: Creamos la tarjeta contenedora flotante con sombreado y bordes suaves */
-        .container { background-color: #1e1e1e; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); width: 100%; max-width: 350px; }
-        /* Título h2: Resaltado principal utilizando el verde ecológico/tecnológico corporativo */
-        h2 { text-align: center; color: #4caf50; }
-        /* Labels: Ajustamos las descripciones de los inputs en color gris sutil para máxima legibilidad */
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Fungi</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #121212; color: #e0e0e0; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }
+        .container { background-color: #1e1e1e; padding: 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); width: 100%; max-width: 400px; margin-bottom: 20px; }
+        h2 { text-align: center; color: #4caf50; margin-top: 0; }
+        .tabs { display: flex; border-bottom: 1px solid #333; margin-bottom: 20px; }
+        .tab { flex: 1; text-align: center; padding: 10px; cursor: pointer; color: #b3b3b3; transition: 0.3s; }
+        .tab.active { border-bottom: 2px solid #4caf50; color: #fff; font-weight: bold; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
         label { display: block; margin-bottom: 8px; font-size: 0.9em; color: #b3b3b3; }
-        /* Inputs unificados: Aplicamos cajas de texto estilo consola oscura, retirando bordes blancos nativos */
         input[type="text"], input[type="password"] { width: 100%; padding: 10px; margin-bottom: 20px; border: 1px solid #333; background-color: #2c2c2c; color: #fff; border-radius: 5px; box-sizing: border-box; }
-        /* Botón de acción: Diseño en bloque ancho 100% con color verde acentuado y transición suave */
-        button { width: 100%; padding: 12px; background-color: #4caf50; color: white; border: none; border-radius: 5px; font-size: 1em; cursor: pointer; transition: background-color 0.3s; }
-        /* Botón (Hover): Microinteracción de usabilidad (aclarar color al pasar el puntero/dedo) */
+        button { width: 100%; padding: 12px; background-color: #4caf50; color: white; border: none; border-radius: 5px; font-size: 1em; cursor: pointer; transition: 0.3s; margin-bottom: 10px; }
         button:hover { background-color: #45a049; }
-    </style> <!-- Cierre obligatorio del bloque CSS interno -->
-</head> <!-- Fin total de las configuraciones de cabecera -->
-<body> <!-- Inicio del cuerpo del DOM (Lo que el cliente interactúa) -->
-    <div class="container"> <!-- Div principal aplicando la clase visual '.container' definida arriba -->
-        <h2>Cámara Fungi 2.0</h2> <!-- Título hero del portal cautivo industrial -->
-        <form action="/guardar" method="POST"> <!-- Formulario web enrutado nativamente para disparar POST al ESP32 -->
-            <label for="ssid">Red WiFi (SSID):</label> <!-- Etiqueta descriptiva para el usuario final -->
-            <input type="text" id="ssid" name="ssid" required> <!-- Campo de texto obligatorio para atrapar la red de su hogar -->
-            <label for="pass">Contraseña:</label> <!-- Etiqueta descriptiva de seguridad -->
-            <input type="password" id="pass" name="pass" required> <!-- Campo ofuscado para atrapar el password sin revelarlo -->
-            <button type="submit">Conectar y Guardar</button> <!-- Botón final de envío de formulario HTTP POST -->
-        </form> <!-- Cierre jerárquico del formulario HTML -->
-    </div> <!-- Cierre jerárquico del contenedor visual principal -->
-</body> <!-- Cierre del cuerpo del documento HTML web -->
-</html> <!-- Fin del documento, listo para ser despachado por el servidor asíncrono -->
-)rawliteral"; // Cierre del delimitador C++ (Raw Literal) que almacena todo el string en memoria Flash (PROGMEM)
+        .btn-act { background-color: #333; display: flex; justify-content: space-between; align-items: center; }
+        .btn-act.on { background-color: #4caf50; }
+        .sensor-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #333; }
+        .val { font-weight: bold; color: #fff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Cámara Fungi 2.0</h2>
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab(0)">Control Local</div>
+            <div class="tab" onclick="switchTab(1)">Red Wi-Fi</div>
+        </div>
+
+        <div id="tab0" class="tab-content active">
+            <div class="sensor-row"><span>Temp. Ambiente:</span><span id="v_temp" class="val">-- °C</span></div>
+            <div class="sensor-row"><span>Humedad:</span><span id="v_hum" class="val">-- %</span></div>
+            <div class="sensor-row"><span>Sonda NTC:</span><span id="v_ntc" class="val">-- U</span></div>
+            <br>
+            <button class="btn-act on" id="b_modo" onclick="toggle('modo_operacion')" style="background-color: #2196F3;">Modo: <span>AUTO</span></button>
+            <hr style="border-color:#333; margin:15px 0;">
+            <button class="btn-act" id="b_cal" onclick="toggle('heater')">Calefactor <span>OFF</span></button>
+            <button class="btn-act" id="b_nbl" onclick="toggle('fogger')">Nebulizador <span>OFF</span></button>
+            <button class="btn-act" id="b_ext" onclick="toggle('extractor')">Extractor <span>OFF</span></button>
+            <button class="btn-act" id="b_luz" onclick="toggle('light')">Luces <span>OFF</span></button>
+        </div>
+
+        <div id="tab1" class="tab-content">
+            <form action="/guardar" method="POST">
+                <label>Red WiFi (SSID):</label>
+                <input type="text" name="ssid" required>
+                <label>Contraseña:</label>
+                <input type="password" name="pass" required>
+                <button type="submit">Guardar y Reiniciar</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(idx) {
+            document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === idx));
+            document.querySelectorAll('.tab-content').forEach((t, i) => t.classList.toggle('active', i === idx));
+        }
+
+        async function updateStatus() {
+            try {
+                let res = await fetch('/api/status');
+                let data = await res.json();
+                document.getElementById('v_temp').innerText = data.t + ' °C';
+                document.getElementById('v_hum').innerText = data.h + ' %';
+                document.getElementById('v_ntc').innerText = data.n + ' U';
+                
+                let btnModo = document.getElementById('b_modo');
+                if (data.modo === "AUTO") {
+                    btnModo.classList.add('on');
+                    btnModo.style.backgroundColor = '#2196F3'; // Azul para AUTO
+                    btnModo.querySelector('span').innerText = 'AUTO';
+                } else {
+                    btnModo.classList.remove('on');
+                    btnModo.style.backgroundColor = '#f44336'; // Rojo para MANUAL
+                    btnModo.querySelector('span').innerText = 'MANUAL';
+                }
+
+                updateBtn('b_cal', data.heater);
+                updateBtn('b_nbl', data.fogger);
+                updateBtn('b_ext', data.extractor);
+                updateBtn('b_luz', data.light);
+            } catch (e) {}
+        }
+
+        function updateBtn(id, state) {
+            let btn = document.getElementById(id);
+            if (state) { btn.classList.add('on'); btn.querySelector('span').innerText = 'ON'; }
+            else { btn.classList.remove('on'); btn.querySelector('span').innerText = 'OFF'; }
+        }
+
+        async function toggle(rele) {
+            await fetch('/api/control', {
+                method: 'POST', 
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'rele=' + rele
+            });
+            updateStatus();
+        }
+
+        setInterval(updateStatus, 2000);
+        updateStatus();
+    </script>
+</body>
+</html>
+)rawliteral";
 
 NetworkManager::NetworkManager() { // Implementación vacía del constructor de clase
     // Principio de diseño: No arrancar hardware ni RTOS en constructores para prevenir crasheos de instanciación global
@@ -86,12 +162,12 @@ void NetworkManager::iniciar() { // Función pública para encender el motor de 
         NULL,                // Inyectamos un puntero nulo ya que la tarea no requiere argumentos externos
         1,                   // Set de prioridad estándar de usuario (1) para balancear carga de la CPU
         NULL,                // Descartamos la captura del handle; esta tarea nunca será matada (killed) externamente
-        0                    // 🚨 REQUISITO CRÍTICO: Forzamos anclaje al Core 0 (Pro Core) aislando el Core 1 para Termodinámica
+        1                    // RESTAURADO: Volvemos al Core 1 (default de Arduino) para evitar race conditions con el driver WiFi
     ); // Fin de la invocación de hardware dual-core
 } // Cierre del método de inicialización
 
 bool NetworkManager::estaConectado() const { // Wrapper limpio para consultar estado del hardware de red
-    return WiFi.status() == WL_CONNECTED; // Devuelve true exclusivamente si el stack WiFi reporta enlace estable con el router
+    return _conexionEstable; // Devuelve true exclusivamente si el stack WiFi reporta enlace estable con el router
 } // Cierre del método consultor
 
 bool NetworkManager::estaEnModoAP() const { // Getter para consultar el portal cautivo
@@ -123,13 +199,16 @@ void NetworkManager::tareaRed(void * parametro) { // Función principal de FreeR
     String ssidGuardado = preferencias.getString("ssid", ""); // Intentamos rescatar el valor 'ssid'. Si no existe, entregamos string vacío ""
     String passGuardado = preferencias.getString("pass", ""); // Intentamos rescatar el valor 'pass'. Si no existe, entregamos string vacío ""
 
-    if (ssidGuardado != "") { // Evaluamos si la placa ya ha sido provisionada anteriormente por el cliente
-        Serial.println("[RED] Credenciales halladas. Intentando asociar a: " + ssidGuardado); // Trazabilidad de inicio de proceso STA
-        WiFi.mode(WIFI_STA); // Forzamos apagado de antenas AP, activando solo recepción cliente (Station Mode)
-        WiFi.disconnect(true); // Limpieza profunda: Borramos cualquier estado colgado en la RAM del chip WiFi
-        vTaskDelay(100 / portTICK_PERIOD_MS); // Pequeño respiro para que el hardware asimile la limpieza
+    if (ssidGuardado != "") { 
+        Serial.println("[RED] Credenciales halladas. Intentando asociar a: " + ssidGuardado); 
+        WiFi.mode(WIFI_STA); 
+        WiFi.setSleep(false); // EVITAR DESCONEXIONES: Desactiva el modem sleep
+        WiFi.setAutoReconnect(true); // El driver de ESP32 manejará las reconexiones automáticamente
         
-        WiFi.begin(ssidGuardado.c_str(), passGuardado.c_str()); // Disparamos el comando asíncrono de handshake WiFi
+        // Eliminado WiFi.disconnect(false, true) porque en algunos routers borra credenciales vitales y causa drops
+        vTaskDelay(100 / portTICK_PERIOD_MS); 
+        
+        WiFi.begin(ssidGuardado.c_str(), passGuardado.c_str());
         
         unsigned long inicioIntento = millis(); // Capturamos un timestamp preciso del procesador
         // Aumentamos el timeout a 20 segundos (algunos routers demoran en asignar IP por DHCP)
@@ -139,6 +218,8 @@ void NetworkManager::tareaRed(void * parametro) { // Función principal de FreeR
         } // Fin del bucle de espera de timeout
         Serial.println(); // Salto de línea estético post-bucle
     } // Fin del proceso condicional de modo STA
+
+    _conexionEstable = (WiFi.status() == WL_CONNECTED);
 
     /*
      * ----------------------------------------------------------------------------------
@@ -171,10 +252,18 @@ void NetworkManager::tareaRed(void * parametro) { // Función principal de FreeR
         servidor.begin(); // ¡START! Encendemos la maquinaria del AsyncWebServer para empezar a escuchar sockets TCP
     } else { // Caso de éxito: El dispositivo logró colgarse del router del cliente
         Serial.println("[RED] Enlace STA Verde. IP Adquirida: " + WiFi.localIP().toString()); // Notificamos victoria y la IP asignada por el router local
+        
+        // Iniciamos mDNS para que el dispositivo responda a http://fungi.local
+        if (MDNS.begin("fungi")) {
+            Serial.println("[RED] mDNS iniciado. Servidor accesible en http://fungi.local");
+        }
+        
         Serial.println("[NTP] Disparando Sincronización Inicial de Certificados..."); // Notificamos paso previo obligatorio de Firebase
         configTime(gmtOffset_sec, daylightOffset_sec, servidorNTP); // Lanzamos el trigger asíncrono para buscar hora real en internet
     } // Fin del bloque condicional de Arranque Dual (STA vs AP)
 
+    int intentosReconexion = 0; // Contador dinámico para el Fallback AP
+    
     for(;;) { // El bucle infinito e inmortal que exige FreeRTOS para toda tarea anclada
         if (modoAP) { // Evalúa de forma ultra rápida (microsegundos) si estamos en modo portal
             dnsServer.processNextRequest(); // Atendemos y resolvemos cualquier rastro de tráfico DNS entrante de iOS/Android
@@ -185,12 +274,41 @@ void NetworkManager::tareaRed(void * parametro) { // Función principal de FreeR
             ESP.restart(); // Fusible final: Matamos por software el microcontrolador. Todo el hardware volverá a arrancar desde cero.
         } // Fin de evaluación de reinicio diferido
         
-        if (!modoAP && WiFi.status() != WL_CONNECTED) { // Modo Resiliencia Activa: Si ya configurado, de pronto el WiFi del cliente se cae...
-            Serial.println("[RED] ⚠️ Router inaccesible. Forzando stack de reconexión..."); // Alerta técnica de pérdida de enlace
-            WiFi.reconnect(); // Emitimos un petitorio formal a los drivers nativos de Espressif para forzar handshake re-try
-            vTaskDelay(5000 / portTICK_PERIOD_MS); // Backoff pasivo: Bloqueamos red por 5 segundos para no asfixiar el router ni al Core 0
+        if (!modoAP && WiFi.status() != WL_CONNECTED) { // Modo Resiliencia Activa
+            intentosReconexion++;
+            Serial.print(F("[RED] ⚠️ Router inaccesible. Esperando reconexión automática... Intento: ")); 
+            Serial.println(intentosReconexion);
+            
+            vTaskDelay(5000 / portTICK_PERIOD_MS); // Backoff pasivo de 5 segundos
+            
+            // Fallback AP: Si falla durante 1 minuto (12 intentos)
+            if (intentosReconexion >= 12 && WiFi.status() != WL_CONNECTED) {
+                Serial.println(F("🚨 [RED] Router inestable o perdido. ¡Levantando Red de Rescate (Fallback AP)!"));
+                
+                modoAP = true;
+                WiFi.mode(WIFI_AP);
+                
+                String mac = WiFi.macAddress();
+                String apName = "Fungi_Rescate_" + mac.substring(mac.length() - 5, mac.length() - 3) + mac.substring(mac.length() - 2);
+                
+                WiFi.softAP(apName.c_str());
+                Serial.println("[RED] SSID Emitido: " + apName);
+                
+                dnsServer.start(53, "*", WiFi.softAPIP());
+                configurarPortal();
+                servidor.begin();
+            }
+        } else if (!modoAP && WiFi.status() == WL_CONNECTED) {
+            // Leaky bucket: si está conectado, bajamos los intentos de error lentamente.
+            // Esto evita que una conexión "parpadeante" reinicie el contador a 0 de golpe y oculte la red de rescate.
+            if (intentosReconexion > 0) {
+                intentosReconexion--;
+                vTaskDelay(500 / portTICK_PERIOD_MS); 
+            }
         } // Fin del bloque de reconexión autónoma
         
+        _conexionEstable = (WiFi.status() == WL_CONNECTED);
+
         vTaskDelay(10 / portTICK_PERIOD_MS); // 🚨 YIELD SUPREMO DE FREERTOS: Le devolvemos 10ms obligatorios al planificador central para evitar panics del RTOS en Core 0
     } // Cierre del bucle for infinito
 } // Cierre de la función maestra TareaRed
@@ -208,15 +326,20 @@ void NetworkManager::configurarPortal() { // Función arquitectónica para defin
         String ssidRecibido; // Creamos buffer local efímero para el payload de la red
         String passRecibido; // Creamos buffer local efímero para el payload de la contraseña
 
-        if (request->hasParam("ssid", true) && request->hasParam("pass", true)) { // Validamos estricta existencia de ambos campos en el Body del POST
-            ssidRecibido = request->getParam("ssid", true)->value(); // Capturamos y almacenamos el valor SSID digitado por el usuario
-            passRecibido = request->getParam("pass", true)->value(); // Capturamos y almacenamos el valor Password digitado por el usuario
+        if (request->hasParam("ssid", true) && request->hasParam("pass", true)) { 
+            ssidRecibido = request->getParam("ssid", true)->value(); 
+            passRecibido = request->getParam("pass", true)->value(); 
             
-            preferencias.putString("ssid", ssidRecibido); // Instruimos a la NVS a quemar en Flash el nombre de la red (persiste al apagar)
-            preferencias.putString("pass", passRecibido); // Instruimos a la NVS a quemar en Flash la clave WiFi (persiste al apagar)
+            preferencias.putString("ssid", ssidRecibido); 
+            preferencias.putString("pass", passRecibido); 
             
-            request->send(200, "text/html", "<h1>¡Comando Aceptado!</h1><p>Aplicando configuracion y reiniciando el dispositivo Fungi...</p>"); // Disparamos respuesta HTTP final al navegador móvil
-            debeReiniciar = true; // Subimos la bandera global. El loop infinito en Core 0 procesará el reinicio de forma segura.
+            String htmlRespuesta = "<h1>¡Credenciales Guardadas!</h1>";
+            htmlRespuesta += "<p>El dispositivo se reiniciara ahora e intentara conectarse a: <b>" + ssidRecibido + "</b>.</p>";
+            htmlRespuesta += "<p><b>NOTA:</b> Si las credenciales son correctas, esta red Fungi_Setup desaparecera y podras acceder al panel en <b>http://fungi.local</b> conectado a tu red principal.</p>";
+            htmlRespuesta += "<p>Si son incorrectas, la red Fungi_Setup volvera a aparecer en 20 segundos.</p>";
+            
+            request->send(200, "text/html", htmlRespuesta); 
+            debeReiniciar = true; 
         } else { // Si el POST llegó alterado o corrupto desde el frontend local
             request->send(400, "text/plain", "Error 400: Parámetros del portal de configuración corruptos o faltantes."); // Emitimos rechazo formal HTTP
         } // Cierre del if de validación de payload
@@ -225,6 +348,64 @@ void NetworkManager::configurarPortal() { // Función arquitectónica para defin
     servidor.onNotFound([](AsyncWebServerRequest *request){ // Callback Catch-All: Si el celular del cliente intenta buscar en segundo plano a google.com, facebook.com, etc.
         request->redirect("/"); // Capturamos la petición ciega y le devolvemos una redirección forzosa 302 (Mecanismo absoluto del Portal Cautivo)
     }); // Cierre del callback lambda NotFound
+
+    // --- NUEVOS ENDPOINTS PARA EL DIAGNÓSTICO LOCAL ---
+    
+    servidor.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request){
+        if (_hw == nullptr) {
+            request->send(500, "application/json", "{\"error\":\"No HW\"}");
+            return;
+        }
+        const SensorData& s = _hw->getSensores();
+        const ActuadorData& a = _hw->getActuadores();
+        
+        // Creamos un JSON ligero a mano para no usar memoria extra
+        String json = "{";
+        json += "\"t\":" + String(s.dhtOk ? s.tempAmb : 0, 1) + ",";
+        json += "\"h\":" + String(s.dhtOk ? s.humAmb : 0, 1) + ",";
+        json += "\"n\":" + String(s.analogicoOk ? s.valorAnalogico : 0, 1) + ",";
+        json += "\"modo\":\"" + String(_hw->getModoOperacion() == ModoOperacion::AUTO ? "AUTO" : "MANUAL") + "\",";
+        json += "\"heater\":" + String(a.heater_ON ? "true" : "false") + ",";
+        json += "\"fogger\":" + String(a.fogger_ON ? "true" : "false") + ",";
+        json += "\"extractor\":" + String(a.extractor_ON ? "true" : "false") + ",";
+        json += "\"light\":" + String(a.light_ON ? "true" : "false");
+        json += "}";
+        
+        request->send(200, "application/json", json);
+    });
+
+    servidor.on("/api/control", HTTP_POST, [](AsyncWebServerRequest *request){
+        if (_hw == nullptr) {
+            request->send(500, "text/plain", "Error: No HW");
+            return;
+        }
+        if (request->hasParam("rele", true)) {
+            String rele = request->getParam("rele", true)->value();
+            ActuadorData a = _hw->getActuadores();
+            
+            if (rele == "modo_operacion") {
+                if (_hw->getModoOperacion() == ModoOperacion::AUTO) {
+                    _hw->setModoOperacion(ModoOperacion::MANUAL);
+                } else {
+                    _hw->setModoOperacion(ModoOperacion::AUTO);
+                }
+            } else {
+                // Si intenta mover un relé, forzamos modo MANUAL primero
+                _hw->setModoOperacion(ModoOperacion::MANUAL);
+                
+                // Alternar estado lógicamente usando los métodos correctos
+                if (rele == "heater") _hw->setHeater(!a.heater_ON);
+                else if (rele == "fogger") _hw->setFogger(!a.fogger_ON);
+                else if (rele == "extractor") _hw->setExtractor(!a.extractor_ON);
+                else if (rele == "light") _hw->setLight(!a.light_ON);
+            }
+            
+            request->send(200, "text/plain", "OK");
+        } else {
+            request->send(400, "text/plain", "Falta parámetro rele");
+        }
+    });
+
 } // Cierre de la función de enrutamiento
 
 /*

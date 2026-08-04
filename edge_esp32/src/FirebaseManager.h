@@ -33,8 +33,14 @@ public:
     // Publica la telemetría actual a la RTDB
     void publicarTelemetria();
     
+    // Publica el historial
+    void publicarHistorial();
+    
     // Verifica si Firebase está autenticado y conectado
     bool isConnected() const;
+
+    // Actualizar Device ID
+    void setDeviceId(const String& id) { _deviceId = id; }
 
 private:
     String _deviceId;
@@ -51,15 +57,18 @@ private:
     // FirebaseData: Objeto utilizado para realizar las operaciones de lectura/escritura en la base de datos.
     // Mantiene la sesión y procesa los datos HTTP que se envían y reciben de los servidores de Firebase.
     FirebaseData _fbdo;
+    FirebaseData _fbdoStream;
     
     // Bandera de estado
     bool _conectado = false;
+    bool _streamConfigurado = false;
+    bool _forzarTelemetria = false;
     unsigned long _ultimoIntento = 0;
     
     // No async callbacks needed for simple FirebaseESP32
     
     // Handlers para Stream (Configuraciones y Comandos)
-    void configurarStreams();
+    bool configurarStreams();
     static void streamCallback(StreamData data);
     static void streamTimeoutCallback(bool timeout);
 

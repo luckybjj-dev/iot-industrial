@@ -1,54 +1,84 @@
 #include "FileManager.h"
 
-/*
- * ============================================================================
- * CONSTRUCTOR
- * ============================================================================
- * No realiza acciones pesadas. En sistemas embebidos, la interacción con el 
- * hardware (como inicializar memorias) se retrasa al método begin() para 
- * garantizar que el hardware base y los objetos de Arduino ya están listos.
- */
 FileManager::FileManager() {
-    // Constructor vacío, inicialización real en begin()
 }
 
-/*
- * ============================================================================
- * MONTAJE DEL SISTEMA DE ARCHIVOS (LittleFS)
- * ============================================================================
- * LittleFS requiere ser "montado" (preparado) antes de poder leer o escribir
- * archivos. El parámetro 'true' en LittleFS.begin(true) indica que, si la
- * memoria flash no está particionada o tiene un formato incorrecto (ej. es un 
- * chip nuevo de fábrica), el ESP32 la formateará automáticamente para poder
- * usarla.
- */
 bool FileManager::begin() {
     Serial.println(F("[LittleFS] Montando sistema de archivos..."));
-    
-    // true = Formatear partición si falla el montaje
     if (!LittleFS.begin(true)) {
         Serial.println(F("❌ [LittleFS] Error crítico al montar el sistema de archivos."));
         return false;
     }
-    
     Serial.println(F("✅ [LittleFS] Sistema de archivos montado correctamente."));
     return true;
 }
 
-/*
- * ============================================================================
- * DESERIALIZACIÓN JSON Y FALLBACKS DE SEGURIDAD (DEFAULT FALLBACKS)
- * ============================================================================
- * Este método extrae los datos desde el archivo persistente (config.json) 
- * hacia las estructuras de C++.
- * 
- * ¿Qué son los "Fallbacks"?
- * Es el mecanismo de seguridad usando el operador '|' que provee ArduinoJson.
- * Si en el JSON falta un campo (ej. porque hubo un error en la actualización), 
- * el operador '|' inyecta un valor seguro por defecto, asegurando que el 
- * sistema no tenga variables nulas (lo cual podría causar que la calefacción 
- * nunca se apague, por ejemplo).
- */
+// Helpers for Enum parsing (String <-> Enum)
+VariableFisica parseVariable(const String& str) {
+    if (str == "TEMP") return VariableFisica::TEMP;
+    if (str == "HUMEDAD") return VariableFisica::HUMEDAD;
+    if (str == "CO2") return VariableFisica::CO2;
+    if (str == "VPD") return VariableFisica::VPD;
+    if (str == "HORA_DEL_DIA") return VariableFisica::HORA_DEL_DIA;
+    return VariableFisica::TEMP; // Default
+}
+String stringifyVariable(VariableFisica var) {
+    switch(var) {
+        case VariableFisica::TEMP: return "TEMP";
+        case VariableFisica::HUMEDAD: return "HUMEDAD";
+        case VariableFisica::CO2: return "CO2";
+        case VariableFisica::VPD: return "VPD";
+        case VariableFisica::HORA_DEL_DIA: return "HORA_DEL_DIA";
+        default: return "TEMP";
+    }
+}
+
+OperadorLogico parseOperador(const String& str) {
+    if (str == "MAYOR_QUE") return OperadorLogico::MAYOR_QUE;
+    if (str == "MENOR_QUE") return OperadorLogico::MENOR_QUE;
+    if (str == "IGUAL") return OperadorLogico::IGUAL;
+    return OperadorLogico::IGUAL; // Default
+}
+String stringifyOperador(OperadorLogico op) {
+    switch(op) {
+        case OperadorLogico::MAYOR_QUE: return "MAYOR_QUE";
+        case OperadorLogico::MENOR_QUE: return "MENOR_QUE";
+        case OperadorLogico::IGUAL: return "IGUAL";
+        default: return "IGUAL";
+    }
+}
+
+ActuadorFisico parseActuador(const String& str) {
+    if (str == "CALEFACTOR") return ActuadorFisico::CALEFACTOR;
+    if (str == "NIEBLA") return ActuadorFisico::NIEBLA;
+    if (str == "EXTRACTOR") return ActuadorFisico::EXTRACTOR;
+    if (str == "LUZ") return ActuadorFisico::LUZ;
+    return ActuadorFisico::CALEFACTOR; // Default
+}
+String stringifyActuador(ActuadorFisico act) {
+    switch(act) {
+        case ActuadorFisico::CALEFACTOR: return "CALEFACTOR";
+        case ActuadorFisico::NIEBLA: return "NIEBLA";
+        case ActuadorFisico::EXTRACTOR: return "EXTRACTOR";
+        case ActuadorFisico::LUZ: return "LUZ";
+        default: return "CALEFACTOR";
+    }
+}
+
+EstadoDeseado parseEstado(const String& str) {
+    if (str == "ENCENDIDO") return EstadoDeseado::ENCENDIDO;
+    if (str == "APAGADO") return EstadoDeseado::APAGADO;
+    return EstadoDeseado::APAGADO; // Default
+}
+String stringifyEstado(EstadoDeseado est) {
+    switch(est) {
+        case EstadoDeseado::ENCENDIDO: return "ENCENDIDO";
+        case EstadoDeseado::APAGADO: return "APAGADO";
+        default: return "APAGADO";
+    }
+}
+
+
 ConfiguracionCultivo FileManager::cargarConfiguracion() {
     if (!LittleFS.exists(_archivoConfig)) {
         Serial.println(F("[LittleFS] No se encontró config.json. Día Cero detectado."));
@@ -61,13 +91,10 @@ ConfiguracionCultivo FileManager::cargarConfiguracion() {
         return _configActual;
     }
 
-    // Se asigna memoria estática en el Stack para procesar el JSON. 
-    // 1024 bytes suelen ser suficientes para archivos de configuración pequeños.
-    StaticJsonDocument<1024> doc;
+    DynamicJsonDocument doc(2048); // Aumentado para soportar arreglos de reglas
     DeserializationError error = deserializeJson(doc, file);
     file.close();
 
-    // Si el JSON está mal formado o corrupto, ejecutamos el plan de rescate.
     if (error) {
         Serial.print(F("❌ [LittleFS] Error parseando JSON: "));
         Serial.println(error.c_str());
@@ -76,94 +103,90 @@ ConfiguracionCultivo FileManager::cargarConfiguracion() {
         return _configActual;
     }
 
-    /* 
-     * Extracción con Fallbacks (|):
-     * doc["clave"] | valor_por_defecto
-     */
+    // Comprobar si el JSON cargado es el formato antiguo (no tiene "reglas")
+    if (!doc.containsKey("reglas")) {
+        Serial.println(F("⚠️ [LittleFS] Configuración antigua detectada (sin reglas). Forzando migración..."));
+        _crearConfiguracionPorDefecto();
+        return _configActual;
+    }
+
     _configActual.greenhouse_id = doc["greenhouse_id"] | "CHAMBER_01";
     _configActual.crop_profile  = doc["crop_profile"] | "DEFAULT";
+    _configActual.max_manual_time_ms = doc["max_manual_time_ms"] | 900000;
     
-    JsonObject climate = doc["climate"];
-    _configActual.climate.temp_target_c       = climate["temp_target_c"] | 21.0;
-    _configActual.climate.temp_hysteresis     = climate["temp_hysteresis"] | 1.0;
-    _configActual.climate.humidity_target_pct = climate["humidity_target_pct"] | 50.0;
-    _configActual.climate.humidity_hysteresis = climate["humidity_hysteresis"] | 5.0;
-    _configActual.climate.co2_max_ppm         = climate["co2_max_ppm"] | 800;
-
-    JsonObject vent = doc["ventilation"];
-    _configActual.ventilation.fae_interval_min = vent["fae_interval_min"] | 60;
-    _configActual.ventilation.fae_duration_sec = vent["fae_duration_sec"] | 120;
-
     JsonObject failsafe = doc["failsafes"];
     _configActual.failsafes.watchdog_timeout_ms       = failsafe["watchdog_timeout_ms"] | 10000;
     _configActual.failsafes.max_internal_temp_limit_c = failsafe["max_internal_temp_limit_c"] | 26.0;
+
+    JsonArray reglasJson = doc["reglas"];
+    _configActual.total_reglas = 0;
+    for (JsonObject reglaJson : reglasJson) {
+        if (_configActual.total_reglas >= 20) break; // Limite de seguridad
+        
+        ReglaTermodinamica regla;
+        regla.variable = parseVariable(reglaJson["var"] | "TEMP");
+        regla.operador = parseOperador(reglaJson["op"] | "IGUAL");
+        regla.valor = reglaJson["val"] | 0.0f;
+        regla.actuador = parseActuador(reglaJson["act"] | "CALEFACTOR");
+        regla.accion = parseEstado(reglaJson["estado"] | "APAGADO");
+        
+        _configActual.reglas[_configActual.total_reglas] = regla;
+        _configActual.total_reglas++;
+    }
 
     Serial.println("[LittleFS] Configuración cargada con éxito. Perfil: " + _configActual.crop_profile);
     return _configActual;
 }
 
-/*
- * ============================================================================
- * PLAN DE RESCATE: CONFIGURACIÓN POR DEFECTO (HARDCODED FALLBACK)
- * ============================================================================
- * Función de autocuración. Cuando detectamos que es la primera vez que se
- * enciende el dispositivo ("Día Cero") o que hubo una corrupción del archivo,
- * esta función sobreescribe las variables en memoria con un estado 
- * predefinido seguro (Modo Fungi) y guarda ese estado como el nuevo
- * archivo config.json estable.
- */
 void FileManager::_crearConfiguracionPorDefecto() {
     Serial.println(F("[LittleFS] Creando perfil inicial (MODO FUNGI PMV) por defecto..."));
     
-    // Perfil "Día Cero" basado en los requisitos de MVP 0 Fungi
     _configActual.greenhouse_id = "FUNGI_CHAMBER_01";
     _configActual.crop_profile  = "Fungi_Fruiting_v1";
-    
-    _configActual.climate.temp_target_c       = 21.0;
-    _configActual.climate.temp_hysteresis     = 1.0;
-    _configActual.climate.humidity_target_pct = 90.0;
-    _configActual.climate.humidity_hysteresis = 3.0;
-    _configActual.climate.co2_max_ppm         = 800;
-
-    _configActual.ventilation.fae_interval_min = 10;
-    _configActual.ventilation.fae_duration_sec = 60;
+    _configActual.max_manual_time_ms = 900000; // 15 minutos
 
     _configActual.failsafes.watchdog_timeout_ms       = 10000;
     _configActual.failsafes.max_internal_temp_limit_c = 30.0;
 
+    _configActual.total_reglas = 0;
+    
+    // Reglas por defecto emulando la antigua histéresis
+    // Temp < 20 -> Calefactor ON
+    _configActual.reglas[0] = {VariableFisica::TEMP, OperadorLogico::MENOR_QUE, 20.0f, ActuadorFisico::CALEFACTOR, EstadoDeseado::ENCENDIDO};
+    // Temp > 21 -> Calefactor OFF
+    _configActual.reglas[1] = {VariableFisica::TEMP, OperadorLogico::MAYOR_QUE, 21.0f, ActuadorFisico::CALEFACTOR, EstadoDeseado::APAGADO};
+    // Hum < 87 -> Niebla ON
+    _configActual.reglas[2] = {VariableFisica::HUMEDAD, OperadorLogico::MENOR_QUE, 87.0f, ActuadorFisico::NIEBLA, EstadoDeseado::ENCENDIDO};
+    // Hum > 90 -> Niebla OFF
+    _configActual.reglas[3] = {VariableFisica::HUMEDAD, OperadorLogico::MAYOR_QUE, 90.0f, ActuadorFisico::NIEBLA, EstadoDeseado::APAGADO};
+    // CO2 > 800 -> Extractor ON
+    _configActual.reglas[4] = {VariableFisica::CO2, OperadorLogico::MAYOR_QUE, 800.0f, ActuadorFisico::EXTRACTOR, EstadoDeseado::ENCENDIDO};
+    
+    _configActual.total_reglas = 5;
+
     guardarConfiguracion(_configActual);
 }
 
-/*
- * ============================================================================
- * SERIALIZACIÓN JSON Y ESCRITURA EN DISCO
- * ============================================================================
- * Convierte el estado actual del equipo (estructuras de C++) en un texto 
- * estructurado (JSON).
- * Se crean "NestedObjects" para organizar el JSON de forma jerárquica
- * mejorando la legibilidad e interoperabilidad.
- * Finalmente, guarda este documento estructurado en el sistema LittleFS.
- */
 bool FileManager::guardarConfiguracion(const ConfiguracionCultivo& config) {
-    StaticJsonDocument<1024> doc;
+    DynamicJsonDocument doc(2048);
     
     doc["greenhouse_id"] = config.greenhouse_id;
     doc["crop_profile"]  = config.crop_profile;
+    doc["max_manual_time_ms"] = config.max_manual_time_ms;
     
-    JsonObject climate = doc.createNestedObject("climate");
-    climate["temp_target_c"]       = config.climate.temp_target_c;
-    climate["temp_hysteresis"]     = config.climate.temp_hysteresis;
-    climate["humidity_target_pct"] = config.climate.humidity_target_pct;
-    climate["humidity_hysteresis"] = config.climate.humidity_hysteresis;
-    climate["co2_max_ppm"]         = config.climate.co2_max_ppm;
-
-    JsonObject vent = doc.createNestedObject("ventilation");
-    vent["fae_interval_min"] = config.ventilation.fae_interval_min;
-    vent["fae_duration_sec"] = config.ventilation.fae_duration_sec;
-
     JsonObject failsafe = doc.createNestedObject("failsafes");
     failsafe["watchdog_timeout_ms"]       = config.failsafes.watchdog_timeout_ms;
     failsafe["max_internal_temp_limit_c"] = config.failsafes.max_internal_temp_limit_c;
+
+    JsonArray reglasJson = doc.createNestedArray("reglas");
+    for (int i = 0; i < config.total_reglas; i++) {
+        JsonObject reglaJson = reglasJson.createNestedObject();
+        reglaJson["var"] = stringifyVariable(config.reglas[i].variable);
+        reglaJson["op"] = stringifyOperador(config.reglas[i].operador);
+        reglaJson["val"] = config.reglas[i].valor;
+        reglaJson["act"] = stringifyActuador(config.reglas[i].actuador);
+        reglaJson["estado"] = stringifyEstado(config.reglas[i].accion);
+    }
 
     File file = LittleFS.open(_archivoConfig, "w");
     if (!file) {
@@ -182,23 +205,8 @@ bool FileManager::guardarConfiguracion(const ConfiguracionCultivo& config) {
     return true;
 }
 
-/*
- * ============================================================================
- * RECEPCIÓN E INYECCIÓN DE NUEVOS PARÁMETROS (DESDE MQTT / WEB)
- * ============================================================================
- * Cuando el dispositivo recibe un nuevo comando (ej. cambiar temperatura), 
- * este suele llegar como un texto JSON plano (String jsonString).
- * 
- * Aquí aplicamos una técnica de inyección segura:
- * 1. Intentamos leer el JSON recibido. Si falla, descartamos por completo.
- * 2. Si es válido, extraemos los nuevos valores. 
- * 3. FALLBACKS DE RETENCIÓN: Si el comando MQTT solo envía la temperatura,
- *    usamos el operador '|' apuntando a _configActual. Esto significa: 
- *    "Si me envían un nuevo valor, úsalo, de lo contrario, conserva el que
- *    ya teníamos". Esto permite actualizaciones parciales de configuración.
- */
 bool FileManager::guardarConfiguracionJson(const String& jsonString) {
-    StaticJsonDocument<1024> doc;
+    DynamicJsonDocument doc(2048);
     DeserializationError error = deserializeJson(doc, jsonString);
     
     if (error) {
@@ -206,25 +214,39 @@ bool FileManager::guardarConfiguracionJson(const String& jsonString) {
         return false;
     }
     
-    // Si es válido, lo inyectamos al método nativo con fallback a los valores actuales
     ConfiguracionCultivo nuevaConfig;
     nuevaConfig.greenhouse_id = doc["greenhouse_id"] | _configActual.greenhouse_id;
     nuevaConfig.crop_profile  = doc["crop_profile"] | _configActual.crop_profile;
+    nuevaConfig.max_manual_time_ms = doc["max_manual_time_ms"] | _configActual.max_manual_time_ms;
     
-    JsonObject climate = doc["climate"];
-    nuevaConfig.climate.temp_target_c       = climate["temp_target_c"] | _configActual.climate.temp_target_c;
-    nuevaConfig.climate.temp_hysteresis     = climate["temp_hysteresis"] | _configActual.climate.temp_hysteresis;
-    nuevaConfig.climate.humidity_target_pct = climate["humidity_target_pct"] | _configActual.climate.humidity_target_pct;
-    nuevaConfig.climate.humidity_hysteresis = climate["humidity_hysteresis"] | _configActual.climate.humidity_hysteresis;
-    nuevaConfig.climate.co2_max_ppm         = climate["co2_max_ppm"] | _configActual.climate.co2_max_ppm;
-
-    JsonObject vent = doc["ventilation"];
-    nuevaConfig.ventilation.fae_interval_min = vent["fae_interval_min"] | _configActual.ventilation.fae_interval_min;
-    nuevaConfig.ventilation.fae_duration_sec = vent["fae_duration_sec"] | _configActual.ventilation.fae_duration_sec;
-
     JsonObject failsafe = doc["failsafes"];
     nuevaConfig.failsafes.watchdog_timeout_ms       = failsafe["watchdog_timeout_ms"] | _configActual.failsafes.watchdog_timeout_ms;
     nuevaConfig.failsafes.max_internal_temp_limit_c = failsafe["max_internal_temp_limit_c"] | _configActual.failsafes.max_internal_temp_limit_c;
+    
+    // Extraer reglas si existen en el JSON, sino mantener las actuales
+    if (doc.containsKey("reglas")) {
+        JsonArray reglasJson = doc["reglas"];
+        nuevaConfig.total_reglas = 0;
+        for (JsonObject reglaJson : reglasJson) {
+            if (nuevaConfig.total_reglas >= 20) break;
+            
+            ReglaTermodinamica regla;
+            regla.variable = parseVariable(reglaJson["var"] | "TEMP");
+            regla.operador = parseOperador(reglaJson["op"] | "IGUAL");
+            regla.valor = reglaJson["val"] | 0.0f;
+            regla.actuador = parseActuador(reglaJson["act"] | "CALEFACTOR");
+            regla.accion = parseEstado(reglaJson["estado"] | "APAGADO");
+            
+            nuevaConfig.reglas[nuevaConfig.total_reglas] = regla;
+            nuevaConfig.total_reglas++;
+        }
+    } else {
+        // Copiar las actuales si el JSON no trajo reglas
+        nuevaConfig.total_reglas = _configActual.total_reglas;
+        for (int i = 0; i < _configActual.total_reglas; i++) {
+            nuevaConfig.reglas[i] = _configActual.reglas[i];
+        }
+    }
     
     _configActual = nuevaConfig;
     return guardarConfiguracion(_configActual);
