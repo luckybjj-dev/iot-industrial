@@ -12,6 +12,9 @@ function App() {
   const [configs, setConfigs] = useState<{ [deviceId: string]: ConfiguracionCultivo }>({});
   const [error, setError] = useState<string | null>(null);
   
+  // Estado optimista para hacer que la UI se sienta instantánea aunque el hardware demore
+  const [optimisticModes, setOptimisticModes] = useState<Record<string, 'AUTO' | 'MANUAL'>>({});
+  
   // Modales
   const [editingRulesFor, setEditingRulesFor] = useState<string | null>(null);
 
@@ -20,6 +23,8 @@ function App() {
     const unsubscribeTelemetria = subscribeToAllDevices((devices) => {
       setCamaras(devices);
       setError(null);
+      // Limpiar estados optimistas cuando recibimos update real del servidor
+      setOptimisticModes({});
     });
 
     return () => unsubscribeTelemetria();
@@ -48,9 +53,15 @@ function App() {
   const handleToggleMode = async (deviceId: string, currentMode: 'AUTO' | 'MANUAL') => {
     try {
       const newMode = currentMode === 'AUTO' ? 'MANUAL' : 'AUTO';
+      setOptimisticModes(prev => ({ ...prev, [deviceId]: newMode }));
       await sendModeCommand(deviceId, newMode);
     } catch (err) {
       console.error("Error al enviar comando de modo", err);
+      setOptimisticModes(prev => {
+        const next = { ...prev };
+        delete next[deviceId];
+        return next;
+      });
     }
   };
 
@@ -109,7 +120,7 @@ function App() {
         ) : (
           <div className="space-y-12">
             {camaras.map((camara) => {
-              const modo = camara.modo_operacion || 'AUTO';
+              const modo = optimisticModes[camara.deviceId] || camara.modo_operacion || 'AUTO';
               const config = configs[camara.deviceId];
               const reglas = config?.reglas || [];
 

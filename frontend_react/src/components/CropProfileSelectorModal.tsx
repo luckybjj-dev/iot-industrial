@@ -85,8 +85,28 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
     try {
       // Usar targets editados si existen, sino los originales
       const finalPhase = { ...phase, targets: editedTargets || phase.targets };
+      
+      let finalProfileName = profile?.commonName || 'Desconocido';
+
+      if (editedTargets) {
+        // Generar un clon customizado para guardar los cambios en localStorage
+        const customId = profile.id.startsWith('custom_') ? profile.id : `custom_${profile.id}_${Date.now()}`;
+        finalProfileName = profile.id.startsWith('custom_') ? profile.commonName : `${profile.commonName} (Custom)`;
+        
+        const updatedProfile = { 
+          ...profile, 
+          id: customId, 
+          commonName: finalProfileName,
+          phases: profile.phases.map(p => p.id === phase.id ? finalPhase : p) 
+        };
+        
+        const newCustoms = { ...customProfiles, [customId]: updatedProfile };
+        setCustomProfiles(newCustoms);
+        localStorage.setItem('CUSTOM_PROFILES', JSON.stringify(newCustoms));
+      }
+
       const compiledRules = generateRulesFromProfile(finalPhase);
-      await onSave(compiledRules, profile?.commonName || 'Desconocido', phase.name);
+      await onSave(compiledRules, finalProfileName, phase.name);
       onClose();
     } catch (e) {
       alert('Error inyectando el perfil al ESP32');
