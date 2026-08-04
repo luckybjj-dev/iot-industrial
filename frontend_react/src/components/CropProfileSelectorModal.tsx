@@ -8,7 +8,7 @@ interface Props {
   deviceId: string;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (rules: ReglaTermodinamica[]) => Promise<void>;
+  onSave: (rules: ReglaTermodinamica[], profileName: string, phaseName: string) => Promise<void>;
 }
 
 type TabType = 'FUNGI' | 'PLANTAE' | 'CUSTOM';
@@ -86,7 +86,7 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
       // Usar targets editados si existen, sino los originales
       const finalPhase = { ...phase, targets: editedTargets || phase.targets };
       const compiledRules = generateRulesFromProfile(finalPhase);
-      await onSave(compiledRules);
+      await onSave(compiledRules, profile?.commonName || 'Desconocido', phase.name);
       onClose();
     } catch (e) {
       alert('Error inyectando el perfil al ESP32');
@@ -100,12 +100,23 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
   const renderEncyclopedia = () => {
     if (!profile) return null;
     return (
-      <div className="bg-emerald-900/10 border border-emerald-500/20 p-4 rounded-xl">
-        <div className="flex items-start gap-3">
-          <BookOpen className="text-emerald-400 mt-1 flex-shrink-0" size={20} />
-          <div>
-            <h4 className="text-white font-bold mb-1">Enciclopedia Agronómica</h4>
-            <p className="text-sm text-neutral-300 leading-relaxed">{profile.description || 'Sin descripción disponible para este perfil personalizado.'}</p>
+      <div className="bg-emerald-900/10 border border-emerald-500/20 p-4 rounded-xl flex gap-4">
+        {profile.imageUrl && (
+          <img src={profile.imageUrl} alt={profile.commonName} className="w-32 h-32 object-cover rounded-lg border border-emerald-500/30 shadow-lg" />
+        )}
+        <div className="flex-1">
+          <div className="flex items-start gap-3">
+            <BookOpen className="text-emerald-400 mt-1 flex-shrink-0" size={20} />
+            <div>
+              <h4 className="text-white font-bold mb-1">Enciclopedia Agronómica</h4>
+              <p className="text-sm text-neutral-300 leading-relaxed mb-3">{profile.description || 'Sin descripción disponible.'}</p>
+              {phase?.stageTips && (
+                <div className="bg-emerald-950/50 border border-emerald-500/20 p-3 rounded-lg shadow-inner">
+                  <h5 className="text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1">💡 Tips para {phase.name}</h5>
+                  <p className="text-xs text-neutral-300">{phase.stageTips}</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -132,9 +143,14 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
               <Edit3 size={16} /> Ajustar Valores
             </button>
           ) : (
-            <button onClick={() => setIsEditing(false)} className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-3 py-1.5 rounded-lg transition-colors">
-              <Save size={16} /> Fijar Ajustes
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setEditedTargets(JSON.parse(JSON.stringify(phase.targets)))} className="flex items-center gap-2 text-sm text-orange-400 hover:text-orange-300 bg-orange-500/10 px-3 py-1.5 rounded-lg transition-colors" title="Restablecer a valores del catálogo">
+                Restablecer
+              </button>
+              <button onClick={() => setIsEditing(false)} className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-3 py-1.5 rounded-lg transition-colors">
+                <Save size={16} /> Fijar Ajustes
+              </button>
+            </div>
           )}
         </div>
         

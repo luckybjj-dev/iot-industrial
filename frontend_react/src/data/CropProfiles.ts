@@ -23,6 +23,7 @@ export interface CropPhase {
   id: string;
   name: string;
   duration_days?: number;
+  stageTips?: string;
   targets: PhaseTargets;
 }
 
@@ -32,6 +33,7 @@ export interface CropProfile {
   scientificName: string;
   commonName: string;
   description: string;
+  imageUrl?: string;
   phases: CropPhase[];
 }
 
@@ -318,10 +320,12 @@ export const CROP_PROFILES: Record<string, CropProfile> = {
     scientificName: 'Lentinula edodes',
     commonName: 'Shiitake',
     description: 'Nivel de dificultad: Alta. Demanda paciencia y un ciclo largo. Su fase más crítica es el "browning" (maduración del bloque que genera una corteza protectora marrón) y requiere shocks físicos (golpes) o hídricos (remojo frío) para desencadenar el pinning explosivo.',
+    imageUrl: 'https://images.unsplash.com/photo-1596704017254-9b121068fb31?auto=format&fit=crop&q=80&w=400',
     phases: [
       {
         id: 'colonization',
         name: '1. Incubación',
+        stageTips: 'Mantener a oscuras absolutas. El micelio del shiitake primero es blanco y algodonoso. No ventilar (el alto CO2 favorece el crecimiento vegetativo rápido y previene competidores).',
         targets: {
           temperature: { day: { min: 23, max: 25 }, night: { min: 23, max: 25 } },
           humidity: { min: 65, max: 75 },
@@ -334,6 +338,7 @@ export const CROP_PROFILES: Record<string, CropProfile> = {
       {
         id: 'browning',
         name: '2. Maduración (Browning)',
+        stageTips: 'El bloque debe empezar a ponerse marrón. Introducir un ciclo de luz leve. Si el bloque exuda líquido marrón, es normal (metabolitos secundarios).',
         targets: {
           temperature: { day: { min: 18, max: 22 }, night: { min: 18, max: 20 } },
           humidity: { min: 70, max: 80 },
@@ -346,6 +351,7 @@ export const CROP_PROFILES: Record<string, CropProfile> = {
       {
         id: 'primordia',
         name: '3. Inducción de Primordios',
+        stageTips: '¡Momento crítico! Retira el plástico del bloque. Aplica un "choque de frío" y aumenta masivamente la oxigenación (FAE) para gatillar los primordios.',
         targets: {
           temperature: { day: { min: 15, max: 17 }, night: { min: 14, max: 16 } },
           humidity: { min: 92, max: 95 },
@@ -358,6 +364,7 @@ export const CROP_PROFILES: Record<string, CropProfile> = {
       {
         id: 'fruiting',
         name: '4. Fructificación',
+        stageTips: 'Baja ligeramente la humedad para evitar manchas bacterianas en los sombreros. Cosechar antes de que el velo debajo del sombrero se rompa por completo.',
         targets: {
           temperature: { day: { min: 14, max: 18 }, night: { min: 13, max: 16 } },
           humidity: { min: 85, max: 90 },
@@ -456,10 +463,12 @@ export const CROP_PROFILES: Record<string, CropProfile> = {
     scientificName: 'Solanum lycopersicum',
     commonName: 'Tomate de Invernadero',
     description: 'Nivel de dificultad: Alta. El cultivo rey en los entornos de CEA industrial. Exige control termodinámico muy preciso del VPD para orquestar el "Crop Steering", inclinando la balanza metabólica de la planta hacia el crecimiento vegetativo o generativo de forma intencional.',
+    imageUrl: 'https://images.unsplash.com/photo-1592841200221-a6898f307baa?auto=format&fit=crop&q=80&w=400',
     phases: [
       {
         id: 'germination',
         name: '1. Germinación',
+        stageTips: 'Mantener humedad alta para evitar que la testa de la semilla se endurezca. VPD muy bajo.',
         targets: {
           temperature: { day: { min: 24, max: 26 }, night: { min: 22, max: 24 } },
           humidity: { min: 90, max: 95 },
@@ -476,6 +485,7 @@ export const CROP_PROFILES: Record<string, CropProfile> = {
       {
         id: 'seedling',
         name: '2. Plántula',
+        stageTips: 'Bajar ligeramente la humedad. Promover desarrollo radicular inicial y evitar elongación excesiva del tallo (ahilamiento) mediante luz adecuada.',
         targets: {
           temperature: { day: { min: 22, max: 24 }, night: { min: 18, max: 20 } },
           humidity: { min: 70, max: 80 },

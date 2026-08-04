@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { subscribeToAllDevices, subscribeToDeviceConfig, sendCommand, sendModeCommand, sendConfigRules } from './services/firebaseService';
 import type { EstadoCamara, ConfiguracionCultivo, ReglaTermodinamica } from './types/cultivo';
 import { MetricCard } from './components/MetricCard';
-import { HistoryChart } from './components/HistoryChart';
+import { TelemetryDashboard } from './components/TelemetryDashboard';
 import { SemaforoEstabilidad } from './components/SemaforoEstabilidad';
 import { CropProfileSelectorModal } from './components/CropProfileSelectorModal';
-import { Thermometer, Droplets, Leaf, Activity, Wind, Power, Settings2, ShieldAlert } from 'lucide-react';
+import { Thermometer, Droplets, Leaf, Activity, Wind, Power, Settings2, ShieldAlert, Sprout } from 'lucide-react';
 
 function App() {
   const [camaras, setCamaras] = useState<EstadoCamara[]>([]);
@@ -63,9 +63,13 @@ function App() {
     }
   };
 
-  const handleSaveRules = async (deviceId: string, rules: ReglaTermodinamica[]) => {
+  const handleSaveRules = async (deviceId: string, rules: ReglaTermodinamica[], profileName?: string, phaseName?: string) => {
     try {
-      await sendConfigRules(deviceId, { reglas: rules });
+      await sendConfigRules(deviceId, { 
+        reglas: rules,
+        activeProfileName: profileName || 'Desconocido',
+        activePhaseName: phaseName || 'Desconocida'
+      });
     } catch (error) {
       console.error("Error saving rules:", error);
       throw error;
@@ -123,7 +127,18 @@ function App() {
                           {camara.estado}
                         </span>
                       </div>
-                      <p className="text-neutral-500 text-xs font-mono tracking-widest">TS: {camara.ultima_actualizacion || 'N/A'}</p>
+                      <p className="text-neutral-500 text-xs font-mono tracking-widest mb-3">TS: {camara.ultima_actualizacion || 'N/A'}</p>
+                      
+                      {/* Active Profile Info */}
+                      {(config as any)?.activeProfileName && (
+                        <div className="inline-flex items-center gap-2 bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-lg">
+                          <Sprout size={14} className="text-purple-400" />
+                          <div>
+                            <div className="text-[10px] font-bold text-purple-400 uppercase tracking-widest leading-none">{(config as any).activeProfileName}</div>
+                            <div className="text-[10px] text-neutral-400 mt-0.5">Etapa: {(config as any).activePhaseName}</div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="w-full xl:w-2/3 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-end">
@@ -253,9 +268,9 @@ function App() {
                           ))}
                         </div>
 
-                        {/* GRÁFICO HISTÓRICO UNIFICADO */}
+                        {/* GRÁFICO HISTÓRICO UNIFICADO (TELEMETRÍA) */}
                         <div className="xl:col-span-3">
-                          <HistoryChart deviceId={camara.deviceId} />
+                          <TelemetryDashboard topology={null} />
                         </div>
                       </div>
 
@@ -272,8 +287,8 @@ function App() {
                       deviceId={camara.deviceId}
                       isOpen={true}
                       onClose={() => setEditingRulesFor(null)}
-                      onSave={async (newRules) => {
-                        await handleSaveRules(camara.deviceId, newRules);
+                      onSave={async (newRules, profileName, phaseName) => {
+                        await handleSaveRules(camara.deviceId, newRules, profileName, phaseName);
                       }}
                     />
                   )}

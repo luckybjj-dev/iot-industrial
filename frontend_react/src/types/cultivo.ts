@@ -55,6 +55,8 @@ export interface FailsafesConfig {
 export interface ConfiguracionCultivo {
     greenhouse_id?: string;
     crop_profile?: string;
+    activeProfileName?: string;
+    activePhaseName?: string;
     max_manual_time_ms?: number;
     failsafes?: FailsafesConfig;
     reglas?: ReglaTermodinamica[];
