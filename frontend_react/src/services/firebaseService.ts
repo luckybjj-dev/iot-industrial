@@ -1,4 +1,4 @@
-import { ref, onValue, update, query, limitToLast, get, set } from 'firebase/database';
+import { ref, onValue, update, query, limitToLast, get } from 'firebase/database';
 import { database } from '../config/firebase';
 import type { EstadoCamara, TelemetriaFungi, HistorialData, ConfiguracionCultivo } from '../types/cultivo';
 
@@ -47,9 +47,23 @@ export const subscribeToAllDevices = (
  */
 export const sendConfigRules = async (deviceId: string, config: Partial<ConfiguracionCultivo>) => {
   try {
+    const configRef = ref(database, `devices/${deviceId}/commands`);
+    
+    // Preparar el payload de actualización
+    const updates: Record<string, any> = {};
+    
     if (config.reglas) {
-      const rulesRef = ref(database, `devices/${deviceId}/commands/reglas`);
-      await set(rulesRef, config.reglas);
+      updates['reglas'] = config.reglas;
+    }
+    if (config.activeProfileName) {
+      updates['activeProfileName'] = config.activeProfileName;
+    }
+    if (config.activePhaseName) {
+      updates['activePhaseName'] = config.activePhaseName;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await update(configRef, updates);
     }
   } catch (error) {
     console.error('Error enviando configuración a Firebase:', error);
