@@ -69,6 +69,10 @@ DisplayManager     display(hw, net, firebase);
 // --------------------------------------------------------------------
 static unsigned long _ultimoCiclo = 0;
 static constexpr long INTERVALO_CICLO = 5000L; // ms
+
+static unsigned long _ultimoHistorial = 0;
+static constexpr long INTERVALO_HISTORIAL = 10000L; // ms
+
 static bool _otaIniciado = false;
 
 // ====================================================================
@@ -101,9 +105,12 @@ void setup() {
     hw.setConfiguracion(fileManager.cargarConfiguracion()); // Inyectar cerebro dinámico leyendo desde la memoria flash
     
     hw.begin();       // Configura los pines GPIO, sensores DHT de humedad/temp, y sonda NTC
+    
+    NetworkManager::setHardwareController(&hw); 
     net.iniciar();    // Inicia el Portal Cautivo Asíncrono (típicamente se delega al Core 0 para no frenar al resto del sistema)
 
-    firebase.begin(); // Arranca el proceso de autenticación y conexión con Realtime Database
+    firebase.setDeviceId(deviceId); // Actualiza el ID dinámico antes de inicializar la nube
+    // RETIRADO DEL SETUP: firebase.begin() ahora se iniciará de forma segura en el loop() solo cuando haya Internet.
 
     display.begin();  // Inicializar y encender la pantalla TFT
 }
@@ -126,10 +133,17 @@ void setup() {
  */
 void loop() {
     // 1. Evaluación de Red (NetworkManager maneja WiFi internamente en Core 0)
-    // Se revisa si tenemos conectividad WiFi y conexión activa con Firebase.
-    bool redOk = net.estaConectado() && firebase.isConnected();
+    bool redOk = net.estaConectado();
+    static bool _firebaseIniciado = false;
 
-    if (net.estaConectado()) {
+    if (redOk) {
+        // Inicialización Segura (Lazy Init) de Firebase
+        if (!_firebaseIniciado) {
+            Serial.println(F("[SISTEMA] Red OK. Inicializando Firebase SDK de forma segura..."));
+            firebase.begin();
+            _firebaseIniciado = true;
+        }
+
         // Inicialización "Lazy" (perezosa) de OTA (Over The Air):
         // Solo intentamos arrancar el servicio de actualización inalámbrica si el WiFi está listo.
         if (!_otaIniciado) {
@@ -165,6 +179,17 @@ void loop() {
         display.render();
         
         // D) Enviar los nuevos datos recolectados hacia la nube.
-        firebase.publicarTelemetria();
+        if (net.estaConectado()) {
+            firebase.publicarTelemetria();
+        }
+    }
+
+    // 4. Ciclo de Historial (se ejecuta una vez cada INTERVALO_HISTORIAL ms)
+    if (now - _ultimoHistorial > INTERVALO_HISTORIAL) {
+        _ultimoHistorial = now;
+        
+        if (net.estaConectado()) {
+            firebase.publicarHistorial();
+        }
     }
 }

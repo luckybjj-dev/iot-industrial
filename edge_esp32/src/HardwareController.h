@@ -17,7 +17,7 @@
 #define DHTTYPE   DHT22
 #define PIN_ANALOGICO 34 // NTC o Humedad de Suelo
 
-#define PIN_HEATER    32 // Control Térmico (Calefactor - No conectado)
+#define PIN_HEATER    4 // Control Térmico (Calefactor - Asignado a GPIO 4)
 #define PIN_FOGGER    25 // Control Hídrico (Humidificador)
 #define PIN_EXTRACTOR 26 // Control de Gases / Aire (Ventilador)
 #define PIN_LIGHT     16 // Control de Iluminación
@@ -63,6 +63,11 @@ struct ActuadorData {
     bool light_ON     = false; // Luz (Ciclo circadiano / fotoperiodo)
 };
 
+enum class ModoOperacion {
+    AUTO,
+    MANUAL
+};
+
 class HardwareController {
 public:
     HardwareController();
@@ -88,13 +93,13 @@ public:
     void setFogger(bool estado);
     void setExtractor(bool estado);
     void setLight(bool estado);
-    void setModoManual(bool modo);
+    void setModoOperacion(ModoOperacion modo);
 
     // Getters de estado
     const SensorData&   getSensores()   const { return _sensores; }
     const ActuadorData& getActuadores() const { return _actuadores; }
     const ConfiguracionCultivo& getConfiguracion() const { return _config; }
-    bool isModoManual()                 const { return _modoManualRemoto; }
+    ModoOperacion getModoOperacion()    const { return _modoActual; }
 
 private:
     DHT          _dht;
@@ -102,7 +107,8 @@ private:
     ActuadorData _actuadores;
     ConfiguracionCultivo _config; // El cerebro dinámico (umbrales de control)
 
-    bool  _modoManualRemoto = false;
+    ModoOperacion _modoActual = ModoOperacion::AUTO;
+    unsigned long _tiempoInicioManual = 0;
     
     // Variables para temporizador asíncrono del extractor (Fresh Air Exchange - FAE)
     unsigned long _ultimoCicloVentilador = 0;

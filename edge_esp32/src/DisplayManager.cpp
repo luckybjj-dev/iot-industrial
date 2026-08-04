@@ -76,7 +76,7 @@ void DisplayManager::_drawSensores(const SensorData& s) {
     _tft.setTextColor(ST77XX_WHITE);
     _tft.print(F("T.Amb: "));
     if (s.dhtOk) {
-        _tft.setTextColor(s.tempAmb >= config.failsafes.max_internal_temp_limit_c ? ST77XX_RED : ST77XX_GREEN);
+        _tft.setTextColor(ST77XX_GREEN);
         _tft.print(s.tempAmb, 1);
         _tft.println(F(" C"));
     } else {
@@ -89,7 +89,7 @@ void DisplayManager::_drawSensores(const SensorData& s) {
     _tft.setTextColor(ST77XX_WHITE);
     _tft.print(F("Humed: "));
     if (s.dhtOk) {
-        _tft.setTextColor(s.humAmb < (config.climate.humidity_target_pct - config.climate.humidity_hysteresis) ? ST77XX_RED : ST77XX_CYAN);
+        _tft.setTextColor(ST77XX_CYAN);
         _tft.print(s.humAmb, 1);
         _tft.println(F(" %"));
     } else {
@@ -102,7 +102,7 @@ void DisplayManager::_drawSensores(const SensorData& s) {
     _tft.setTextColor(ST77XX_WHITE);
     _tft.print(F("NTC:   "));
     if (s.analogicoOk) {
-        _tft.setTextColor(s.valorAnalogico < (config.climate.temp_target_c - config.climate.temp_hysteresis) ? ST77XX_CYAN : ST77XX_GREEN);
+        _tft.setTextColor(ST77XX_GREEN);
         _tft.print(s.valorAnalogico, 1);
         _tft.println(F(" U"));
     } else {
@@ -171,11 +171,11 @@ void DisplayManager::_drawEstadoRed() {
 
     // Línea 2: Estado del Servidor RTDB
     _tft.setCursor(5, 100);
-    if (_firebase.isConnected()) {
+    if (redOk) {
         _tft.setTextColor(ST77XX_GREEN);
         _tft.println(F("FIREBASE: OK"));
     } else {
         _tft.setTextColor(ST77XX_RED);
-        _tft.println(F("FIREBASE: CAIDO"));
+        _tft.println(F("FIREBASE: ESPERANDO RED"));
     }
 }

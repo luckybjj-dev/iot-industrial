@@ -27,17 +27,18 @@
  * necesarios para controlar un entorno de cultivo. Al utilizar "structs"
  * aseguramos que la memoria requerida esté contigua y el acceso sea rápido.
  */
-struct ClimateConfig {
-    float temp_target_c;
-    float temp_hysteresis;
-    float humidity_target_pct;
-    float humidity_hysteresis;
-    int co2_max_ppm;
-};
+// --- Diccionario del Rule Engine ---
+enum class VariableFisica { TEMP, HUMEDAD, CO2, VPD, HORA_DEL_DIA };
+enum class OperadorLogico { MAYOR_QUE, MENOR_QUE, IGUAL };
+enum class ActuadorFisico { CALEFACTOR, NIEBLA, EXTRACTOR, LUZ };
+enum class EstadoDeseado  { ENCENDIDO, APAGADO };
 
-struct VentilationConfig {
-    int fae_interval_min;
-    int fae_duration_sec;
+struct ReglaTermodinamica {
+    VariableFisica variable;
+    OperadorLogico operador;
+    float valor;
+    ActuadorFisico actuador;
+    EstadoDeseado  accion;
 };
 
 struct FailsafesConfig {
@@ -49,8 +50,11 @@ struct ConfiguracionCultivo {
     String greenhouse_id;
     String crop_profile;
     
-    ClimateConfig climate;
-    VentilationConfig ventilation;
+    unsigned long max_manual_time_ms; // Caducidad del modo manual
+    
+    ReglaTermodinamica reglas[20];
+    int total_reglas;
+    
     FailsafesConfig failsafes;
 };
 
