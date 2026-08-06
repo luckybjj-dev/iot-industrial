@@ -362,9 +362,13 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
         {/* BODY - SCROLLABLE */}
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           
-          {activeTab === 'CUSTOM' && filteredProfiles.length === 0 ? (
-            renderCustomBuilder()
-          ) : (
+          {activeTab === 'CUSTOM' && (
+            <div className="mb-6">
+              {renderCustomBuilder()}
+            </div>
+          )}
+          
+          {filteredProfiles.length > 0 ? (
             <>
               {/* SPECIES GRID */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -412,7 +416,7 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
               {/* TARGETS / SCADA */}
               {renderTargets()}
             </>
-          )}
+          ) : null}
 
         </div>
 
