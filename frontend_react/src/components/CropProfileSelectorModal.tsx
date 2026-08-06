@@ -87,8 +87,9 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
       setEditedTargets(JSON.parse(JSON.stringify(phase.targets)));
       // Parsear el fotoperiodo "12/12" en dos valores numéricos separados
       const parts = (phase.targets.lighting?.photoperiod || '12/12').split('/');
-      setEditLightHours(parseInt(parts[0]) || 12);
-      setEditDarkHours(parseInt(parts[1]) || 12);
+      const parseH = (v: string) => isNaN(parseInt(v)) ? 12 : parseInt(v);
+      setEditLightHours(parseH(parts[0]));
+      setEditDarkHours(parseH(parts[1]));
       setEditProfileName(profile.commonName);
       setEditProfileDesc(profile.description);
       setIsEditing(true);
@@ -139,12 +140,40 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
     // Iniciar edición inmediatamente para los SCADA
     setTimeout(() => {
       setEditedTargets(JSON.parse(JSON.stringify(newProfile.phases[0].targets)));
-      setEditLightHours(12);
-      setEditDarkHours(12);
+      const parts = (newProfile.phases[0].targets.lighting?.photoperiod || '12/12').split('/');
+      const parseH = (v: string) => isNaN(parseInt(v)) ? 12 : parseInt(v);
+      setEditLightHours(parseH(parts[0]));
+      setEditDarkHours(parseH(parts[1]));
       setEditProfileName(newProfile.commonName);
       setEditProfileDesc(newProfile.description);
       setIsEditing(true);
     }, 100);
+  };
+
+  const handleSaveEditsOnly = () => {
+    if (!phase || !profile) return;
+    
+    const finalPhase = { ...phase, targets: editedTargets || phase.targets };
+    const customId = profile.id.startsWith('custom_') ? profile.id : `custom_${profile.id}_${Date.now()}`;
+    const finalProfileName = editProfileName || profile.commonName;
+    
+    const updatedProfile = { 
+      ...profile, 
+      id: customId, 
+      commonName: finalProfileName,
+      description: editProfileDesc || profile.description,
+      phases: profile.phases.map(p => p.id === phase.id ? finalPhase : p) 
+    };
+    
+    const newCustoms = { ...customProfiles, [customId]: updatedProfile };
+    setCustomProfiles(newCustoms);
+    localStorage.setItem('CUSTOM_PROFILES', JSON.stringify(newCustoms));
+    
+    if (!profile.id.startsWith('custom_')) {
+       handleSelectProfile(customId, phase.id);
+    }
+    
+    setIsEditing(false);
   };
 
   const handleSaveInjection = async () => {
@@ -205,6 +234,24 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
                     <Edit3 size={16} /> Editar Perfil Completo
                   </button>
                 )}
+                {isEditing && (
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setIsEditing(false)} className="flex items-center gap-2 text-sm text-neutral-400 hover:text-white bg-white/5 px-3 py-1.5 rounded-lg transition-colors">
+                      Cancelar
+                    </button>
+                    <button onClick={() => setEditedTargets(JSON.parse(JSON.stringify(phase?.targets || {})))} className="flex items-center gap-2 text-sm text-orange-400 hover:text-orange-300 bg-orange-500/10 px-3 py-1.5 rounded-lg transition-colors" title="Restablecer a valores iniciales">
+                      Restablecer
+                    </button>
+                    <button 
+                      onClick={handleSaveEditsOnly}
+                      disabled={editLightHours + editDarkHours !== 24}
+                      className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={editLightHours + editDarkHours !== 24 ? `La suma de horas debe ser 24h` : 'Guardar perfil localmente'}
+                    >
+                      <Save size={16} /> Guardar Edición
+                    </button>
+                  </div>
+                )}
               </div>
               {isEditing ? (
                 <div className="space-y-2 mb-3 w-full">
@@ -242,23 +289,9 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
       <div className="space-y-4">
         <div className="flex justify-between items-center border-b border-white/10 pb-2">
           <h3 className="text-lg font-semibold text-purple-400">3. Variables Objetivo (SCADA)</h3>
-          {!isEditing ? (
-            <div className="text-sm text-neutral-400 italic">Haz clic en "Editar Perfil Completo" arriba para modificar.</div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <button onClick={() => setEditedTargets(JSON.parse(JSON.stringify(phase.targets)))} className="flex items-center gap-2 text-sm text-orange-400 hover:text-orange-300 bg-orange-500/10 px-3 py-1.5 rounded-lg transition-colors" title="Restablecer a valores del catálogo">
-                Restablecer
-              </button>
-              <button 
-                onClick={handleSaveInjection}
-                disabled={editLightHours + editDarkHours !== 24}
-                className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                title={editLightHours + editDarkHours !== 24 ? `La suma debe ser 24h (actual: ${editLightHours + editDarkHours}h)` : 'Guardar e inyectar al ESP32'}
-              >
-                <Save size={16} /> Fijar Ajustes
-              </button>
-            </div>
-          )}
+          <div className="text-sm text-neutral-400 italic">
+            {!isEditing ? 'Haz clic en "Editar Perfil Completo" arriba para modificar.' : 'Edita los valores SCADA a continuación.'}
+          </div>
         </div>
         
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -274,9 +307,9 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
           {/* Humedad */}
           {renderField('Humedad (%)', `${t.humidity.min}% - ${t.humidity.max}%`, 
             <div className="flex gap-2 items-center">
-              <input type="number" value={t.humidity.min} onChange={e => setEditedTargets({...t, humidity: {...t.humidity, min: Number(e.target.value)}})} className="w-16 bg-black text-white p-1 rounded border border-white/20 text-center" />
+              <input type="number" min={0} max={100} value={t.humidity.min} onChange={e => setEditedTargets({...t, humidity: {...t.humidity, min: Math.max(0, Math.min(100, Number(e.target.value)))}})} className="w-16 bg-black text-white p-1 rounded border border-white/20 text-center" />
               <span>-</span>
-              <input type="number" value={t.humidity.max} onChange={e => setEditedTargets({...t, humidity: {...t.humidity, max: Number(e.target.value)}})} className="w-16 bg-black text-white p-1 rounded border border-white/20 text-center" />
+              <input type="number" min={0} max={100} value={t.humidity.max} onChange={e => setEditedTargets({...t, humidity: {...t.humidity, max: Math.max(0, Math.min(100, Number(e.target.value)))}})} className="w-16 bg-black text-white p-1 rounded border border-white/20 text-center" />
             </div>
           )}
 
@@ -294,10 +327,10 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
                 <div className="flex flex-col items-center">
                   <span className="text-[9px] text-yellow-400 uppercase tracking-wider mb-0.5">☀️ Luz</span>
                   <input
-                    type="number" min={0} max={23}
+                    type="number" min={0} max={24}
                     value={editLightHours}
                     onChange={e => {
-                      const v = Math.min(23, Math.max(0, Number(e.target.value)));
+                      const v = Math.min(24, Math.max(0, Number(e.target.value)));
                       setEditLightHours(v);
                       setEditedTargets(prev => prev ? {...prev, lighting: {...prev.lighting, photoperiod: `${v}/${editDarkHours}`}} : prev);
                     }}
@@ -308,10 +341,10 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
                 <div className="flex flex-col items-center">
                   <span className="text-[9px] text-blue-400 uppercase tracking-wider mb-0.5">🌙 Oscuridad</span>
                   <input
-                    type="number" min={0} max={23}
+                    type="number" min={0} max={24}
                     value={editDarkHours}
                     onChange={e => {
-                      const v = Math.min(23, Math.max(0, Number(e.target.value)));
+                      const v = Math.min(24, Math.max(0, Number(e.target.value)));
                       setEditDarkHours(v);
                       setEditedTargets(prev => prev ? {...prev, lighting: {...prev.lighting, photoperiod: `${editLightHours}/${v}`}} : prev);
                     }}
@@ -456,12 +489,13 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
             onClick={onClose}
             className="px-6 py-3 rounded-xl text-neutral-400 hover:text-white hover:bg-white/5 transition-colors font-medium"
           >
-            Cancelar
+            Cerrar
           </button>
           <button 
             onClick={handleSaveInjection}
-            disabled={isSaving || !phase}
-            className="flex items-center gap-2 px-8 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isSaving || !phase || isEditing}
+            title={isEditing ? 'Debes Guardar Edición antes de Inyectar' : 'Inyectar al ESP32'}
+            className="flex items-center gap-2 px-8 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
           >
             {isSaving ? (
               <div className="animate-spin w-5 h-5 border-2 border-white/30 border-t-white rounded-full"></div>
