@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { X, Sprout, Play, Search, BookOpen, Edit3, Save, Plus } from 'lucide-react';
-import type { ReglaTermodinamica } from '../types/cultivo';
-import { CROP_PROFILES, generateRulesFromProfile } from '../data/CropProfiles';
+import type { DeviceCropProfile } from '../types/cultivo';
+import { CROP_PROFILES, generateDeviceProfile } from '../data/CropProfiles';
 import type { CropProfile, PhaseTargets } from '../data/CropProfiles';
 
 interface Props {
   deviceId: string;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (rules: ReglaTermodinamica[], profileName: string, phaseName: string) => Promise<void>;
+  onSave: (crop: DeviceCropProfile, profileName: string, phaseName: string) => Promise<void>;
 }
 
 type TabType = 'FUNGI' | 'PLANTAE' | 'CUSTOM';
@@ -105,8 +105,8 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
         localStorage.setItem('CUSTOM_PROFILES', JSON.stringify(newCustoms));
       }
 
-      const compiledRules = generateRulesFromProfile(finalPhase);
-      await onSave(compiledRules, finalProfileName, phase.name);
+      const deviceProfile = generateDeviceProfile(finalPhase);
+      await onSave(deviceProfile, finalProfileName, phase.name);
       onClose();
     } catch (e) {
       alert('Error inyectando el perfil al ESP32');

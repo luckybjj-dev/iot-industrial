@@ -27,18 +27,22 @@
  * necesarios para controlar un entorno de cultivo. Al utilizar "structs"
  * aseguramos que la memoria requerida esté contigua y el acceso sea rápido.
  */
-// --- Diccionario del Rule Engine ---
-enum class VariableFisica { TEMP, HUMEDAD, CO2, VPD, HORA_DEL_DIA };
-enum class OperadorLogico { MAYOR_QUE, MENOR_QUE, IGUAL };
-enum class ActuadorFisico { CALEFACTOR, NIEBLA, EXTRACTOR, LUZ };
-enum class EstadoDeseado  { ENCENDIDO, APAGADO };
-
-struct ReglaTermodinamica {
-    VariableFisica variable;
-    OperadorLogico operador;
-    float valor;
-    ActuadorFisico actuador;
-    EstadoDeseado  accion;
+// --- Perfil Agronómico de Control (Capa 1) ---
+struct CropProfile {
+    float temp_ideal_min = 20.0f;
+    float temp_ideal_max = 24.0f;
+    float temp_crit_min = 15.0f;
+    float temp_crit_max = 28.0f;
+    
+    float hum_ideal_min = 85.0f;
+    float hum_ideal_max = 95.0f;
+    float hum_crit_min = 70.0f;
+    
+    int co2_ideal_min = 400;
+    int co2_ideal_max = 800;
+    int co2_crit_max = 1200;
+    
+    int light_hours_on = 12;
 };
 
 struct FailsafesConfig {
@@ -52,8 +56,7 @@ struct ConfiguracionCultivo {
     
     unsigned long max_manual_time_ms; // Caducidad del modo manual
     
-    ReglaTermodinamica reglas[20];
-    int total_reglas;
+    CropProfile crop;
     
     FailsafesConfig failsafes;
 };

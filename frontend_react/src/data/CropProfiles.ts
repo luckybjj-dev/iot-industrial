@@ -1,4 +1,4 @@
-import type { ReglaTermodinamica } from '../types/cultivo';
+import type { DeviceCropProfile } from '../types/cultivo';
 
 export interface PhaseTargets {
   temperature: {
@@ -908,40 +908,39 @@ export const CROP_PROFILES: Record<string, CropProfile> = {
 };
 
 /**
- * Traduce un perfil y fase a las Reglas Matemáticas que entiende el ESP32
+ * Traduce un perfil y fase a las Reglas de Hardware que entiende el ESP32
  */
-export function generateRulesFromProfile(phase: CropPhase): ReglaTermodinamica[] {
-  const rules: ReglaTermodinamica[] = [];
-
-  // TEMPERATURA (Prioridad Diurna para el MVP, luego se puede integrar lógica NTP de Noche)
-  rules.push({ var: 'TEMP', op: 'MENOR_QUE', val: phase.targets.temperature.day.min, act: 'CALEFACTOR', estado: 'ENCENDIDO' });
-  rules.push({ var: 'TEMP', op: 'MAYOR_QUE', val: phase.targets.temperature.day.max, act: 'CALEFACTOR', estado: 'APAGADO' });
-  
-  // Refrigeración si sube demasiado
-  rules.push({ var: 'TEMP', op: 'MAYOR_QUE', val: phase.targets.temperature.day.max + 1, act: 'EXTRACTOR', estado: 'ENCENDIDO' });
-
-  // HUMEDAD
-  rules.push({ var: 'HUMEDAD', op: 'MENOR_QUE', val: phase.targets.humidity.min, act: 'NIEBLA', estado: 'ENCENDIDO' });
-  rules.push({ var: 'HUMEDAD', op: 'MAYOR_QUE', val: phase.targets.humidity.max, act: 'NIEBLA', estado: 'APAGADO' });
-
-  // CO2 -> Solo encendemos extractor si hay exceso, asumiendo que no inyectamos en Fungi.
-  rules.push({ var: 'CO2', op: 'MAYOR_QUE', val: phase.targets.co2.max, act: 'EXTRACTOR', estado: 'ENCENDIDO' });
-  // Apagamos extractor si el CO2 bajó lo suficiente, a menos que la temperatura lo obligue a encender.
-  rules.push({ var: 'CO2', op: 'MENOR_QUE', val: phase.targets.co2.min, act: 'EXTRACTOR', estado: 'APAGADO' });
-
-  // LUZ (Fotoperiodo)
+export function generateDeviceProfile(phase: CropPhase): DeviceCropProfile {
   const [lightHoursStr] = phase.targets.lighting.photoperiod.split('/');
   const lightHours = parseInt(lightHoursStr, 10);
   
-  if (lightHours > 0) {
-    // Ejemplo: 12 horas de luz (de 08:00 a 20:00)
-    // El ESP32 encenderá la luz si HORA_DEL_DIA >= 8 y la apagará si HORA_DEL_DIA >= (8 + lightHours)
-    rules.push({ var: 'HORA_DEL_DIA', op: 'MAYOR_QUE', val: 7, act: 'LUZ', estado: 'ENCENDIDO' });
-    rules.push({ var: 'HORA_DEL_DIA', op: 'MAYOR_QUE', val: 7 + lightHours, act: 'LUZ', estado: 'APAGADO' });
-  } else {
-    // 0 horas = Apagar siempre
-    rules.push({ var: 'HORA_DEL_DIA', op: 'MAYOR_QUE', val: -1, act: 'LUZ', estado: 'APAGADO' });
-  }
+  // Extraemos o definimos valores por defecto en caso de no existir
+  const tempIdealMin = phase.targets.temperature.day.min;
+  const tempIdealMax = phase.targets.temperature.day.max;
+  
+  // Limites criticos: si no están explícitos, los estimamos
+  const tempCritMin = tempIdealMin - 5;
+  const tempCritMax = tempIdealMax + 5;
+  
+  const humIdealMin = phase.targets.humidity.min;
+  const humIdealMax = phase.targets.humidity.max;
+  const humCritMin = Math.max(0, humIdealMin - 15);
+  
+  const co2IdealMin = phase.targets.co2.min;
+  const co2IdealMax = phase.targets.co2.max;
+  const co2CritMax = co2IdealMax + (co2IdealMax * 0.5); // 50% extra como limite crítico
 
-  return rules;
+  return {
+      temp_ideal_min: tempIdealMin,
+      temp_ideal_max: tempIdealMax,
+      temp_crit_min: tempCritMin,
+      temp_crit_max: tempCritMax,
+      hum_ideal_min: humIdealMin,
+      hum_ideal_max: humIdealMax,
+      hum_crit_min: humCritMin,
+      co2_ideal_min: co2IdealMin,
+      co2_ideal_max: co2IdealMax,
+      co2_crit_max: co2CritMax,
+      light_hours_on: lightHours > 0 ? lightHours : 0
+  };
 }

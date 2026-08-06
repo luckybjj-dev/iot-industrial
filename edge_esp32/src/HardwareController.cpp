@@ -14,7 +14,7 @@ void HardwareController::begin() {
     digitalWrite(PIN_HEATER, LOW);
     digitalWrite(PIN_FOGGER, LOW);
     digitalWrite(PIN_EXTRACTOR, LOW);
-    digitalWrite(PIN_LIGHT, LOW);
+    digitalWrite(PIN_LIGHT, HIGH); // Relé de Luz es Activo LOW
 
     _dht.begin();
     
@@ -41,64 +41,30 @@ void HardwareController::setHeater(bool estado) {
         Serial.println(F("❌ [Hardware] Ignorando comando de Calefactor. Sistema en modo AUTO."));
         return;
     }
-    // PROTECCIÓN AL CULTIVO (Failsafe)
-    if (estado) {
-        if (!_sensores.dhtOk && !_sensores.analogicoOk) {
-            Serial.println(F("⛔ [Failsafe] Comando DENEGADO. Sensores fallando (riesgo de incendio)."));
-            return;
-        }
-        float tempActual = _sensores.analogicoOk ? _sensores.valorAnalogico : _sensores.tempAmb;
-        if (tempActual >= _config.failsafes.max_internal_temp_limit_c) {
-            Serial.println(F("⛔ [Failsafe] Comando de Calefactor DENEGADO por sobretemperatura crítica."));
-            return;
-        }
-    }
-    
-    _actuadores.heater_ON = estado;
-    digitalWrite(PIN_HEATER, estado ? HIGH : LOW);
+    _ejecutarAccion(PIN_HEATER, _actuadores.heater_ON, estado, _last_heater_switch, millis(), false);
 }
 void HardwareController::setFogger(bool estado) {
     if (_modoActual == ModoOperacion::AUTO) {
         Serial.println(F("❌ [Hardware] Ignorando comando de Niebla. Sistema en modo AUTO."));
         return;
     }
-    // PROTECCIÓN AL CULTIVO (Failsafe)
-    if (estado) {
-        if (!_sensores.dhtOk) {
-            Serial.println(F("⛔ [Failsafe] Comando DENEGADO. Sensor de humedad fallando."));
-            return;
-        }
-        if (_sensores.humAmb >= 95.0f) {
-            Serial.println(F("⛔ [Failsafe] Comando de Niebla DENEGADO por saturación hídrica."));
-            return;
-        }
-    }
-    
-    _actuadores.fogger_ON = estado;
-    digitalWrite(PIN_FOGGER, estado ? HIGH : LOW);
+    _ejecutarAccion(PIN_FOGGER, _actuadores.fogger_ON, estado, _last_fogger_switch, millis(), false);
 }
 void HardwareController::setExtractor(bool estado) {
     if (_modoActual == ModoOperacion::AUTO) {
         Serial.println(F("❌ [Hardware] Ignorando comando de Extractor. Sistema en modo AUTO."));
         return;
     }
-    // PROTECCIÓN AL CULTIVO (Failsafe)
-    if (!estado && _alertaCalor) {
-        Serial.println(F("⛔ [Failsafe] Apagado de Extractor DENEGADO. Alarma térmica activa."));
-        return;
-    }
-    
-    _actuadores.extractor_ON = estado;
-    digitalWrite(PIN_EXTRACTOR, estado ? HIGH : LOW);
+    _ejecutarAccion(PIN_EXTRACTOR, _actuadores.extractor_ON, estado, _last_extractor_switch, millis(), false);
 }
 void HardwareController::setLight(bool estado) {
     if (_modoActual == ModoOperacion::AUTO) {
         Serial.println(F("❌ [Hardware] Ignorando comando de Luz. Sistema en modo AUTO."));
         return;
     }
-    // Failsafe de fotoperiodo relajado en modo manual. Se asume que expirará pronto.
-    _actuadores.light_ON = estado;
-    digitalWrite(PIN_LIGHT, estado ? HIGH : LOW);
+    // Luz exenta de filtro de tiempo y protección (ignorarFiltro = true)
+    unsigned long dummyTime = 0;
+    _ejecutarAccion(PIN_LIGHT, _actuadores.light_ON, estado, dummyTime, millis(), true);
 }
 
 void HardwareController::leerSensores() {
@@ -135,122 +101,112 @@ float HardwareController::calcularVPD(float tempC, float humRH) {
     return svp - avp;
 }
 
+void HardwareController::_ejecutarAccion(int pin, bool& estadoActual, bool nuevoEstado, unsigned long& ultimoCambio, unsigned long now, bool ignorarFiltro) {
+    if (estadoActual == nuevoEstado) return;
+
+    if (!ignorarFiltro && _modoActual == ModoOperacion::AUTO) {
+        if (now - ultimoCambio < MIN_RELAY_TIME_MS && ultimoCambio != 0) {
+            // Aún en tiempo de Debounce (Anti-Short Cycle)
+            return;
+        }
+    }
+    
+    // Si llegamos aquí, se puede cambiar el estado
+    estadoActual = nuevoEstado;
+    ultimoCambio = now;
+    
+    if (pin == PIN_LIGHT) {
+        digitalWrite(pin, estadoActual ? LOW : HIGH); // Activo LOW
+    } else {
+        digitalWrite(pin, estadoActual ? HIGH : LOW);
+    }
+}
+
 void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia) {
     // =========================================================
     // 0. CONTROL DE CADUCIDAD MODO MANUAL
     // =========================================================
-    bool evaluarReglas = true;
+    bool evaluarPerfil = true;
     if (_modoActual == ModoOperacion::MANUAL) {
-        if (now - _tiempoInicioManual >= _config.max_manual_time_ms) {
-            Serial.println(F("⏱️ [Hardware] Tiempo manual expirado. Restaurando modo AUTO para proteger cultivo."));
-            setModoOperacion(ModoOperacion::AUTO);
+        // Asegurar un mínimo de 1 minuto para evitar expiraciones instantáneas por configuraciones corruptas
+        unsigned long timeout = _config.max_manual_time_ms;
+        if (timeout < 60000) timeout = 300000; // 5 minutos por defecto
+
+        unsigned long elapsed = (now >= _tiempoInicioManual) ? (now - _tiempoInicioManual) : 0;
+        if (elapsed >= timeout) {
+            Serial.println(F("⚠️ [Hardware] Tiempo manual expirado. Retornando a modo AUTO."));
+            _modoActual = ModoOperacion::AUTO;
         } else {
-            evaluarReglas = false; // Seguimos en modo manual. No evaluamos reglas.
+            evaluarPerfil = false; 
+            _estadoActual = EstadoOperacional::MANUAL;
         }
     }
 
     // =========================================================
-    // 1. RULE ENGINE (Motor Declarativo)
+    // 1. CAPA 2: ÁRBITRO DE CONFLICTOS Y MOTOR DETERMINISTA
     // =========================================================
-    if (evaluarReglas) {
-        for (int i = 0; i < _config.total_reglas; i++) {
-            const ReglaTermodinamica& regla = _config.reglas[i];
-        
-        // A. Obtener el valor del sensor
-        float valorActual = 0.0f;
-        bool sensorValido = true;
-        switch (regla.variable) {
-            case VariableFisica::TEMP:
-                if (_sensores.analogicoOk) valorActual = _sensores.valorAnalogico;
-                else if (_sensores.dhtOk) valorActual = _sensores.tempAmb;
-                else sensorValido = false;
-                break;
-            case VariableFisica::HUMEDAD:
-                if (_sensores.dhtOk) valorActual = _sensores.humAmb;
-                else sensorValido = false;
-                break;
-            case VariableFisica::CO2:
-                if (_sensores.co2Ok) valorActual = _sensores.co2;
-                else sensorValido = false;
-                break;
-            case VariableFisica::VPD:
-                if (_sensores.dhtOk) valorActual = _sensores.vpd;
-                else sensorValido = false;
-                break;
-            case VariableFisica::HORA_DEL_DIA:
-                if (horaDia >= 0) valorActual = (float)horaDia;
-                else sensorValido = false;
-                break;
-        }
+    if (evaluarPerfil) {
+        bool req_extractor = false;
+        bool req_heater = false;
+        bool req_fogger = false;
+        bool req_light = false;
+        EstadoOperacional proxEstado = EstadoOperacional::NORMAL;
 
-        if (!sensorValido) continue; // No se puede evaluar esta regla
+        // Lectura segura de sensores
+        float tempActual = _sensores.analogicoOk ? _sensores.valorAnalogico : (_sensores.dhtOk ? _sensores.tempAmb : -999.0f);
+        float humActual = _sensores.dhtOk ? _sensores.humAmb : -999.0f;
+        int co2Actual = _sensores.co2Ok ? _sensores.co2 : 400;
 
-        // B. Evaluar el Operador Lógico
-        bool condicionCumplida = false;
-        switch (regla.operador) {
-            case OperadorLogico::MAYOR_QUE:
-                condicionCumplida = (valorActual > regla.valor);
-                break;
-            case OperadorLogico::MENOR_QUE:
-                condicionCumplida = (valorActual < regla.valor);
-                break;
-            case OperadorLogico::IGUAL:
-                condicionCumplida = (valorActual == regla.valor);
-                break;
-        }
+        // Falla catastrófica de sensores: Apagar por seguridad (Safe Mode)
+        if (tempActual == -999.0f) {
+            proxEstado = EstadoOperacional::SAFE_MODE;
+        } else {
+            // Jerarquía de Supervivencia:
+            // 1. Calor Extremo o Failsafe Absoluto
+            if (tempActual >= _config.failsafes.max_internal_temp_limit_c || tempActual >= _config.crop.temp_crit_max) {
+                req_extractor = true;
+                proxEstado = EstadoOperacional::EMERGENCIA;
+            } 
+            // 2. Toxicidad de Gases (CO2)
+            else if (co2Actual >= _config.crop.co2_crit_max) {
+                req_extractor = true;
+                if (proxEstado == EstadoOperacional::NORMAL) proxEstado = EstadoOperacional::NORMAL; // O EMERGENCIA
+            }
+            // 3. Frío Extremo o Demanda de Calor
+            else if (tempActual <= _config.crop.temp_ideal_min) {
+                req_heater = true;
+                proxEstado = EstadoOperacional::CALENTANDO;
+            }
+            else if (tempActual >= _config.crop.temp_ideal_max) {
+                req_extractor = true; // Refrescar 
+            }
 
-        // C. Ejecutar Acción si se cumple
-        if (condicionCumplida) {
-            bool encender = (regla.accion == EstadoDeseado::ENCENDIDO);
-            switch (regla.actuador) {
-                case ActuadorFisico::CALEFACTOR: _actuadores.heater_ON = encender; break;
-                case ActuadorFisico::NIEBLA:     _actuadores.fogger_ON = encender; break;
-                case ActuadorFisico::EXTRACTOR:  _actuadores.extractor_ON = encender; break;
-                case ActuadorFisico::LUZ:        _actuadores.light_ON = encender; break;
+            // 4. Demanda de Humedad (solo si no hay calor extremo, ya que la extracción ganaría)
+            if (humActual != -999.0f && humActual <= _config.crop.hum_ideal_min && proxEstado != EstadoOperacional::EMERGENCIA) {
+                req_fogger = true;
+                if (proxEstado == EstadoOperacional::NORMAL) proxEstado = EstadoOperacional::HUMIDIFICANDO;
+            }
+            else if (humActual != -999.0f && humActual >= _config.crop.hum_ideal_max) {
+                req_extractor = true; // Sacar humedad
+            }
+
+            // Fotoperiodo
+            if (horaDia >= 0 && horaDia < _config.crop.light_hours_on) {
+                req_light = true;
             }
         }
-    }
-}
 
-    // =========================================================
-    // 2. SEGUROS DE SUPERVIVENCIA (FAILSAFES)
-    // Tienen la última palabra absoluta y sobreescriben cualquier regla.
-    // =========================================================
+        _estadoActual = proxEstado;
 
-    // Failsafe Térmico: Temperatura Crítica o Fallo de Sensor
-    if (_sensores.dhtOk || _sensores.analogicoOk) {
-        float tempActual = _sensores.analogicoOk ? _sensores.valorAnalogico : _sensores.tempAmb;
-        if (tempActual >= _config.failsafes.max_internal_temp_limit_c) {
-            _alertaCalor = true;
-        } else if (tempActual <= _config.failsafes.max_internal_temp_limit_c - 1.0f) {
-            _alertaCalor = false;
-        }
-    } else {
-        // Riesgo altísimo: no hay ningún sensor de temperatura.
-        _alertaCalor = false;
-        _actuadores.heater_ON = false; // Jamás encender calefactor a ciegas.
-        _actuadores.fogger_ON = false; // Tampoco el humidificador.
+        // =========================================================
+        // 2. CAPA 3: FILTRO DE HARDWARE Y EJECUCIÓN (Anti-Short Cycle)
+        // =========================================================
+        _ejecutarAccion(PIN_EXTRACTOR, _actuadores.extractor_ON, req_extractor, _last_extractor_switch, now, false);
+        _ejecutarAccion(PIN_HEATER, _actuadores.heater_ON, req_heater, _last_heater_switch, now, false);
+        _ejecutarAccion(PIN_FOGGER, _actuadores.fogger_ON, req_fogger, _last_fogger_switch, now, false);
+        
+        // Luz exenta de filtro de tiempo
+        unsigned long dummyTime = 0;
+        _ejecutarAccion(PIN_LIGHT, _actuadores.light_ON, req_light, dummyTime, now, true);
     }
-    
-    if (_alertaCalor) {
-        _actuadores.heater_ON = false;
-        _actuadores.extractor_ON = true; // Extraer aire forzosamente
-    }
-    
-    // Failsafe Biológico (Fotoperiodo seguro si se pierde el reloj NTP)
-    if (horaDia < 0) {
-        _actuadores.light_ON = false;
-    }
-
-    // Failsafe de FAE Asíncrono (Si el usuario quiere ventilar independientemente de CO2/Temp)
-    // Nota: Como no tenemos una regla explícita en JSON para temporizadores aún,
-    // mantenemos este failsafe vitalicio de "Fresh Air Exchange".
-    // En una refactorización futura, el FAE puede volverse parte del Rule Engine.
-    // ---
-
-    // Aplicar estados finales al Hardware
-    digitalWrite(PIN_HEATER, _actuadores.heater_ON ? HIGH : LOW);
-    digitalWrite(PIN_FOGGER, _actuadores.fogger_ON ? HIGH : LOW);
-    digitalWrite(PIN_EXTRACTOR, _actuadores.extractor_ON ? HIGH : LOW);
-    digitalWrite(PIN_LIGHT, _actuadores.light_ON ? HIGH : LOW);
 }

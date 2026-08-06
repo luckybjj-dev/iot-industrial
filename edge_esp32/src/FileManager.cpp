@@ -13,70 +13,7 @@ bool FileManager::begin() {
     return true;
 }
 
-// Helpers for Enum parsing (String <-> Enum)
-VariableFisica parseVariable(const String& str) {
-    if (str == "TEMP") return VariableFisica::TEMP;
-    if (str == "HUMEDAD") return VariableFisica::HUMEDAD;
-    if (str == "CO2") return VariableFisica::CO2;
-    if (str == "VPD") return VariableFisica::VPD;
-    if (str == "HORA_DEL_DIA") return VariableFisica::HORA_DEL_DIA;
-    return VariableFisica::TEMP; // Default
-}
-String stringifyVariable(VariableFisica var) {
-    switch(var) {
-        case VariableFisica::TEMP: return "TEMP";
-        case VariableFisica::HUMEDAD: return "HUMEDAD";
-        case VariableFisica::CO2: return "CO2";
-        case VariableFisica::VPD: return "VPD";
-        case VariableFisica::HORA_DEL_DIA: return "HORA_DEL_DIA";
-        default: return "TEMP";
-    }
-}
-
-OperadorLogico parseOperador(const String& str) {
-    if (str == "MAYOR_QUE") return OperadorLogico::MAYOR_QUE;
-    if (str == "MENOR_QUE") return OperadorLogico::MENOR_QUE;
-    if (str == "IGUAL") return OperadorLogico::IGUAL;
-    return OperadorLogico::IGUAL; // Default
-}
-String stringifyOperador(OperadorLogico op) {
-    switch(op) {
-        case OperadorLogico::MAYOR_QUE: return "MAYOR_QUE";
-        case OperadorLogico::MENOR_QUE: return "MENOR_QUE";
-        case OperadorLogico::IGUAL: return "IGUAL";
-        default: return "IGUAL";
-    }
-}
-
-ActuadorFisico parseActuador(const String& str) {
-    if (str == "CALEFACTOR") return ActuadorFisico::CALEFACTOR;
-    if (str == "NIEBLA") return ActuadorFisico::NIEBLA;
-    if (str == "EXTRACTOR") return ActuadorFisico::EXTRACTOR;
-    if (str == "LUZ") return ActuadorFisico::LUZ;
-    return ActuadorFisico::CALEFACTOR; // Default
-}
-String stringifyActuador(ActuadorFisico act) {
-    switch(act) {
-        case ActuadorFisico::CALEFACTOR: return "CALEFACTOR";
-        case ActuadorFisico::NIEBLA: return "NIEBLA";
-        case ActuadorFisico::EXTRACTOR: return "EXTRACTOR";
-        case ActuadorFisico::LUZ: return "LUZ";
-        default: return "CALEFACTOR";
-    }
-}
-
-EstadoDeseado parseEstado(const String& str) {
-    if (str == "ENCENDIDO") return EstadoDeseado::ENCENDIDO;
-    if (str == "APAGADO") return EstadoDeseado::APAGADO;
-    return EstadoDeseado::APAGADO; // Default
-}
-String stringifyEstado(EstadoDeseado est) {
-    switch(est) {
-        case EstadoDeseado::ENCENDIDO: return "ENCENDIDO";
-        case EstadoDeseado::APAGADO: return "APAGADO";
-        default: return "APAGADO";
-    }
-}
+// Funciones de parsing de enum eliminadas (se usa CropProfile)
 
 
 ConfiguracionCultivo FileManager::cargarConfiguracion() {
@@ -91,7 +28,7 @@ ConfiguracionCultivo FileManager::cargarConfiguracion() {
         return _configActual;
     }
 
-    DynamicJsonDocument doc(2048); // Aumentado para soportar arreglos de reglas
+    DynamicJsonDocument doc(2048);
     DeserializationError error = deserializeJson(doc, file);
     file.close();
 
@@ -103,9 +40,9 @@ ConfiguracionCultivo FileManager::cargarConfiguracion() {
         return _configActual;
     }
 
-    // Comprobar si el JSON cargado es el formato antiguo (no tiene "reglas")
-    if (!doc.containsKey("reglas")) {
-        Serial.println(F("⚠️ [LittleFS] Configuración antigua detectada (sin reglas). Forzando migración..."));
+    // Comprobar si el JSON cargado es el formato antiguo (Reglas en lugar de crop_profile)
+    if (doc.containsKey("reglas") && !doc.containsKey("crop")) {
+        Serial.println(F("⚠️ [LittleFS] Configuración antigua detectada (Motor de Reglas). Forzando migración a CropProfile..."));
         _crearConfiguracionPorDefecto();
         return _configActual;
     }
@@ -116,27 +53,28 @@ ConfiguracionCultivo FileManager::cargarConfiguracion() {
     
     JsonObject failsafe = doc["failsafes"];
     _configActual.failsafes.watchdog_timeout_ms       = failsafe["watchdog_timeout_ms"] | 10000;
-    _configActual.failsafes.max_internal_temp_limit_c = failsafe["max_internal_temp_limit_c"] | 26.0;
+    _configActual.failsafes.max_internal_temp_limit_c = failsafe["max_internal_temp_limit_c"] | 35.0;
 
-    JsonArray reglasJson = doc["reglas"];
-    _configActual.total_reglas = 0;
-    for (JsonObject reglaJson : reglasJson) {
-        if (_configActual.total_reglas >= 20) break; // Limite de seguridad
-        
-        ReglaTermodinamica regla;
-        regla.variable = parseVariable(reglaJson["var"] | "TEMP");
-        regla.operador = parseOperador(reglaJson["op"] | "IGUAL");
-        regla.valor = reglaJson["val"] | 0.0f;
-        regla.actuador = parseActuador(reglaJson["act"] | "CALEFACTOR");
-        regla.accion = parseEstado(reglaJson["estado"] | "APAGADO");
-        
-        _configActual.reglas[_configActual.total_reglas] = regla;
-        _configActual.total_reglas++;
-    }
+    JsonObject crop = doc["crop"];
+    _configActual.crop.temp_ideal_min = crop["temp_ideal_min"] | 20.0f;
+    _configActual.crop.temp_ideal_max = crop["temp_ideal_max"] | 24.0f;
+    _configActual.crop.temp_crit_min  = crop["temp_crit_min"] | 15.0f;
+    _configActual.crop.temp_crit_max  = crop["temp_crit_max"] | 28.0f;
+    
+    _configActual.crop.hum_ideal_min  = crop["hum_ideal_min"] | 85.0f;
+    _configActual.crop.hum_ideal_max  = crop["hum_ideal_max"] | 95.0f;
+    _configActual.crop.hum_crit_min   = crop["hum_crit_min"] | 70.0f;
+    
+    _configActual.crop.co2_ideal_min  = crop["co2_ideal_min"] | 400;
+    _configActual.crop.co2_ideal_max  = crop["co2_ideal_max"] | 800;
+    _configActual.crop.co2_crit_max   = crop["co2_crit_max"] | 1200;
+    
+    _configActual.crop.light_hours_on = crop["light_hours_on"] | 12;
 
     Serial.println("[LittleFS] Configuración cargada con éxito. Perfil: " + _configActual.crop_profile);
     return _configActual;
 }
+
 
 void FileManager::_crearConfiguracionPorDefecto() {
     Serial.println(F("[LittleFS] Creando perfil inicial (MODO FUNGI PMV) por defecto..."));
@@ -146,23 +84,23 @@ void FileManager::_crearConfiguracionPorDefecto() {
     _configActual.max_manual_time_ms = 900000; // 15 minutos
 
     _configActual.failsafes.watchdog_timeout_ms       = 10000;
-    _configActual.failsafes.max_internal_temp_limit_c = 30.0;
+    _configActual.failsafes.max_internal_temp_limit_c = 35.0; // Evitar apagar todo muy rápido
 
-    _configActual.total_reglas = 0;
+    // Setup de parámetros seguros de Fungi (Oyster Mushrooms por ejemplo)
+    _configActual.crop.temp_ideal_min = 18.0f;
+    _configActual.crop.temp_ideal_max = 24.0f;
+    _configActual.crop.temp_crit_min  = 10.0f;
+    _configActual.crop.temp_crit_max  = 29.0f;
     
-    // Reglas por defecto emulando la antigua histéresis
-    // Temp < 20 -> Calefactor ON
-    _configActual.reglas[0] = {VariableFisica::TEMP, OperadorLogico::MENOR_QUE, 20.0f, ActuadorFisico::CALEFACTOR, EstadoDeseado::ENCENDIDO};
-    // Temp > 21 -> Calefactor OFF
-    _configActual.reglas[1] = {VariableFisica::TEMP, OperadorLogico::MAYOR_QUE, 21.0f, ActuadorFisico::CALEFACTOR, EstadoDeseado::APAGADO};
-    // Hum < 87 -> Niebla ON
-    _configActual.reglas[2] = {VariableFisica::HUMEDAD, OperadorLogico::MENOR_QUE, 87.0f, ActuadorFisico::NIEBLA, EstadoDeseado::ENCENDIDO};
-    // Hum > 90 -> Niebla OFF
-    _configActual.reglas[3] = {VariableFisica::HUMEDAD, OperadorLogico::MAYOR_QUE, 90.0f, ActuadorFisico::NIEBLA, EstadoDeseado::APAGADO};
-    // CO2 > 800 -> Extractor ON
-    _configActual.reglas[4] = {VariableFisica::CO2, OperadorLogico::MAYOR_QUE, 800.0f, ActuadorFisico::EXTRACTOR, EstadoDeseado::ENCENDIDO};
+    _configActual.crop.hum_ideal_min = 85.0f;
+    _configActual.crop.hum_ideal_max = 95.0f;
+    _configActual.crop.hum_crit_min  = 75.0f;
     
-    _configActual.total_reglas = 5;
+    _configActual.crop.co2_ideal_min = 400;
+    _configActual.crop.co2_ideal_max = 800;
+    _configActual.crop.co2_crit_max  = 1000;
+    
+    _configActual.crop.light_hours_on = 12;
 
     guardarConfiguracion(_configActual);
 }
@@ -178,15 +116,21 @@ bool FileManager::guardarConfiguracion(const ConfiguracionCultivo& config) {
     failsafe["watchdog_timeout_ms"]       = config.failsafes.watchdog_timeout_ms;
     failsafe["max_internal_temp_limit_c"] = config.failsafes.max_internal_temp_limit_c;
 
-    JsonArray reglasJson = doc.createNestedArray("reglas");
-    for (int i = 0; i < config.total_reglas; i++) {
-        JsonObject reglaJson = reglasJson.createNestedObject();
-        reglaJson["var"] = stringifyVariable(config.reglas[i].variable);
-        reglaJson["op"] = stringifyOperador(config.reglas[i].operador);
-        reglaJson["val"] = config.reglas[i].valor;
-        reglaJson["act"] = stringifyActuador(config.reglas[i].actuador);
-        reglaJson["estado"] = stringifyEstado(config.reglas[i].accion);
-    }
+    JsonObject crop = doc.createNestedObject("crop");
+    crop["temp_ideal_min"] = config.crop.temp_ideal_min;
+    crop["temp_ideal_max"] = config.crop.temp_ideal_max;
+    crop["temp_crit_min"]  = config.crop.temp_crit_min;
+    crop["temp_crit_max"]  = config.crop.temp_crit_max;
+    
+    crop["hum_ideal_min"] = config.crop.hum_ideal_min;
+    crop["hum_ideal_max"] = config.crop.hum_ideal_max;
+    crop["hum_crit_min"]  = config.crop.hum_crit_min;
+    
+    crop["co2_ideal_min"] = config.crop.co2_ideal_min;
+    crop["co2_ideal_max"] = config.crop.co2_ideal_max;
+    crop["co2_crit_max"]  = config.crop.co2_crit_max;
+    
+    crop["light_hours_on"] = config.crop.light_hours_on;
 
     File file = LittleFS.open(_archivoConfig, "w");
     if (!file) {
@@ -223,29 +167,24 @@ bool FileManager::guardarConfiguracionJson(const String& jsonString) {
     nuevaConfig.failsafes.watchdog_timeout_ms       = failsafe["watchdog_timeout_ms"] | _configActual.failsafes.watchdog_timeout_ms;
     nuevaConfig.failsafes.max_internal_temp_limit_c = failsafe["max_internal_temp_limit_c"] | _configActual.failsafes.max_internal_temp_limit_c;
     
-    // Extraer reglas si existen en el JSON, sino mantener las actuales
-    if (doc.containsKey("reglas")) {
-        JsonArray reglasJson = doc["reglas"];
-        nuevaConfig.total_reglas = 0;
-        for (JsonObject reglaJson : reglasJson) {
-            if (nuevaConfig.total_reglas >= 20) break;
-            
-            ReglaTermodinamica regla;
-            regla.variable = parseVariable(reglaJson["var"] | "TEMP");
-            regla.operador = parseOperador(reglaJson["op"] | "IGUAL");
-            regla.valor = reglaJson["val"] | 0.0f;
-            regla.actuador = parseActuador(reglaJson["act"] | "CALEFACTOR");
-            regla.accion = parseEstado(reglaJson["estado"] | "APAGADO");
-            
-            nuevaConfig.reglas[nuevaConfig.total_reglas] = regla;
-            nuevaConfig.total_reglas++;
-        }
+    if (doc.containsKey("crop")) {
+        JsonObject crop = doc["crop"];
+        nuevaConfig.crop.temp_ideal_min = crop["temp_ideal_min"] | _configActual.crop.temp_ideal_min;
+        nuevaConfig.crop.temp_ideal_max = crop["temp_ideal_max"] | _configActual.crop.temp_ideal_max;
+        nuevaConfig.crop.temp_crit_min  = crop["temp_crit_min"] | _configActual.crop.temp_crit_min;
+        nuevaConfig.crop.temp_crit_max  = crop["temp_crit_max"] | _configActual.crop.temp_crit_max;
+        
+        nuevaConfig.crop.hum_ideal_min = crop["hum_ideal_min"] | _configActual.crop.hum_ideal_min;
+        nuevaConfig.crop.hum_ideal_max = crop["hum_ideal_max"] | _configActual.crop.hum_ideal_max;
+        nuevaConfig.crop.hum_crit_min  = crop["hum_crit_min"] | _configActual.crop.hum_crit_min;
+        
+        nuevaConfig.crop.co2_ideal_min = crop["co2_ideal_min"] | _configActual.crop.co2_ideal_min;
+        nuevaConfig.crop.co2_ideal_max = crop["co2_ideal_max"] | _configActual.crop.co2_ideal_max;
+        nuevaConfig.crop.co2_crit_max  = crop["co2_crit_max"] | _configActual.crop.co2_crit_max;
+        
+        nuevaConfig.crop.light_hours_on = crop["light_hours_on"] | _configActual.crop.light_hours_on;
     } else {
-        // Copiar las actuales si el JSON no trajo reglas
-        nuevaConfig.total_reglas = _configActual.total_reglas;
-        for (int i = 0; i < _configActual.total_reglas; i++) {
-            nuevaConfig.reglas[i] = _configActual.reglas[i];
-        }
+        nuevaConfig.crop = _configActual.crop;
     }
     
     _configActual = nuevaConfig;

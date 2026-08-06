@@ -90,8 +90,20 @@ void FirebaseManager::publicarTelemetria() {
     json.set("dht_ok", s.dhtOk);
     json.set("analogico_ok", s.analogicoOk);
 
-    // Enviar el estado actual del modo de operación al Dashboard
+    // Enviar el estado actual del modo de operación y la máquina de estados al Dashboard
     json.set("modo_operacion", _hw.getModoOperacion() == ModoOperacion::AUTO ? "AUTO" : "MANUAL");
+    
+    String estadoStr = "NORMAL";
+    switch (_hw.getEstadoOperacional()) {
+        case EstadoOperacional::NORMAL: estadoStr = "NORMAL"; break;
+        case EstadoOperacional::CALENTANDO: estadoStr = "CALENTANDO"; break;
+        case EstadoOperacional::ENFRIANDO: estadoStr = "ENFRIANDO"; break;
+        case EstadoOperacional::HUMIDIFICANDO: estadoStr = "HUMIDIFICANDO"; break;
+        case EstadoOperacional::SAFE_MODE: estadoStr = "SAFE_MODE"; break;
+        case EstadoOperacional::EMERGENCIA: estadoStr = "EMERGENCIA"; break;
+        case EstadoOperacional::MANUAL: estadoStr = "MANUAL"; break;
+    }
+    json.set("estado_operacional", estadoStr);
 
     String path = "/telemetry/" + _deviceId + "/data";
     
@@ -113,8 +125,12 @@ void FirebaseManager::publicarHistorial() {
 
     FirebaseJson json;
     
-    // .sv/timestamp hace que los servidores de Firebase escriban la hora UNIX exacta
-    json.set("timestamp", ".sv/timestamp");
+    // ESTÁNDAR INDUSTRIAL: El ESP32 genera su propio Timestamp vía NTP
+    // Esto desacopla el hardware de la plataforma en la nube (Zero Tech Debt)
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    double epoch_ms = (double)tv.tv_sec * 1000.0 + (double)tv.tv_usec / 1000.0;
+    json.set("timestamp", epoch_ms);
 
     if (s.dhtOk) {
         json.set("temp_aire", s.tempAmb);
@@ -163,7 +179,19 @@ bool FirebaseManager::configurarStreams() {
 
 void FirebaseManager::streamCallback(StreamData data) {
     if (_instancia) {
-        _instancia->_procesarPayloadStream(data.dataPath(), data.jsonString().length() > 0 ? data.jsonString() : data.stringData());
+        String payload = data.jsonString();
+        if (payload.length() == 0) {
+            if (data.dataType() == "boolean") {
+                payload = data.boolData() ? "true" : "false";
+            } else if (data.dataType() == "int") {
+                payload = String(data.intData());
+            } else if (data.dataType() == "float" || data.dataType() == "double") {
+                payload = String(data.floatData());
+            } else {
+                payload = data.stringData();
+            }
+        }
+        _instancia->_procesarPayloadStream(data.dataPath(), payload);
     }
 }
 
@@ -179,32 +207,40 @@ void FirebaseManager::_procesarPayloadStream(const String& path, const String& d
     DynamicJsonDocument doc(1024);
     DeserializationError error = deserializeJson(doc, data);
     
-    if (!error) {
-        if (doc.is<JsonObject>()) {
-            if (doc.containsKey("modo_operacion")) {
-                String modo = doc["modo_operacion"].as<String>();
-                if (modo == "AUTO") _hw.setModoOperacion(ModoOperacion::AUTO);
-                else if (modo == "MANUAL") _hw.setModoOperacion(ModoOperacion::MANUAL);
-            }
-            if (doc.containsKey("heater_on")) _hw.setHeater(doc["heater_on"]);
-            if (doc.containsKey("fogger_on")) _hw.setFogger(doc["fogger_on"]);
-            if (doc.containsKey("extractor_on")) _hw.setExtractor(doc["extractor_on"]);
-            if (doc.containsKey("light_on")) _hw.setLight(doc["light_on"]);
+    if (!error && doc.is<JsonObject>()) {
+        // Es un objeto JSON completo (por ejemplo, en el arranque o al enviar múltiples configuraciones)
+        if (doc.containsKey("modo_operacion")) {
+            String modo = doc["modo_operacion"].as<String>();
+            if (modo == "AUTO") _hw.setModoOperacion(ModoOperacion::AUTO);
+            else if (modo == "MANUAL") _hw.setModoOperacion(ModoOperacion::MANUAL);
+        }
+        if (doc.containsKey("heater_on")) _hw.setHeater(doc["heater_on"] | false);
+        if (doc.containsKey("fogger_on")) _hw.setFogger(doc["fogger_on"] | false);
+        if (doc.containsKey("extractor_on")) _hw.setExtractor(doc["extractor_on"] | false);
+        if (doc.containsKey("light_on")) _hw.setLight(doc["light_on"] | false);
+        
+        if (doc.containsKey("max_manual_time_ms")) {
+            ConfiguracionCultivo cfg = _hw.getConfiguracion();
+            cfg.max_manual_time_ms = doc["max_manual_time_ms"].as<unsigned long>();
+            _hw.setConfiguracion(cfg);
         }
         
-        if (path == "/reglas" || path == "/config") {
-            String wrappedJson = "{\"reglas\":" + data + "}";
+        if (path == "/crop" || path == "/config") {
+            String wrappedJson = "{\"crop\":" + data + "}";
             _fm.guardarConfiguracionJson(wrappedJson);
             _hw.setConfiguracion(_fm.cargarConfiguracion());
-            Serial.println(F("✅ [Firebase] Reglas recibidas (ruta específica) y aplicadas."));
-        } else if (doc.is<JsonObject>() && doc.containsKey("reglas")) {
+            Serial.println(F("✅ [Firebase] CropProfile recibido (ruta específica) y aplicado."));
+        } else if (doc.containsKey("crop")) {
             _fm.guardarConfiguracionJson(data);
             _hw.setConfiguracion(_fm.cargarConfiguracion());
-            Serial.println(F("✅ [Firebase] Reglas recibidas (raíz) y aplicadas."));
+            Serial.println(F("✅ [Firebase] CropProfile recibido (raíz) y aplicado."));
         }
     } else {
+        // Es un valor primitivo (boolean o string), o JSON inválido que asumimos como primitivo.
+        // Firebase manda los strings con comillas, así que las removemos.
         String val = data;
         val.replace("\"", ""); 
+        val.trim(); // MUY IMPORTANTE: Eliminar saltos de linea o espacios
         
         if (path.indexOf("modo_operacion") >= 0) {
             if (val == "AUTO") _hw.setModoOperacion(ModoOperacion::AUTO);
@@ -217,6 +253,10 @@ void FirebaseManager::_procesarPayloadStream(const String& path, const String& d
             _hw.setExtractor(val == "true" || val == "1");
         } else if (path.indexOf("light_on") >= 0) {
             _hw.setLight(val == "true" || val == "1");
+        } else if (path.indexOf("max_manual_time_ms") >= 0) {
+            ConfiguracionCultivo cfg = _hw.getConfiguracion();
+            cfg.max_manual_time_ms = val.toInt();
+            _hw.setConfiguracion(cfg);
         }
     }
     

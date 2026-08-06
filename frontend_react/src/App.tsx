@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { subscribeToAllDevices, subscribeToDeviceConfig, sendCommand, sendModeCommand, sendConfigRules } from './services/firebaseService';
-import type { EstadoCamara, ConfiguracionCultivo, ReglaTermodinamica } from './types/cultivo';
+import { subscribeToAllDevices, subscribeToDeviceConfig, sendCommand, sendModeCommand, sendConfigRules, updateConfigField } from './services/firebaseService';
+import type { EstadoCamara, ConfiguracionCultivo, DeviceCropProfile } from './types/cultivo';
 import { MetricCard } from './components/MetricCard';
 import { TelemetryDashboard } from './components/TelemetryDashboard';
 import { SemaforoEstabilidad } from './components/SemaforoEstabilidad';
@@ -15,16 +15,48 @@ function App() {
   // Estado optimista para hacer que la UI se sienta instantánea aunque el hardware demore
   const [optimisticModes, setOptimisticModes] = useState<Record<string, 'AUTO' | 'MANUAL'>>({});
   
+  // Timer manual
+  const [manualStartTimes, setManualStartTimes] = useState<Record<string, number>>({});
+  const [now, setNow] = useState<number>(Date.now());
+  
   // Modales
   const [editingRulesFor, setEditingRulesFor] = useState<string | null>(null);
+
+  useEffect(() => {
+    const ticker = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(ticker);
+  }, []);
 
   useEffect(() => {
     // Suscribirse a Firebase RTDB para Telemetría
     const unsubscribeTelemetria = subscribeToAllDevices((devices) => {
       setCamaras(devices);
       setError(null);
-      // Limpiar estados optimistas cuando recibimos update real del servidor
-      setOptimisticModes({});
+      // Limpiar estados optimistas SOLO cuando recibimos update real del servidor que coincida
+      setOptimisticModes(prev => {
+        const next = { ...prev };
+        let changed = false;
+        devices.forEach(dev => {
+          if (next[dev.deviceId] === dev.modo_operacion) {
+            delete next[dev.deviceId];
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+      
+      // Update manual start times
+      setManualStartTimes(prev => {
+        const next = { ...prev };
+        devices.forEach(dev => {
+          if (dev.modo_operacion === 'MANUAL' && !next[dev.deviceId]) {
+            next[dev.deviceId] = Date.now();
+          } else if (dev.modo_operacion === 'AUTO') {
+            delete next[dev.deviceId];
+          }
+        });
+        return next;
+      });
     });
 
     return () => unsubscribeTelemetria();
@@ -74,15 +106,23 @@ function App() {
     }
   };
 
-  const handleSaveRules = async (deviceId: string, rules: ReglaTermodinamica[], profileName?: string, phaseName?: string) => {
+  const updateConfigField = async (deviceId: string, field: string, value: any) => {
+    try {
+      await sendCommand(deviceId, field, value);
+    } catch (err) {
+      console.error(`Error al actualizar config field ${field}`, err);
+    }
+  };
+
+  const handleSaveRules = async (deviceId: string, crop: DeviceCropProfile, profileName?: string, phaseName?: string) => {
     try {
       await sendConfigRules(deviceId, { 
-        reglas: rules,
+        crop: crop,
         activeProfileName: profileName || 'Desconocido',
         activePhaseName: phaseName || 'Desconocida'
       });
     } catch (error) {
-      console.error("Error saving rules:", error);
+      console.error("Error saving crop profile:", error);
       throw error;
     }
   };
@@ -122,7 +162,15 @@ function App() {
             {camaras.map((camara) => {
               const modo = optimisticModes[camara.deviceId] || camara.modo_operacion || 'AUTO';
               const config = configs[camara.deviceId];
-              const reglas = config?.reglas || [];
+              const crop = config?.crop;
+
+              const getTarget = (variable: 'TEMP' | 'HUMEDAD' | 'VPD' | 'CO2') => {
+                if (!crop) return undefined;
+                if (variable === 'TEMP') return `${crop.temp_ideal_min} - ${crop.temp_ideal_max} °C`;
+                if (variable === 'HUMEDAD') return `${crop.hum_ideal_min} - ${crop.hum_ideal_max} %`;
+                if (variable === 'CO2') return `< ${crop.co2_ideal_max} ppm`;
+                return undefined;
+              };
 
               return (
                 <div key={camara.deviceId} className="bg-[#0a0a0a] border border-white/5 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
@@ -188,12 +236,12 @@ function App() {
                       {/* Semáforo Inteligente */}
                       <SemaforoEstabilidad 
                         telemetria={camara.telemetria} 
-                        reglas={reglas} 
+                        crop={crop} 
                         modo_operacion={modo} 
                       />
 
                       {/* HERO CARDS - Métricas */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                         <MetricCard
                           title="Temp. Ambiente"
                           value={camara.telemetria.temp_aire?.toFixed(1) || '--'}
@@ -201,6 +249,7 @@ function App() {
                           icon={Thermometer}
                           colorClass="text-amber-400"
                           status={!camara.telemetria.dht_ok ? 'DANGER' : 'STABLE'}
+                          target={getTarget('TEMP')}
                         />
                         <MetricCard
                           title="Humedad Relativa"
@@ -209,6 +258,7 @@ function App() {
                           icon={Droplets}
                           colorClass="text-cyan-400"
                           status={!camara.telemetria.dht_ok ? 'DANGER' : 'STABLE'}
+                          target={getTarget('HUMEDAD')}
                         />
                         <MetricCard
                           title="Temp. Sustrato"
@@ -225,6 +275,15 @@ function App() {
                           icon={Activity}
                           colorClass="text-purple-400"
                           status={camara.telemetria.vpd && (camara.telemetria.vpd < 0.4 || camara.telemetria.vpd > 1.6) ? 'WARNING' : 'STABLE'}
+                          target={getTarget('VPD')}
+                        />
+                        <MetricCard
+                          title="Nivel CO2"
+                          value={camara.telemetria.co2 || '--'}
+                          unit="ppm"
+                          icon={Wind}
+                          colorClass="text-sky-400"
+                          target={getTarget('CO2')}
                         />
                       </div>
                       
@@ -243,9 +302,37 @@ function App() {
                               </p>
                             )}
                             {modo === 'MANUAL' && (
-                              <p className="text-[10px] text-orange-400 font-mono uppercase tracking-widest mt-2">
-                                T/O: {config?.max_manual_time_ms ? config.max_manual_time_ms / 60000 : 15} MINUTOS
-                              </p>
+                              <div className="mt-2 flex items-center justify-between">
+                                <p className="text-[10px] text-orange-400 font-mono uppercase tracking-widest flex items-center gap-2">
+                                  T/O:{' '}
+                                  <span className="font-bold text-xs bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20">
+                                  {(() => {
+                                    const start = manualStartTimes[camara.deviceId];
+                                    const timeoutMs = (config?.max_manual_time_ms && config.max_manual_time_ms >= 60000) ? config.max_manual_time_ms : 300000;
+                                    if (!start) return `${Math.floor(timeoutMs / 60000)}:00`;
+                                    const elapsed = now - start;
+                                    const remaining = Math.max(0, timeoutMs - elapsed);
+                                    const minutes = Math.floor(remaining / 60000);
+                                    const seconds = Math.floor((remaining % 60000) / 1000);
+                                    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                                  })()}
+                                  </span>
+                                </p>
+                                <select 
+                                  className="bg-black/50 border border-orange-500/30 text-orange-400 text-[10px] uppercase font-mono tracking-widest px-2 py-1 rounded outline-none cursor-pointer"
+                                  value={(config?.max_manual_time_ms || 300000).toString()}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value);
+                                    updateConfigField(camara.deviceId, 'max_manual_time_ms', val);
+                                  }}
+                                >
+                                  <option value="300000">5 MIN</option>
+                                  <option value="600000">10 MIN</option>
+                                  <option value="900000">15 MIN</option>
+                                  <option value="1800000">30 MIN</option>
+                                  <option value="3600000">60 MIN</option>
+                                </select>
+                              </div>
                             )}
                           </div>
                           
