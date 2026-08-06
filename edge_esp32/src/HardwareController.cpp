@@ -104,9 +104,14 @@ float HardwareController::calcularVPD(float tempC, float humRH) {
 void HardwareController::_ejecutarAccion(int pin, bool& estadoActual, bool nuevoEstado, unsigned long& ultimoCambio, unsigned long now, bool ignorarFiltro) {
     if (estadoActual == nuevoEstado) return;
 
-    if (!ignorarFiltro && _modoActual == ModoOperacion::AUTO) {
+    // ── FILTRO ANTI-SHORT-CYCLE (Solo protege re-encendido) ──────────────
+    // Lógica industrial: APAGAR siempre es inmediato (protege el cultivo).
+    // RE-ENCENDER requiere esperar MIN_RELAY_TIME_MS (protege el relé/motor).
+    // Ejemplo: fogger se apaga al instante si humedad > setpoint,
+    //          pero no puede re-encenderse por 3 minutos tras apagarse.
+    if (!ignorarFiltro && _modoActual == ModoOperacion::AUTO && nuevoEstado == true) {
         if (now - ultimoCambio < MIN_RELAY_TIME_MS && ultimoCambio != 0) {
-            // Aún en tiempo de Debounce (Anti-Short Cycle)
+            // Aún en tiempo de Debounce — bloqueando RE-ENCENDIDO
             return;
         }
     }
