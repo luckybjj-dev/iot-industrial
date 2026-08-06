@@ -9,6 +9,10 @@ export interface TelemetriaFungi {
     extractor_on: boolean;
     heater_on: boolean;
     light_on: boolean;
+
+    heater_locked?: boolean;
+    fogger_locked?: boolean;
+    extractor_locked?: boolean;
     
     dht_ok: boolean;
     analogico_ok: boolean;
