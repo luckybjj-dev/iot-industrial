@@ -30,6 +30,8 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
   // Fotoperiodo separado en horas numéricas para validar que sumen 24h
   const [editLightHours, setEditLightHours] = useState<number>(12);
   const [editDarkHours, setEditDarkHours] = useState<number>(12);
+  const [editProfileName, setEditProfileName] = useState<string>('');
+  const [editProfileDesc, setEditProfileDesc] = useState<string>('');
 
   useEffect(() => {
     const saved = localStorage.getItem('CUSTOM_PROFILES');
@@ -75,14 +77,49 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
   };
 
   const startEditing = () => {
-    if (phase) {
+    if (phase && profile) {
       setEditedTargets(JSON.parse(JSON.stringify(phase.targets)));
       // Parsear el fotoperiodo "12/12" en dos valores numéricos separados
       const parts = (phase.targets.lighting?.photoperiod || '12/12').split('/');
       setEditLightHours(parseInt(parts[0]) || 12);
       setEditDarkHours(parseInt(parts[1]) || 12);
+      setEditProfileName(profile.commonName);
+      setEditProfileDesc(profile.description);
       setIsEditing(true);
     }
+  };
+
+  const handleCreateCustomProfile = () => {
+    const id = `custom_${Date.now()}`;
+    const newProfile: CropProfile = {
+      id,
+      kingdom: 'FUNGI',
+      commonName: 'Nuevo Perfil Personalizado',
+      scientificName: 'Custom Species',
+      description: 'Describe aquí tu perfil.',
+      imageUrl: '',
+      phases: [{
+        id: 'fase1',
+        name: 'Fase Principal',
+        stageTips: '',
+        targets: {
+          temperature: {
+            day: { min: 20, max: 25 },
+            night: { min: 18, max: 22 }
+          },
+          humidity: { min: 80, max: 90 },
+          vpd: { min: 0.5, max: 1.0 },
+          co2: { min: 400, max: 1000 },
+          fae: { ach: { min: 1, max: 4 } },
+          lighting: { photoperiod: '12/12' }
+        }
+      }]
+    };
+    const newCustoms = { ...customProfiles, [id]: newProfile };
+    setCustomProfiles(newCustoms);
+    localStorage.setItem('CUSTOM_PROFILES', JSON.stringify(newCustoms));
+    setActiveTab('CUSTOM');
+    handleSelectProfile(id, 'fase1');
   };
 
   const handleSaveInjection = async () => {
@@ -95,15 +132,16 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
       
       let finalProfileName = profile?.commonName || 'Desconocido';
 
-      if (editedTargets) {
+      if (isEditing) {
         // Generar un clon customizado para guardar los cambios en localStorage
         const customId = profile.id.startsWith('custom_') ? profile.id : `custom_${profile.id}_${Date.now()}`;
-        finalProfileName = profile.id.startsWith('custom_') ? profile.commonName : `${profile.commonName} (Custom)`;
+        finalProfileName = editProfileName || profile.commonName;
         
         const updatedProfile = { 
           ...profile, 
           id: customId, 
           commonName: finalProfileName,
+          description: editProfileDesc || profile.description,
           phases: profile.phases.map(p => p.id === phase.id ? finalPhase : p) 
         };
         
@@ -134,9 +172,16 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
         <div className="flex-1">
           <div className="flex items-start gap-3">
             <BookOpen className="text-emerald-400 mt-1 flex-shrink-0" size={20} />
-            <div>
+            <div className="w-full">
               <h4 className="text-white font-bold mb-1">Enciclopedia Agronómica</h4>
-              <p className="text-sm text-neutral-300 leading-relaxed mb-3">{profile.description || 'Sin descripción disponible.'}</p>
+              {isEditing ? (
+                <div className="space-y-2 mb-3 w-full">
+                  <input type="text" value={editProfileName} onChange={e => setEditProfileName(e.target.value)} className="w-full bg-black/50 border border-white/20 p-2 rounded text-white text-sm" placeholder="Nombre del perfil..." />
+                  <textarea value={editProfileDesc} onChange={e => setEditProfileDesc(e.target.value)} className="w-full bg-black/50 border border-white/20 p-2 rounded text-neutral-300 text-sm h-20" placeholder="Descripción..."></textarea>
+                </div>
+              ) : (
+                <p className="text-sm text-neutral-300 leading-relaxed mb-3">{profile.description || 'Sin descripción disponible.'}</p>
+              )}
               {phase?.stageTips && (
                 <div className="bg-emerald-950/50 border border-emerald-500/20 p-3 rounded-lg shadow-inner">
                   <h5 className="text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1">💡 Tips para {phase.name}</h5>
@@ -263,9 +308,9 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
     return (
       <div className="text-center p-12 bg-white/5 rounded-2xl border border-white/10 border-dashed">
         <Sprout size={48} className="mx-auto text-emerald-500/50 mb-4" />
-        <h3 className="text-xl font-bold text-white mb-2">Creador de Perfiles Comunitario</h3>
-        <p className="text-neutral-400 mb-6 max-w-md mx-auto">Crea una especie desde cero, define sus fases y compártela. (Implementación futura del Community Hub).</p>
-        <button className="bg-emerald-500 text-white px-6 py-2 rounded-xl font-bold hover:bg-emerald-600 transition-colors flex items-center gap-2 mx-auto" onClick={() => alert('¡El Creador Completo de Fases se desbloqueará en la siguiente versión!')}>
+        <h3 className="text-xl font-bold text-white mb-2">Creador de Perfiles</h3>
+        <p className="text-neutral-400 mb-6 max-w-md mx-auto">Crea un perfil de cultivo personalizado desde cero con tus propios parámetros.</p>
+        <button onClick={handleCreateCustomProfile} className="bg-emerald-500 text-white px-6 py-2 rounded-xl font-bold hover:bg-emerald-600 transition-colors flex items-center gap-2 mx-auto">
           <Plus size={20} /> Crear Nueva Especie
         </button>
       </div>
