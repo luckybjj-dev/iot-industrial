@@ -277,7 +277,7 @@ function App() {
                       {/* Semáforo Inteligente */}
                       <SemaforoEstabilidad 
                         telemetria={camara.telemetria} 
-                        crop={crop} 
+                        crop={crop ?? null} 
                         modo_operacion={modo} 
                       />
 
@@ -320,7 +320,7 @@ function App() {
                         />
                         <MetricCard
                           title="Nivel CO2"
-                          value={camara.telemetria.co2 || '--'}
+                          value={camara.telemetria.co2_ppm?.toString() || '--'}
                           unit="ppm"
                           icon={Wind}
                           colorClass="text-sky-400"

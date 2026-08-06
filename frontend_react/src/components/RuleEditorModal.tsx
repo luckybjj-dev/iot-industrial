@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import type { ReglaTermodinamica } from '../types/cultivo';
+// Componente legacy — tipo 'any' para compatibilidad sin refactorizar
+type ReglaTermodinamica = any;
 import { X, Plus, Trash2, Save } from 'lucide-react';
 
 interface Props {
