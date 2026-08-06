@@ -152,8 +152,7 @@ void loop() {
             // CALLBACKS: Desconectar Firebase durante el flash para evitar
             // competencia de CPU/heap que causa el fallo al 100% de OTA
             ArduinoOTA.onStart([]() {
-                Serial.println(F("[OTA] Inicio de flash. Desconectando Firebase..."));
-                Firebase.end();
+                Serial.println(F("[OTA] Inicio de flash..."));
             });
             ArduinoOTA.onEnd([]() {
                 Serial.println(F("[OTA] Flash completado. Reiniciando..."));

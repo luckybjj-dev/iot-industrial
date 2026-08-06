@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { subscribeToAllDevices, subscribeToDeviceConfig, sendCommand, sendModeCommand, sendConfigRules, updateConfigField } from './services/firebaseService';
+import { useEffect, useRef, useState } from 'react';
+import { subscribeToAllDevices, subscribeToDeviceConfig, sendCommand, sendModeCommand, sendConfigRules } from './services/firebaseService';
 import type { EstadoCamara, ConfiguracionCultivo, DeviceCropProfile } from './types/cultivo';
 import { MetricCard } from './components/MetricCard';
 import { TelemetryDashboard } from './components/TelemetryDashboard';
@@ -26,6 +26,47 @@ function App() {
     const ticker = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(ticker);
   }, []);
+
+  // Ref para evitar múltiples llamadas de revert en el mismo segundo
+  const revertingRef = useRef<Set<string>>(new Set());
+
+  // ── AUTO-REVERT A MODO AUTO ──────────────────────────────────────────────
+  // Se ejecuta cada segundo (gracias al ticker de 'now').
+  // Cuando el cronómetro manual de un dispositivo llega a cero,
+  // React envía el comando AUTO a Firebase sin depender del ESP32.
+  useEffect(() => {
+    camaras.forEach(camara => {
+      const modo = optimisticModes[camara.deviceId] ?? camara.modo_operacion ?? 'AUTO';
+      if (modo !== 'MANUAL') {
+        revertingRef.current.delete(camara.deviceId);
+        return;
+      }
+      if (revertingRef.current.has(camara.deviceId)) return;
+
+      const start = manualStartTimes[camara.deviceId];
+      if (!start) return;
+
+      const config = configs[camara.deviceId];
+      const timeoutMs = (config?.max_manual_time_ms && config.max_manual_time_ms >= 60000)
+        ? config.max_manual_time_ms
+        : 300000;
+
+      if ((now - start) >= timeoutMs) {
+        revertingRef.current.add(camara.deviceId);
+        // Actualización optimista inmediata para bloquear re-trigger
+        setOptimisticModes(prev => ({ ...prev, [camara.deviceId]: 'AUTO' }));
+        setManualStartTimes(prev => {
+          const next = { ...prev };
+          delete next[camara.deviceId];
+          return next;
+        });
+        // Enviar comando AUTO a Firebase
+        sendModeCommand(camara.deviceId, 'AUTO')
+          .catch(err => console.error('[AutoRevert] Error:', err))
+          .finally(() => revertingRef.current.delete(camara.deviceId));
+      }
+    });
+  }, [now]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     // Suscribirse a Firebase RTDB para Telemetría
@@ -155,7 +196,7 @@ function App() {
         {camaras.length === 0 && !error ? (
           <div className="flex flex-col items-center justify-center h-64 border border-white/5 bg-[#0a0a0a] rounded-3xl">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mb-6"></div>
-            <p className="text-neutral-500 font-mono text-sm tracking-widest uppercase">Estableciendo conexión MQTT / RTDB...</p>
+            <p className="text-neutral-500 font-mono text-sm tracking-widest uppercase">Conectando con Firebase RTDB...</p>
           </div>
         ) : (
           <div className="space-y-12">
@@ -324,6 +365,8 @@ function App() {
                                   onChange={(e) => {
                                     const val = parseInt(e.target.value);
                                     updateConfigField(camara.deviceId, 'max_manual_time_ms', val);
+                                    // Reset del cronómetro al nuevo valor seleccionado
+                                    setManualStartTimes(prev => ({ ...prev, [camara.deviceId]: Date.now() }));
                                   }}
                                 >
                                   <option value="300000">5 MIN</option>

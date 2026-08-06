@@ -1,4 +1,4 @@
-import { ref, onValue, update, query, limitToLast, get } from 'firebase/database';
+import { ref, onValue, update, set, query, limitToLast, get } from 'firebase/database';
 import { database } from '../config/firebase';
 import type { EstadoCamara, TelemetriaFungi, HistorialData, ConfiguracionCultivo } from '../types/cultivo';
 
@@ -94,13 +94,16 @@ export const subscribeToDeviceConfig = (
 /**
  * Enviar comando de actuador (Overrides manuales)
  */
+/**
+ * Enviar comando de actuador a ruta hija directa.
+ * Escribir en /commands/light_on (no en /commands/) hace que el
+ * streamCallback del ESP32 reciba el path exacto y procese el
+ * primitivo por la rama 'else', más robusta para booleanos.
+ */
 export const sendCommand = async (deviceId: string, actuator: string, state: any) => {
-  const commandRef = ref(database, `devices/${deviceId}/commands`);
+  const commandRef = ref(database, `devices/${deviceId}/commands/${actuator}`);
   try {
-    await update(commandRef, {
-      [actuator]: state,
-      timestamp: Date.now()
-    });
+    await set(commandRef, state);
   } catch (error) {
     console.error('Error enviando comando a Firebase:', error);
     throw error;
