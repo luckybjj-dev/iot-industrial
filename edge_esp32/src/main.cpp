@@ -36,11 +36,10 @@
 #include <ArduinoOTA.h>
 
 // --------------------------------------------------------------------
-// Credenciales y configuración de red
+// NOTA: Las credenciales WiFi se gestionan EXCLUSIVAMENTE mediante el
+// Portal Cautivo (NetworkManager). No se hardcodean aquí por seguridad
+// comercial. El dispositivo arrancará en modo AP si la NVS está vacía.
 // --------------------------------------------------------------------
-static const char* WIFI_SSID     = "Presidio";
-static const char* WIFI_PASSWORD = "manchita2";
-// No MQTT Config needed anymore
 
 // --------------------------------------------------------------------
 // Identidad dinámica del nodo (basada en MAC Address)
@@ -148,6 +147,25 @@ void loop() {
         // Solo intentamos arrancar el servicio de actualización inalámbrica si el WiFi está listo.
         if (!_otaIniciado) {
             ArduinoOTA.setHostname(deviceId.c_str());
+            // SEGURIDAD: Password requerido para flashear firmware via WiFi
+            ArduinoOTA.setPassword("agriedge2026");
+            // CALLBACKS: Desconectar Firebase durante el flash para evitar
+            // competencia de CPU/heap que causa el fallo al 100% de OTA
+            ArduinoOTA.onStart([]() {
+                Serial.println(F("[OTA] Inicio de flash. Desconectando Firebase..."));
+                Firebase.end();
+            });
+            ArduinoOTA.onEnd([]() {
+                Serial.println(F("[OTA] Flash completado. Reiniciando..."));
+            });
+            ArduinoOTA.onError([](ota_error_t error) {
+                Serial.printf("[OTA] Error [%u]: ", error);
+                if (error == OTA_AUTH_ERROR) Serial.println(F("Auth Failed"));
+                else if (error == OTA_BEGIN_ERROR) Serial.println(F("Begin Failed"));
+                else if (error == OTA_CONNECT_ERROR) Serial.println(F("Connect Failed"));
+                else if (error == OTA_RECEIVE_ERROR) Serial.println(F("Receive Failed"));
+                else if (error == OTA_END_ERROR) Serial.println(F("End Failed"));
+            });
             ArduinoOTA.begin();
             _otaIniciado = true;
             Serial.println(F("[OTA] Servicio inalambrico listo y a la escucha."));

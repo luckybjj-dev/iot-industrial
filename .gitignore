@@ -5,6 +5,9 @@ node_modules/
 .env
 *.env
 
+# Credenciales del firmware ESP32 (NUNCA commitear)
+edge_esp32/src/Secrets.h
+
 # Archivos compilados de C++ / Arduino
 *.bin
 *.elf
