@@ -404,17 +404,20 @@ function App() {
                           
                           {/* Actuadores List */}
                           {[
-                            { id: 'fogger_on', label: 'Niebla', icon: Droplets, val: camara.telemetria.fogger_on, activeBg: 'bg-cyan-500/20 text-cyan-500 border-cyan-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
-                            { id: 'extractor_on', label: 'Extractor', icon: Wind, val: camara.telemetria.extractor_on, activeBg: 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
-                            { id: 'heater_on', label: 'Calefactor', icon: Activity, val: camara.telemetria.heater_on, activeBg: 'bg-amber-500/20 text-amber-500 border-amber-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
-                            { id: 'light_on', label: 'Luz', icon: Power, val: camara.telemetria.light_on, activeBg: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
+                            { id: 'fogger_on', label: 'Niebla', icon: Droplets, val: camara.telemetria.fogger_on, locked: camara.telemetria.fogger_locked, activeBg: 'bg-cyan-500/20 text-cyan-500 border-cyan-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
+                            { id: 'extractor_on', label: 'Extractor', icon: Wind, val: camara.telemetria.extractor_on, locked: camara.telemetria.extractor_locked, activeBg: 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
+                            { id: 'heater_on', label: 'Calefactor', icon: Activity, val: camara.telemetria.heater_on, locked: camara.telemetria.heater_locked, activeBg: 'bg-amber-500/20 text-amber-500 border-amber-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
+                            { id: 'light_on', label: 'Luz', icon: Power, val: camara.telemetria.light_on, locked: false, activeBg: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
                           ].map((act) => (
-                            <div key={act.id} className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5">
+                            <div key={act.id} className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5 relative">
                               <span className="text-neutral-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
                                 <act.icon size={14}/> {act.label}
+                                {modo === 'MANUAL' && act.locked && (
+                                  <span className="text-red-500 ml-1" title="Bloqueado por protección térmica (Anti-Short Cycle)">🔒</span>
+                                )}
                               </span>
                               <button 
-                                disabled={modo === 'AUTO'}
+                                disabled={modo === 'AUTO' || (modo === 'MANUAL' && act.locked)}
                                 onClick={() => handleToggleActuator(camara.deviceId, act.id, act.val, modo)}
                                 className={`px-4 py-1.5 rounded-lg text-xs font-black tracking-widest uppercase transition-all duration-300 border ${
                                   modo === 'AUTO'
@@ -423,10 +426,12 @@ function App() {
                                       : 'bg-neutral-900 text-neutral-600 border-neutral-800'
                                     : act.val 
                                       ? act.manualBg 
-                                      : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700 border-neutral-700'
+                                      : act.locked 
+                                        ? 'bg-red-950/30 text-red-500 border-red-500/20 cursor-not-allowed'
+                                        : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700 border-neutral-700'
                                 }`}
                               >
-                                {act.val ? 'ON' : 'OFF'}
+                                {modo === 'MANUAL' && act.locked ? 'LOCKED' : (act.val ? 'ON' : 'OFF')}
                               </button>
                             </div>
                           ))}

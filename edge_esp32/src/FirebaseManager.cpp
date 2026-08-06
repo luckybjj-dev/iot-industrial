@@ -87,6 +87,12 @@ void FirebaseManager::publicarTelemetria() {
     json.set("fogger_on", a.fogger_ON);
     json.set("extractor_on", a.extractor_ON);
     json.set("light_on", a.light_ON);
+
+    unsigned long now = millis();
+    json.set("heater_locked", !a.heater_ON && _hw.isHeaterLocked(now));
+    json.set("fogger_locked", !a.fogger_ON && _hw.isFoggerLocked(now));
+    json.set("extractor_locked", !a.extractor_ON && _hw.isExtractorLocked(now));
+
     json.set("dht_ok", s.dhtOk);
     json.set("analogico_ok", s.analogicoOk);
 

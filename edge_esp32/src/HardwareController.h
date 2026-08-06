@@ -114,6 +114,11 @@ public:
     ModoOperacion getModoOperacion()    const { return _modoActual; }
     EstadoOperacional getEstadoOperacional() const { return _estadoActual; }
 
+    // Consultas de bloqueo por protección de hardware (Anti-Short Cycle)
+    bool isHeaterLocked(unsigned long now) const { return (now - _last_heater_switch < MIN_RELAY_TIME_MS && _last_heater_switch != 0); }
+    bool isFoggerLocked(unsigned long now) const { return (now - _last_fogger_switch < MIN_RELAY_TIME_MS && _last_fogger_switch != 0); }
+    bool isExtractorLocked(unsigned long now) const { return (now - _last_extractor_switch < MIN_RELAY_TIME_MS && _last_extractor_switch != 0); }
+
 private:
     DHT          _dht;
     SensorData   _sensores;
