@@ -32,6 +32,12 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
   const [editDarkHours, setEditDarkHours] = useState<number>(12);
   const [editProfileName, setEditProfileName] = useState<string>('');
   const [editProfileDesc, setEditProfileDesc] = useState<string>('');
+  
+  // Create Modal State
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newProfileName, setNewProfileName] = useState('');
+  const [newProfileDesc, setNewProfileDesc] = useState('');
+  const [newProfileKingdom, setNewProfileKingdom] = useState<'FUNGI' | 'PLANTAE'>('FUNGI');
 
   useEffect(() => {
     const saved = localStorage.getItem('CUSTOM_PROFILES');
@@ -90,23 +96,31 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
   };
 
   const handleCreateCustomProfile = () => {
+    setNewProfileName('');
+    setNewProfileDesc('');
+    setNewProfileKingdom('FUNGI');
+    setShowCreateModal(true);
+  };
+
+  const confirmCreateCustomProfile = () => {
+    if (!newProfileName.trim()) {
+      alert('Por favor ingresa un nombre para el perfil.');
+      return;
+    }
     const id = `custom_${Date.now()}`;
     const newProfile: CropProfile = {
       id,
-      kingdom: 'FUNGI',
-      commonName: 'Nuevo Perfil Personalizado',
+      kingdom: newProfileKingdom,
+      commonName: newProfileName,
       scientificName: 'Custom Species',
-      description: 'Describe aquí tu perfil.',
+      description: newProfileDesc || 'Perfil personalizado',
       imageUrl: '',
       phases: [{
         id: 'fase1',
         name: 'Fase Principal',
         stageTips: '',
         targets: {
-          temperature: {
-            day: { min: 20, max: 25 },
-            night: { min: 18, max: 22 }
-          },
+          temperature: { day: { min: 20, max: 25 }, night: { min: 18, max: 22 } },
           humidity: { min: 80, max: 90 },
           vpd: { min: 0.5, max: 1.0 },
           co2: { min: 400, max: 1000 },
@@ -120,6 +134,17 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
     localStorage.setItem('CUSTOM_PROFILES', JSON.stringify(newCustoms));
     setActiveTab('CUSTOM');
     handleSelectProfile(id, 'fase1');
+    setShowCreateModal(false);
+
+    // Iniciar edición inmediatamente para los SCADA
+    setTimeout(() => {
+      setEditedTargets(JSON.parse(JSON.stringify(newProfile.phases[0].targets)));
+      setEditLightHours(12);
+      setEditDarkHours(12);
+      setEditProfileName(newProfile.commonName);
+      setEditProfileDesc(newProfile.description);
+      setIsEditing(true);
+    }, 100);
   };
 
   const handleSaveInjection = async () => {
@@ -173,7 +198,14 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
           <div className="flex items-start gap-3">
             <BookOpen className="text-emerald-400 mt-1 flex-shrink-0" size={20} />
             <div className="w-full">
-              <h4 className="text-white font-bold mb-1">Enciclopedia Agronómica</h4>
+              <div className="flex justify-between items-center mb-1">
+                <h4 className="text-white font-bold">Resumen del Perfil</h4>
+                {!isEditing && activeTab === 'CUSTOM' && (
+                  <button onClick={startEditing} className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 bg-blue-500/10 px-3 py-1.5 rounded-lg transition-colors">
+                    <Edit3 size={16} /> Editar Perfil Completo
+                  </button>
+                )}
+              </div>
               {isEditing ? (
                 <div className="space-y-2 mb-3 w-full">
                   <input type="text" value={editProfileName} onChange={e => setEditProfileName(e.target.value)} className="w-full bg-black/50 border border-white/20 p-2 rounded text-white text-sm" placeholder="Nombre del perfil..." />
@@ -211,9 +243,7 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
         <div className="flex justify-between items-center border-b border-white/10 pb-2">
           <h3 className="text-lg font-semibold text-purple-400">3. Variables Objetivo (SCADA)</h3>
           {!isEditing ? (
-            <button onClick={startEditing} className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 bg-blue-500/10 px-3 py-1.5 rounded-lg transition-colors">
-              <Edit3 size={16} /> Ajustar Valores
-            </button>
+            <div className="text-sm text-neutral-400 italic">Haz clic en "Editar Perfil Completo" arriba para modificar.</div>
           ) : (
             <div className="flex items-center gap-2">
               <button onClick={() => setEditedTargets(JSON.parse(JSON.stringify(phase.targets)))} className="flex items-center gap-2 text-sm text-orange-400 hover:text-orange-300 bg-orange-500/10 px-3 py-1.5 rounded-lg transition-colors" title="Restablecer a valores del catálogo">
@@ -443,6 +473,53 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
         </div>
 
       </div>
+      
+      {/* OVERLAY DE CREACIÓN DE NUEVA ESPECIE */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+          <div className="bg-[#1a1a1a] border border-emerald-500/30 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <h2 className="text-2xl font-bold text-emerald-400 mb-6 flex items-center gap-3">
+              <Plus size={24} /> Crear Nuevo Perfil
+            </h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-neutral-400 mb-1">Reino</label>
+                <div className="flex gap-2">
+                  <button onClick={() => setNewProfileKingdom('FUNGI')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${newProfileKingdom === 'FUNGI' ? 'bg-emerald-500 text-white' : 'bg-white/5 text-neutral-400 hover:bg-white/10'}`}>🍄 Fungi</button>
+                  <button onClick={() => setNewProfileKingdom('PLANTAE')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${newProfileKingdom === 'PLANTAE' ? 'bg-emerald-500 text-white' : 'bg-white/5 text-neutral-400 hover:bg-white/10'}`}>🌿 Plantae</button>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm text-neutral-400 mb-1">Nombre del Cultivo</label>
+                <input 
+                  type="text" 
+                  value={newProfileName} 
+                  onChange={e => setNewProfileName(e.target.value)} 
+                  placeholder="Ej: Champiñón de París" 
+                  className="w-full bg-black/50 border border-white/20 p-3 rounded-xl text-white focus:border-emerald-500 outline-none transition-colors"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm text-neutral-400 mb-1">Descripción</label>
+                <textarea 
+                  value={newProfileDesc} 
+                  onChange={e => setNewProfileDesc(e.target.value)} 
+                  placeholder="Breve descripción del cultivo..." 
+                  className="w-full bg-black/50 border border-white/20 p-3 rounded-xl text-white focus:border-emerald-500 outline-none transition-colors h-24"
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-end gap-3 mt-8">
+              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/5 transition-colors">Cancelar</button>
+              <button onClick={confirmCreateCustomProfile} className="px-6 py-2 bg-emerald-500 text-white rounded-lg font-bold hover:bg-emerald-600 transition-colors shadow-lg">Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
