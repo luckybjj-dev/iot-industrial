@@ -112,14 +112,13 @@ export const sendCommand = async (deviceId: string, actuator: string, state: any
 
 /**
  * Enviar comando de modo de operación (AUTO / MANUAL)
+ * Escribe directamente en /commands/modo_operacion para que el
+ * ESP32 lo procese por la rama primitiva del streamCallback.
  */
 export const sendModeCommand = async (deviceId: string, mode: 'AUTO' | 'MANUAL') => {
-  const commandRef = ref(database, `devices/${deviceId}/commands`);
+  const modeRef = ref(database, `devices/${deviceId}/commands/modo_operacion`);
   try {
-    await update(commandRef, {
-      modo_operacion: mode,
-      timestamp: Date.now()
-    });
+    await set(modeRef, mode);
   } catch (error) {
     console.error('Error enviando comando de modo a Firebase:', error);
     throw error;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { subscribeToAllDevices, subscribeToDeviceConfig, sendCommand, sendModeCommand, sendConfigRules } from './services/firebaseService';
+import { subscribeToAllDevices, subscribeToDeviceConfig, sendCommand, sendModeCommand, sendConfigRules, updateConfigField } from './services/firebaseService';
 import type { EstadoCamara, ConfiguracionCultivo, DeviceCropProfile } from './types/cultivo';
 import { MetricCard } from './components/MetricCard';
 import { TelemetryDashboard } from './components/TelemetryDashboard';
@@ -103,25 +103,33 @@ function App() {
     return () => unsubscribeTelemetria();
   }, []);
 
-  // Suscribirse a configuraciones por cada cámara detectada
+  // ── SUSCRIPCIÓN A CONFIGURACIONES ──────────────────────────────────────
+  // Usa un ref para rastrear suscripciones activas y evitar que se
+  // destruyan cada vez que 'camaras' se actualiza por telemetría.
+  const configSubsRef = useRef<Record<string, () => void>>({});
+
   useEffect(() => {
-    const unsubscribers: (() => void)[] = [];
-    
     camaras.forEach(camara => {
-      if (!configs[camara.deviceId]) {
+      // Solo suscribirse si no hay listener activo para este deviceId
+      if (!configSubsRef.current[camara.deviceId]) {
         const unsub = subscribeToDeviceConfig(camara.deviceId, (config) => {
           if (config) {
             setConfigs(prev => ({ ...prev, [camara.deviceId]: config }));
           }
         });
-        unsubscribers.push(unsub);
+        configSubsRef.current[camara.deviceId] = unsub;
       }
     });
-
-    return () => {
-      unsubscribers.forEach(unsub => unsub());
-    };
+    // No cleanup aquí — las suscripciones persisten mientras el componente viva
   }, [camaras]);
+
+  // Cleanup global al desmontar
+  useEffect(() => {
+    return () => {
+      Object.values(configSubsRef.current).forEach(unsub => unsub());
+      configSubsRef.current = {};
+    };
+  }, []);
 
   const handleToggleMode = async (deviceId: string, currentMode: 'AUTO' | 'MANUAL') => {
     try {
@@ -147,13 +155,8 @@ function App() {
     }
   };
 
-  const updateConfigField = async (deviceId: string, field: string, value: any) => {
-    try {
-      await sendCommand(deviceId, field, value);
-    } catch (err) {
-      console.error(`Error al actualizar config field ${field}`, err);
-    }
-  };
+  // updateConfigField ahora viene del import de firebaseService.ts
+  // Usa update() en la raíz /commands/ (correcto para campos de config)
 
   const handleSaveRules = async (deviceId: string, crop: DeviceCropProfile, profileName?: string, phaseName?: string) => {
     try {
