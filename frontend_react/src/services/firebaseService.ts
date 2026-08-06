@@ -17,8 +17,8 @@ export const subscribeToAllDevices = (
       const devicesArray: EstadoCamara[] = Object.keys(data).map(deviceId => {
         const deviceNode = data[deviceId];
         
-        // Extraer modo de operación, por defecto AUTO
-        const modo = deviceNode.modo_operacion || (deviceNode.data && deviceNode.data.modo_operacion) || 'AUTO';
+        // Extraer modo de operación, priorizando la data de telemetría (para ignorar campos fantasma legacy)
+        const modo = (deviceNode.data && deviceNode.data.modo_operacion) || deviceNode.modo_operacion || 'AUTO';
         
         return {
           deviceId,
@@ -52,8 +52,8 @@ export const sendConfigRules = async (deviceId: string, config: Partial<Configur
     // Preparar el payload de actualización
     const updates: Record<string, any> = {};
     
-    if (config.reglas) {
-      updates['reglas'] = config.reglas;
+    if (config.crop) {
+      updates['crop'] = config.crop;
     }
     if (config.activeProfileName) {
       updates['activeProfileName'] = config.activeProfileName;
@@ -94,7 +94,7 @@ export const subscribeToDeviceConfig = (
 /**
  * Enviar comando de actuador (Overrides manuales)
  */
-export const sendCommand = async (deviceId: string, actuator: string, state: boolean) => {
+export const sendCommand = async (deviceId: string, actuator: string, state: any) => {
   const commandRef = ref(database, `devices/${deviceId}/commands`);
   try {
     await update(commandRef, {
@@ -148,3 +148,15 @@ export const fetchDeviceHistory = async (deviceId: string, limit: number = 100):
   }
 };
 
+/**
+ * Actualiza un campo específico de la configuración general
+ */
+export const updateConfigField = async (deviceId: string, field: string, value: any) => {
+  const configRef = ref(database, `devices/${deviceId}/commands`);
+  try {
+    await update(configRef, { [field]: value });
+  } catch (error) {
+    console.error('Error actualizando config en Firebase:', error);
+    throw error;
+  }
+};

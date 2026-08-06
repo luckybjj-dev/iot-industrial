@@ -1,14 +1,14 @@
 import React, { useMemo } from 'react';
-import type { TelemetriaFungi, ReglaTermodinamica } from '../types/cultivo';
-import { CheckCircle2, AlertTriangle, AlertOctagon } from 'lucide-react';
+import type { TelemetriaFungi, DeviceCropProfile } from '../types/cultivo';
+import { CheckCircle2, AlertTriangle, AlertOctagon, Activity } from 'lucide-react';
 
 interface Props {
   telemetria: TelemetriaFungi | null;
-  reglas: ReglaTermodinamica[] | null;
+  crop: DeviceCropProfile | null;
   modo_operacion: 'AUTO' | 'MANUAL';
 }
 
-export const SemaforoEstabilidad: React.FC<Props> = ({ telemetria, reglas, modo_operacion }) => {
+export const SemaforoEstabilidad: React.FC<Props> = ({ telemetria, crop, modo_operacion }) => {
   const { estado, mensaje, colorClass, Icon } = useMemo(() => {
     if (!telemetria) {
       return {
@@ -28,7 +28,7 @@ export const SemaforoEstabilidad: React.FC<Props> = ({ telemetria, reglas, modo_
       };
     }
 
-    if (modo_operacion === 'MANUAL') {
+    if (modo_operacion === 'MANUAL' || telemetria.estado_operacional === 'MANUAL') {
       return {
         estado: 'MODO OVERRIDE',
         mensaje: 'Control manual activo. Reglas ignoradas.',
@@ -37,50 +37,61 @@ export const SemaforoEstabilidad: React.FC<Props> = ({ telemetria, reglas, modo_
       };
     }
 
-    // Evaluar reglas dinámicas
-    if (reglas && reglas.length > 0) {
-      let reglasActivas = 0;
-      let variablesCorrigiendo = new Set<string>();
-
-      for (const regla of reglas) {
-        let valorActual = 0;
-        switch (regla.var) {
-          case 'TEMP': valorActual = telemetria.temp_aire || 0; break;
-          case 'HUMEDAD': valorActual = telemetria.humedad_aire || 0; break;
-          case 'CO2': valorActual = telemetria.co2_ppm || 0; break;
-          case 'VPD': valorActual = telemetria.vpd || 0; break;
-        }
-
-        let condicionCumplida = false;
-        if (regla.op === 'MAYOR_QUE' && valorActual > regla.val) condicionCumplida = true;
-        if (regla.op === 'MENOR_QUE' && valorActual < regla.val) condicionCumplida = true;
-        if (regla.op === 'IGUAL' && valorActual === regla.val) condicionCumplida = true;
-
-        if (condicionCumplida) {
-          reglasActivas++;
-          variablesCorrigiendo.add(regla.var);
-        }
-      }
-
-      if (reglasActivas > 0) {
-        const vars = Array.from(variablesCorrigiendo).join(', ');
-        return {
-          estado: 'CORRIGIENDO CLIMA',
-          mensaje: `Sistema compensando parámetros: ${vars}`,
-          colorClass: 'text-amber-400 bg-amber-950/30 border-amber-500/50',
-          Icon: AlertTriangle
-        };
+    if (telemetria.estado_operacional) {
+      switch (telemetria.estado_operacional) {
+        case 'NORMAL':
+          return {
+            estado: 'CLIMA ESTABLE',
+            mensaje: 'Todas las variables dentro del rango ideal',
+            colorClass: 'text-emerald-400 bg-emerald-950/30 border-emerald-500/50',
+            Icon: CheckCircle2
+          };
+        case 'CALENTANDO':
+          return {
+            estado: 'CALENTANDO',
+            mensaje: 'Sistema compensando: Temperatura baja',
+            colorClass: 'text-amber-400 bg-amber-950/30 border-amber-500/50',
+            Icon: AlertTriangle
+          };
+        case 'ENFRIANDO':
+          return {
+            estado: 'ENFRIANDO / EXTRAYENDO',
+            mensaje: 'Sistema compensando: Exceso de Calor o CO2',
+            colorClass: 'text-blue-400 bg-blue-950/30 border-blue-500/50',
+            Icon: AlertTriangle
+          };
+        case 'HUMIDIFICANDO':
+          return {
+            estado: 'HUMIDIFICANDO',
+            mensaje: 'Sistema compensando: Humedad baja',
+            colorClass: 'text-cyan-400 bg-cyan-950/30 border-cyan-500/50',
+            Icon: AlertTriangle
+          };
+        case 'SAFE_MODE':
+          return {
+            estado: 'SAFE MODE',
+            mensaje: 'Hardware descansando (Filtro Anti-Corto Ciclo)',
+            colorClass: 'text-purple-400 bg-purple-950/30 border-purple-500/50',
+            Icon: Activity
+          };
+        case 'EMERGENCIA':
+          return {
+            estado: 'EMERGENCIA',
+            mensaje: 'Variables en niveles críticos, mitigación activa.',
+            colorClass: 'text-red-500 bg-red-950/30 border-red-500/50',
+            Icon: AlertOctagon
+          };
       }
     }
 
     return {
-      estado: 'CLIMA ESTABLE',
-      mensaje: 'Todas las variables dentro del rango ideal',
-      colorClass: 'text-emerald-400 bg-emerald-950/30 border-emerald-500/50',
-      Icon: CheckCircle2
+      estado: 'EVALUANDO',
+      mensaje: 'Recopilando telemetría...',
+      colorClass: 'text-neutral-400 bg-neutral-900/50 border-neutral-500/50',
+      Icon: Activity
     };
 
-  }, [telemetria, reglas, modo_operacion]);
+  }, [telemetria, crop, modo_operacion]);
 
   return (
     <div className={`flex items-center gap-4 p-4 rounded-xl border backdrop-blur-sm shadow-lg ${colorClass} transition-all duration-500`}>

@@ -12,6 +12,8 @@ export interface TelemetriaFungi {
     
     dht_ok: boolean;
     analogico_ok: boolean;
+    
+    estado_operacional?: EstadoOperacional;
 }
 
 export interface EstadoCamara {
@@ -34,17 +36,23 @@ export interface HistorialData {
     heater_on?: boolean;
 }
 
-export type VariableFisica = 'TEMP' | 'HUMEDAD' | 'CO2' | 'VPD' | 'HORA_DEL_DIA';
-export type OperadorLogico = 'MAYOR_QUE' | 'MENOR_QUE' | 'IGUAL';
-export type ActuadorFisico = 'CALEFACTOR' | 'NIEBLA' | 'EXTRACTOR' | 'LUZ';
-export type EstadoDeseado = 'ENCENDIDO' | 'APAGADO';
+export type EstadoOperacional = 'NORMAL' | 'CALENTANDO' | 'ENFRIANDO' | 'HUMIDIFICANDO' | 'SAFE_MODE' | 'EMERGENCIA' | 'MANUAL';
 
-export interface ReglaTermodinamica {
-    var: VariableFisica;
-    op: OperadorLogico;
-    val: number;
-    act: ActuadorFisico;
-    estado: EstadoDeseado;
+export interface DeviceCropProfile {
+    temp_ideal_min: number;
+    temp_ideal_max: number;
+    temp_crit_min: number;
+    temp_crit_max: number;
+    
+    hum_ideal_min: number;
+    hum_ideal_max: number;
+    hum_crit_min: number;
+    
+    co2_ideal_min: number;
+    co2_ideal_max: number;
+    co2_crit_max: number;
+    
+    light_hours_on: number;
 }
 
 export interface FailsafesConfig {
@@ -59,5 +67,5 @@ export interface ConfiguracionCultivo {
     activePhaseName?: string;
     max_manual_time_ms?: number;
     failsafes?: FailsafesConfig;
-    reglas?: ReglaTermodinamica[];
+    crop?: DeviceCropProfile;
 }

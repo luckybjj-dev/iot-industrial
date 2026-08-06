@@ -7,6 +7,7 @@ interface MetricCardProps {
     icon: LucideIcon;
     colorClass: string;
     status?: 'STABLE' | 'WARNING' | 'DANGER';
+    target?: string;
 }
 
 export const MetricCard: React.FC<MetricCardProps> = ({ 
@@ -15,7 +16,8 @@ export const MetricCard: React.FC<MetricCardProps> = ({
     unit, 
     icon: Icon, 
     colorClass,
-    status = 'STABLE'
+    status = 'STABLE',
+    target
 }) => {
     
     let borderClass = 'border-white/10';
@@ -33,7 +35,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
     }
 
     return (
-        <div className={`flex items-center space-x-4 p-6 rounded-2xl border ${borderClass} ${bgClass} shadow-xl transition-all duration-300 relative overflow-hidden`}>
+        <div className={`flex items-center space-x-4 p-6 rounded-2xl border ${borderClass} ${bgClass} shadow-xl transition-all duration-300 relative overflow-hidden h-full`}>
             {/* Status indicator line */}
             <div className={`absolute left-0 top-0 bottom-0 w-1 ${status === 'STABLE' ? 'bg-transparent' : (status === 'WARNING' ? 'bg-amber-500' : 'bg-red-500')}`}></div>
 
@@ -41,13 +43,22 @@ export const MetricCard: React.FC<MetricCardProps> = ({
                 <Icon size={32} />
             </div>
             
-            <div className="flex flex-col">
-                <p className="text-xs text-neutral-400 font-bold uppercase tracking-widest mb-1">{title}</p>
+            <div className="flex flex-col min-w-0 w-full">
+                <div className="h-8 flex items-end mb-1">
+                    <p className="text-xs text-neutral-400 font-bold uppercase tracking-widest leading-tight line-clamp-2">{title}</p>
+                </div>
                 <div className="flex items-baseline space-x-1">
                     <span className="text-4xl font-black text-white tracking-tighter" style={{ textShadow: '0 0 20px rgba(255,255,255,0.1)' }}>
                         {value}
                     </span>
                     {unit && <span className="text-lg text-neutral-500 font-bold">{unit}</span>}
+                </div>
+                <div className="h-4 mt-1 flex items-center">
+                    {target ? (
+                        <div className="text-[11px] font-bold text-emerald-400 font-mono tracking-wider uppercase whitespace-nowrap">
+                            {target}
+                        </div>
+                    ) : null}
                 </div>
             </div>
         </div>

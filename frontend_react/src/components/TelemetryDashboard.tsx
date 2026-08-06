@@ -10,7 +10,7 @@ import type { IndustrialTopology, PlantNode } from '../types/DataModel';
 const generateMockTelemetry = (days: number) => {
   const data = [];
   const now = Date.now();
-  for (let i = 0; i < days * 24; i++) { // 1 punto por hora
+  for (let i = 0; i <= days * 24; i++) { // 1 punto por hora, incluyendo el momento actual
     const timestamp = now - (days * 24 - i) * 3600000;
     const hour = new Date(timestamp).getHours();
     const isDay = hour >= 6 && hour <= 18;
@@ -46,7 +46,7 @@ export const TelemetryDashboard: React.FC<Props> = () => {
   const [selectedZone, setSelectedZone] = useState<string>('zone_01');
   const [selectedNode, setSelectedNode] = useState<string>('node_01');
 
-  const [timeWindow, setTimeWindow] = useState<number>(30); // days
+  const [timeWindow, setTimeWindow] = useState<number>(1); // days
 
   // Filtrar data por ventana de tiempo
   const chartData = useMemo(() => {
@@ -56,7 +56,7 @@ export const TelemetryDashboard: React.FC<Props> = () => {
 
   const formatXAxis = (tickItem: number) => {
     const date = new Date(tickItem);
-    if (timeWindow <= 1) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (timeWindow <= 1) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 

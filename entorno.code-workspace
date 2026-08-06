@@ -18,6 +18,9 @@
     "typescript.suggest.completeFunctionCalls": true,
     "editor.codeActionsOnSave": {
       "source.fixAll.eslint": "explicit"
-    }
+    },
+    "C_Cpp.default.compileCommands": "${workspaceFolder:⚙️ 1. ESP32_EDGE (C++)}/.pio/build/esp32dev/compile_commands.json",
+    "C_Cpp.intelliSenseEngine": "default",
+    "C_Cpp.default.compilerPath": "C:/Users/lagos/.platformio/packages/toolchain-xtensa-esp32/bin/xtensa-esp32-elf-gcc.exe"
   }
 }

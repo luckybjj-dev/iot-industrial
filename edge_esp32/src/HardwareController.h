@@ -54,13 +54,25 @@ struct SensorData {
 
 // -----------------------------------------------------------
 // Struct de estado de los actuadores semánticos
-// Máquina de estados que representa qué hardware está activo.
 // -----------------------------------------------------------
 struct ActuadorData {
     bool heater_ON    = false; // Térmico (Sube temperatura)
     bool fogger_ON    = false; // Hídrico (Sube humedad)
     bool extractor_ON = false; // Gases (Renueva aire / baja temperatura)
     bool light_ON     = false; // Luz (Ciclo circadiano / fotoperiodo)
+};
+
+// -----------------------------------------------------------
+// Estado Operacional (Telemetría de Máquina de Estados)
+// -----------------------------------------------------------
+enum class EstadoOperacional {
+    NORMAL,
+    CALENTANDO,
+    ENFRIANDO, // Futura expansión
+    HUMIDIFICANDO,
+    SAFE_MODE,
+    EMERGENCIA,
+    MANUAL
 };
 
 enum class ModoOperacion {
@@ -100,6 +112,7 @@ public:
     const ActuadorData& getActuadores() const { return _actuadores; }
     const ConfiguracionCultivo& getConfiguracion() const { return _config; }
     ModoOperacion getModoOperacion()    const { return _modoActual; }
+    EstadoOperacional getEstadoOperacional() const { return _estadoActual; }
 
 private:
     DHT          _dht;
@@ -108,14 +121,20 @@ private:
     ConfiguracionCultivo _config; // El cerebro dinámico (umbrales de control)
 
     ModoOperacion _modoActual = ModoOperacion::AUTO;
+    EstadoOperacional _estadoActual = EstadoOperacional::NORMAL;
     unsigned long _tiempoInicioManual = 0;
     
-    // Variables para temporizador asíncrono del extractor (Fresh Air Exchange - FAE)
-    unsigned long _ultimoCicloVentilador = 0;
-    bool _ventiladorEnCiclo = false;
+    // Capa 3: Filtro de Hardware (Debounce)
+    const unsigned long MIN_RELAY_TIME_MS = 180000; // 3 Minutos de seguridad (Anti-Corto Ciclo)
+    unsigned long _last_heater_switch = 0;
+    unsigned long _last_fogger_switch = 0;
+    unsigned long _last_extractor_switch = 0;
+    // Nota: La luz está exenta del timer.
+
     bool _alertaCalor = false;
 
     // Métodos internos
+    void _ejecutarAccion(int pin, bool& estadoActual, bool nuevoEstado, unsigned long& ultimoCambio, unsigned long now, bool ignorarFiltro = false);
     /*
      * calcularVPD: Calcula el déficit de presión de vapor utilizando la 
      * fórmula de Tetens para obtener la presión de vapor de saturación.
