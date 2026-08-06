@@ -5,12 +5,13 @@ import { MetricCard } from './components/MetricCard';
 import { TelemetryDashboard } from './components/TelemetryDashboard';
 import { SemaforoEstabilidad } from './components/SemaforoEstabilidad';
 import { CropProfileSelectorModal } from './components/CropProfileSelectorModal';
-import { Thermometer, Droplets, Leaf, Activity, Wind, Power, Settings2, ShieldAlert, Sprout } from 'lucide-react';
+import { Thermometer, Droplets, Leaf, Activity, Wind, Power, Settings2, ShieldAlert, Sprout, X } from 'lucide-react';
 
 function App() {
   const [camaras, setCamaras] = useState<EstadoCamara[]>([]);
   const [configs, setConfigs] = useState<{ [deviceId: string]: ConfiguracionCultivo }>({});
   const [error, setError] = useState<string | null>(null);
+  const [infoToast, setInfoToast] = useState<string | null>(null);
   
   // Estado optimista para hacer que la UI se sienta instantánea aunque el hardware demore
   const [optimisticModes, setOptimisticModes] = useState<Record<string, 'AUTO' | 'MANUAL'>>({});
@@ -146,12 +147,19 @@ function App() {
     }
   };
 
+  const showInfo = (msg: string) => {
+    setInfoToast(msg);
+    setTimeout(() => setInfoToast(null), 5000);
+  };
+
   const handleToggleActuator = async (deviceId: string, actuator: string, currentState: boolean, currentMode: 'AUTO' | 'MANUAL') => {
     if (currentMode === 'AUTO') return;
     try {
       await sendCommand(deviceId, actuator, !currentState);
+      showInfo(`Comando enviado a ${actuator.replace('_on', '').toUpperCase()}. Si no responde, puede estar bloqueado por protección de hardware.`);
     } catch (err) {
       console.error("Error al enviar comando", err);
+      setError("Error al encender/apagar el actuador.");
     }
   };
 
@@ -193,6 +201,18 @@ function App() {
           <div className="bg-red-950/50 border border-red-500/50 text-red-400 px-6 py-4 rounded-xl mb-8 flex items-center space-x-3 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
             <Activity size={24} />
             <span className="font-bold tracking-wide uppercase">{error}</span>
+          </div>
+        )}
+
+        {infoToast && (
+          <div className="bg-blue-950/50 border border-blue-500/50 text-blue-400 px-6 py-4 rounded-xl mb-8 flex items-center justify-between shadow-[0_0_20px_rgba(59,130,246,0.2)]">
+            <div className="flex items-center space-x-3">
+              <Activity size={24} />
+              <span className="font-medium tracking-wide">{infoToast}</span>
+            </div>
+            <button onClick={() => setInfoToast(null)} className="text-blue-400 hover:text-white">
+              <X size={20} />
+            </button>
           </div>
         )}
 
