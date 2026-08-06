@@ -27,6 +27,9 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
   const [customProfiles, setCustomProfiles] = useState<Record<string, CropProfile>>({});
 
   const [isSaving, setIsSaving] = useState(false);
+  // Fotoperiodo separado en horas numéricas para validar que sumen 24h
+  const [editLightHours, setEditLightHours] = useState<number>(12);
+  const [editDarkHours, setEditDarkHours] = useState<number>(12);
 
   useEffect(() => {
     const saved = localStorage.getItem('CUSTOM_PROFILES');
@@ -73,7 +76,11 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
 
   const startEditing = () => {
     if (phase) {
-      setEditedTargets(JSON.parse(JSON.stringify(phase.targets))); // deep copy
+      setEditedTargets(JSON.parse(JSON.stringify(phase.targets)));
+      // Parsear el fotoperiodo "12/12" en dos valores numéricos separados
+      const parts = (phase.targets.lighting?.photoperiod || '12/12').split('/');
+      setEditLightHours(parseInt(parts[0]) || 12);
+      setEditDarkHours(parseInt(parts[1]) || 12);
       setIsEditing(true);
     }
   };
@@ -167,7 +174,12 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
               <button onClick={() => setEditedTargets(JSON.parse(JSON.stringify(phase.targets)))} className="flex items-center gap-2 text-sm text-orange-400 hover:text-orange-300 bg-orange-500/10 px-3 py-1.5 rounded-lg transition-colors" title="Restablecer a valores del catálogo">
                 Restablecer
               </button>
-              <button onClick={() => setIsEditing(false)} className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-3 py-1.5 rounded-lg transition-colors">
+              <button 
+                onClick={handleSaveInjection}
+                disabled={editLightHours + editDarkHours !== 24}
+                className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                title={editLightHours + editDarkHours !== 24 ? `La suma debe ser 24h (actual: ${editLightHours + editDarkHours}h)` : 'Guardar e inyectar al ESP32'}
+              >
                 <Save size={16} /> Fijar Ajustes
               </button>
             </div>
@@ -198,9 +210,49 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
             <input type="number" value={t.co2.max} onChange={e => setEditedTargets({...t, co2: {...t.co2, max: Number(e.target.value)}})} className="w-20 bg-black text-white p-1 rounded border border-white/20 text-center" />
           )}
 
-          {/* Fotoperiodo */}
-          {renderField('Fotoperiodo (L/O)', `${t.lighting.photoperiod}`, 
-            <input type="text" value={t.lighting.photoperiod} onChange={e => setEditedTargets({...t, lighting: {...t.lighting, photoperiod: e.target.value}})} className="w-20 bg-black text-white p-1 rounded border border-white/20 text-center" placeholder="12/12" />
+          {/* Fotoperiodo — dos inputs numéricos con validación suma=24h */}
+          {renderField(
+            'Fotoperiodo (Luz/Oscuridad)',
+            `${t.lighting.photoperiod}`,
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="flex flex-col items-center">
+                  <span className="text-[9px] text-yellow-400 uppercase tracking-wider mb-0.5">☀️ Luz</span>
+                  <input
+                    type="number" min={0} max={23}
+                    value={editLightHours}
+                    onChange={e => {
+                      const v = Math.min(23, Math.max(0, Number(e.target.value)));
+                      setEditLightHours(v);
+                      setEditedTargets(prev => prev ? {...prev, lighting: {...prev.lighting, photoperiod: `${v}/${editDarkHours}`}} : prev);
+                    }}
+                    className="w-14 bg-black text-white p-1 rounded border border-white/20 text-center"
+                  />
+                </div>
+                <span className="text-white font-bold mt-3">/</span>
+                <div className="flex flex-col items-center">
+                  <span className="text-[9px] text-blue-400 uppercase tracking-wider mb-0.5">🌙 Oscuridad</span>
+                  <input
+                    type="number" min={0} max={23}
+                    value={editDarkHours}
+                    onChange={e => {
+                      const v = Math.min(23, Math.max(0, Number(e.target.value)));
+                      setEditDarkHours(v);
+                      setEditedTargets(prev => prev ? {...prev, lighting: {...prev.lighting, photoperiod: `${editLightHours}/${v}`}} : prev);
+                    }}
+                    className="w-14 bg-black text-white p-1 rounded border border-white/20 text-center"
+                  />
+                </div>
+              </div>
+              <div className={`text-[10px] font-bold text-center px-2 py-0.5 rounded ${
+                editLightHours + editDarkHours === 24
+                  ? 'text-emerald-400 bg-emerald-500/10'
+                  : 'text-red-400 bg-red-500/10'
+              }`}>
+                {editLightHours}h + {editDarkHours}h = {editLightHours + editDarkHours}h
+                {editLightHours + editDarkHours === 24 ? ' ✓' : ` ✗ (faltan ${24 - editLightHours - editDarkHours}h)`}
+              </div>
+            </div>
           )}
         </div>
       </div>
