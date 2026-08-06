@@ -156,7 +156,7 @@ function App() {
     if (currentMode === 'AUTO') return;
     try {
       await sendCommand(deviceId, actuator, !currentState);
-      showInfo(`Comando enviado a ${actuator.replace('_on', '').toUpperCase()}. Si no responde, puede estar bloqueado por protección de hardware.`);
+      showInfo(`Comando enviado a ${actuator.replace('_on', '').toUpperCase()}. El controlador de hardware procesará la orden respetando los tiempos de protección térmicos (hasta 3 min).`);
     } catch (err) {
       console.error("Error al enviar comando", err);
       setError("Error al encender/apagar el actuador.");
