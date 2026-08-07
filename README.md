@@ -1,4 +1,4 @@
-# Motor Agnóstico IoT y Gestor SCADA 🍄🌿
+# Motor Agnóstico IoT y Gestor SCADA 🍄🌿 v1.0.0 (MVP)
 
 Sistema industrial automatizado (CEA - Controlled Environment Agriculture) que separa completamente la toma de decisiones termodinámicas de la ejecución en hardware. 
 
@@ -6,9 +6,12 @@ Consta de dos bloques principales:
 1. **Frontend en React (Crop Engine / SCADA):** Gestiona la lógica agronómica, alberga una librería universal de perfiles (Fungi y Plantae) y traduce objetivos biológicos en reglas termodinámicas matemáticas.
 2. **Edge Node (ESP32):** Un actuador "agnóstico" y robusto que ejecuta las reglas descargadas desde Firebase, sin importar si está cultivando Champiñones, Tomates o Cannabis.
 
-## 🚀 Estado del Proyecto (Sprint Actual)
-- **SCADA React Finalizado:** Se implementó el Gestor de Perfiles 2.0 con enciclopedia agronómica, separación taxonómica (Fungi vs Plantae), modo de edición empírica (Tuning) y persistencia local (Custom Profiles).
-- **Validación HIL (Hardware-in-the-Loop):** El firmware del ESP32 está siendo sometido a validación empírica física para confirmar la activación de relés frente a inyecciones asíncronas de reglas desde la nube.
+## 🚀 Estado del Proyecto: MVP en Producción (v1.0.0)
+El sistema ha alcanzado el hito de Producto Mínimo Viable. Puedes leer el reporte de este logro en el documento [INFORME_HITO_1.md](INFORME_HITO_1.md) y nuestra proyección a futuro en el [ROADMAP.md](ROADMAP.md).
+
+- **SCADA Web Robusto:** Se integraron gráficos estadísticos (Recharts) soportando historiales de hasta 30 días y se construyó bajo la ontología del estándar ISA-95 (Granja > Nave > Zona > Nodo).
+- **Control Hardware Avanzado:** La placa ESP32 (Wemos D1 R32) controla con seguridad industrial ciclos de Calefacción, Extracción, Niebla y Luz. Además, se integró hardware de Enfriamiento (Peltier) y redundancia ambiental promediada entre sensores DHT22 y NTC2.
+- **Fail-safes Industriales:** El firmware reacciona proactivamente ante desconexiones de WiFi, errores silenciosos de desbordamiento de memoria JSON, o saturación de sensores en el campo.
 
 ## 🏗️ Arquitectura de Firmware (C++)
 
