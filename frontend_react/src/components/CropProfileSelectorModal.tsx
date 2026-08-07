@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Sprout, Play, Search, BookOpen, Edit3, Save, Plus } from 'lucide-react';
+import { X, Sprout, Play, Search, BookOpen, Edit3, Save, Plus, Trash2 } from 'lucide-react';
 import type { DeviceCropProfile } from '../types/cultivo';
 import { CROP_PROFILES, generateDeviceProfile } from '../data/CropProfiles';
 import type { CropProfile, PhaseTargets } from '../data/CropProfiles';
@@ -93,6 +93,24 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
       setEditProfileName(profile.commonName);
       setEditProfileDesc(profile.description);
       setIsEditing(true);
+    }
+  };
+
+  const handleDeleteCustomProfile = (id: string, name: string) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar el perfil "${name}"?\n\nEsta acción no se puede deshacer.`)) return;
+    const updated = { ...customProfiles };
+    delete updated[id];
+    setCustomProfiles(updated);
+    localStorage.setItem('CUSTOM_PROFILES', JSON.stringify(updated));
+    // Si el perfil eliminado era el seleccionado, volver al primero disponible
+    if (selectedProfileId === id) {
+      const remaining = Object.keys(updated);
+      if (remaining.length > 0) {
+        handleSelectProfile(remaining[0], updated[remaining[0]].phases[0].id);
+      } else {
+        setSelectedProfileId('');
+        setSelectedPhaseId('');
+      }
     }
   };
 
@@ -382,7 +400,7 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+      <div className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-[95vw] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
         
         {/* HEADER */}
         <div className="flex justify-between items-center p-6 border-b border-white/10 bg-black/40 flex-shrink-0">
@@ -434,20 +452,34 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
           {filteredProfiles.length > 0 ? (
             <>
               {/* SPECIES GRID */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3">
                 {filteredProfiles.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => handleSelectProfile(p.id, p.phases[0].id)}
-                    className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                      selectedProfileId === p.id 
-                        ? 'bg-emerald-500/10 border-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/50' 
-                        : 'bg-black/20 border-white/5 text-neutral-400 hover:border-white/20 hover:bg-white/5'
-                    }`}
-                  >
-                    <div className="font-bold text-lg leading-tight">{p.commonName}</div>
-                    <div className="text-xs italic opacity-70 mt-1">{p.scientificName}</div>
-                  </button>
+                  <div key={p.id} className="relative group">
+                    <button
+                      onClick={() => handleSelectProfile(p.id, p.phases[0].id)}
+                      className={`w-full p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                        selectedProfileId === p.id 
+                          ? 'bg-emerald-500/10 border-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/50' 
+                          : 'bg-black/20 border-white/5 text-neutral-400 hover:border-white/20 hover:bg-white/5'
+                      }`}
+                    >
+                      <div className="font-bold text-lg leading-tight pr-6">{p.commonName}</div>
+                      <div className="text-xs italic opacity-70 mt-1">{p.scientificName}</div>
+                      {activeTab === 'CUSTOM' && (
+                        <div className="text-[10px] mt-2 text-purple-400 font-semibold uppercase tracking-wider">Perfil Personalizado</div>
+                      )}
+                    </button>
+                    {/* Botón eliminar — solo visible en tab CUSTOM */}
+                    {activeTab === 'CUSTOM' && customProfiles[p.id] && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteCustomProfile(p.id, p.commonName); }}
+                        className="absolute top-2 right-2 p-1.5 text-neutral-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                        title={`Eliminar perfil "${p.commonName}"`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
 
