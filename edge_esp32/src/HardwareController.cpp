@@ -7,11 +7,13 @@ void HardwareController::begin() {
     Serial.println(F("[Hardware] Inicializando pines y sensores..."));
     
     pinMode(PIN_HEATER, OUTPUT);
+    pinMode(PIN_COOLER, OUTPUT);
     pinMode(PIN_FOGGER, OUTPUT);
     pinMode(PIN_EXTRACTOR, OUTPUT);
     pinMode(PIN_LIGHT, OUTPUT);
 
     digitalWrite(PIN_HEATER, LOW);
+    digitalWrite(PIN_COOLER, LOW);
     digitalWrite(PIN_FOGGER, LOW);
     digitalWrite(PIN_EXTRACTOR, LOW);
     digitalWrite(PIN_LIGHT, HIGH); // Relé de Luz es Activo LOW
@@ -67,6 +69,15 @@ void HardwareController::setLight(bool estado) {
     _ejecutarAccion(PIN_LIGHT, _actuadores.light_ON, estado, _last_light_switch, millis(), true);
 }
 
+void HardwareController::setCooler(bool estado) {
+    if (_modoActual == ModoOperacion::AUTO) {
+        Serial.println(F("❌ [Hardware] Ignorando comando de Cooler. Sistema en modo AUTO."));
+        return;
+    }
+    // Peltier exento de filtro anti-short-cycle (ignorarFiltro = true)
+    _ejecutarAccion(PIN_COOLER, _actuadores.cooler_ON, estado, _last_cooler_switch, millis(), true);
+}
+
 void HardwareController::leerSensores() {
     float t = _dht.readTemperature();
     float h = _dht.readHumidity();
@@ -89,6 +100,16 @@ void HardwareController::leerSensores() {
         _sensores.valorAnalogico = tempK - 273.15f; 
     } else {
         _sensores.analogicoOk = false;
+    }
+
+    int valorADC2 = analogRead(PIN_NTC_2);
+    if (valorADC2 > 0 && valorADC2 < 4095) {
+        _sensores.ntc2Ok = true;
+        float resistencia2 = NTC_R_SERIE / (4095.0f / (float)valorADC2 - 1.0f);
+        float tempK2 = 1.0f / (1.0f / (NTC_T_NOMINAL + 273.15f) + (1.0f / NTC_BETA) * log(resistencia2 / NTC_R_NOMINAL));
+        _sensores.tempAmb2 = tempK2 - 273.15f; 
+    } else {
+        _sensores.ntc2Ok = false;
     }
 
     _sensores.co2Ok = false;
@@ -153,6 +174,7 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
     if (evaluarPerfil) {
         bool req_extractor = false;
         bool req_heater = false;
+        bool req_cooler = false;
         bool req_fogger = false;
         bool req_light = false;
         EstadoOperacional proxEstado = EstadoOperacional::NORMAL;
@@ -170,6 +192,7 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
             // 1. Calor Extremo o Failsafe Absoluto
             if (tempActual >= _config.failsafes.max_internal_temp_limit_c || tempActual >= _config.crop.temp_crit_max) {
                 req_extractor = true;
+                req_cooler = true;
                 proxEstado = EstadoOperacional::EMERGENCIA;
             } 
             // 2. Toxicidad de Gases (CO2)
@@ -182,11 +205,14 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
                 req_heater = true;
                 proxEstado = EstadoOperacional::CALENTANDO;
             }
+            // 4. Demanda de Frío
             else if (tempActual >= _config.crop.temp_ideal_max) {
+                req_cooler = true;
                 req_extractor = true; // Refrescar 
+                proxEstado = EstadoOperacional::ENFRIANDO;
             }
 
-            // 4. Demanda de Humedad (solo si no hay calor extremo, ya que la extracción ganaría)
+            // 5. Demanda de Humedad (solo si no hay calor extremo, ya que la extracción ganaría)
             if (humActual != -999.0f && humActual <= _config.crop.hum_ideal_min && proxEstado != EstadoOperacional::EMERGENCIA) {
                 req_fogger = true;
                 if (proxEstado == EstadoOperacional::NORMAL) proxEstado = EstadoOperacional::HUMIDIFICANDO;
@@ -209,6 +235,9 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
         _ejecutarAccion(PIN_EXTRACTOR, _actuadores.extractor_ON, req_extractor, _last_extractor_switch, now, false);
         _ejecutarAccion(PIN_HEATER, _actuadores.heater_ON, req_heater, _last_heater_switch, now, false);
         _ejecutarAccion(PIN_FOGGER, _actuadores.fogger_ON, req_fogger, _last_fogger_switch, now, false);
+        
+        // Peltier exento de filtro de tiempo
+        _ejecutarAccion(PIN_COOLER, _actuadores.cooler_ON, req_cooler, _last_cooler_switch, now, true);
         
         // Luz exenta de filtro de tiempo
         _ejecutarAccion(PIN_LIGHT, _actuadores.light_ON, req_light, _last_light_switch, now, true);

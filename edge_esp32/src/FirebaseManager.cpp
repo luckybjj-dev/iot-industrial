@@ -79,11 +79,15 @@ void FirebaseManager::publicarTelemetria() {
     if (s.analogicoOk) {
         json.set("sensor_analogico", s.valorAnalogico);
     }
+    if (s.ntc2Ok) {
+        json.set("temp_ambiente", s.tempAmb2);
+    }
     if (s.co2Ok) {
         json.set("co2_ppm", s.co2);
     }
 
     json.set("heater_on", a.heater_ON);
+    json.set("cooler_on", a.cooler_ON);
     json.set("fogger_on", a.fogger_ON);
     json.set("extractor_on", a.extractor_ON);
     json.set("light_on", a.light_ON);
@@ -95,6 +99,7 @@ void FirebaseManager::publicarTelemetria() {
 
     json.set("dht_ok", s.dhtOk);
     json.set("analogico_ok", s.analogicoOk);
+    json.set("ntc2_ok", s.ntc2Ok);
 
     // Enviar el estado actual del modo de operación y la máquina de estados al Dashboard
     json.set("modo_operacion", _hw.getModoOperacion() == ModoOperacion::AUTO ? "AUTO" : "MANUAL");
@@ -146,11 +151,15 @@ void FirebaseManager::publicarHistorial() {
     if (s.analogicoOk) {
         json.set("sensor_analogico", s.valorAnalogico);
     }
+    if (s.ntc2Ok) {
+        json.set("temp_ambiente", s.tempAmb2);
+    }
     if (s.co2Ok) {
         json.set("co2_ppm", s.co2);
     }
 
     json.set("heater_on", a.heater_ON);
+    json.set("cooler_on", a.cooler_ON);
     json.set("fogger_on", a.fogger_ON);
     json.set("extractor_on", a.extractor_ON);
     json.set("light_on", a.light_ON);
@@ -221,6 +230,7 @@ void FirebaseManager::_procesarPayloadStream(const String& path, const String& d
             else if (modo == "MANUAL") _hw.setModoOperacion(ModoOperacion::MANUAL);
         }
         if (doc.containsKey("heater_on")) _hw.setHeater(doc["heater_on"] | false);
+        if (doc.containsKey("cooler_on")) _hw.setCooler(doc["cooler_on"] | false);
         if (doc.containsKey("fogger_on")) _hw.setFogger(doc["fogger_on"] | false);
         if (doc.containsKey("extractor_on")) _hw.setExtractor(doc["extractor_on"] | false);
         if (doc.containsKey("light_on")) _hw.setLight(doc["light_on"] | false);
@@ -253,6 +263,8 @@ void FirebaseManager::_procesarPayloadStream(const String& path, const String& d
             else if (val == "MANUAL") _hw.setModoOperacion(ModoOperacion::MANUAL);
         } else if (path.indexOf("heater_on") >= 0) {
             _hw.setHeater(val == "true" || val == "1");
+        } else if (path.indexOf("cooler_on") >= 0) {
+            _hw.setCooler(val == "true" || val == "1");
         } else if (path.indexOf("fogger_on") >= 0) {
             _hw.setFogger(val == "true" || val == "1");
         } else if (path.indexOf("extractor_on") >= 0) {

@@ -18,9 +18,12 @@
 #define PIN_ANALOGICO 34 // NTC o Humedad de Suelo
 
 #define PIN_HEATER    4 // Control Térmico (Calefactor - Asignado a GPIO 4)
+#define PIN_COOLER    17 // Control Térmico (Enfriador Peltier - Asignado a GPIO 17)
 #define PIN_FOGGER    25 // Control Hídrico (Humidificador)
 #define PIN_EXTRACTOR 26 // Control de Gases / Aire (Ventilador)
 #define PIN_LIGHT     16 // Control de Iluminación
+
+#define PIN_NTC_2     35 // Sonda de Temperatura Ambiente 2
 
 // Constantes NTC Steinhart-Hart (por defecto)
 // Utilizadas para calcular la temperatura a partir de la resistencia del termistor NTC
@@ -34,7 +37,8 @@ constexpr float NTC_R_SERIE   = 10000.0f;
 // Almacena el estado actual de las variables climáticas.
 // -----------------------------------------------------------
 struct SensorData {
-    float tempAmb      = 0.0f;
+    float tempAmb      = 0.0f; // Temp NTC 1
+    float tempAmb2     = 0.0f; // Temp NTC 2 (Ambiente)
     float humAmb       = 0.0f;
     /*
      * VPD (Déficit de Presión de Vapor - Vapor Pressure Deficit)
@@ -49,6 +53,7 @@ struct SensorData {
     
     bool  dhtOk        = false; // Estado de salud del sensor DHT
     bool  analogicoOk  = false; // Estado de salud del sensor analógico
+    bool  ntc2Ok       = false; // Estado de salud de la sonda NTC 2
     bool  co2Ok        = false; // Estado de salud del sensor de CO2
 };
 
@@ -57,6 +62,7 @@ struct SensorData {
 // -----------------------------------------------------------
 struct ActuadorData {
     bool heater_ON    = false; // Térmico (Sube temperatura)
+    bool cooler_ON    = false; // Térmico (Baja temperatura - Peltier)
     bool fogger_ON    = false; // Hídrico (Sube humedad)
     bool extractor_ON = false; // Gases (Renueva aire / baja temperatura)
     bool light_ON     = false; // Luz (Ciclo circadiano / fotoperiodo)
@@ -102,6 +108,7 @@ public:
 
     // Setters manuales (Sobrescritura por MQTT o UI Local)
     void setHeater(bool estado);
+    void setCooler(bool estado);
     void setFogger(bool estado);
     void setExtractor(bool estado);
     void setLight(bool estado);
@@ -135,6 +142,7 @@ private:
     unsigned long _last_fogger_switch = 0;
     unsigned long _last_extractor_switch = 0;
     unsigned long _last_light_switch = 0; // La luz no usa filtro anti-short-cycle, pero necesita persistencia de estado
+    unsigned long _last_cooler_switch = 0; // El Peltier no usa filtro anti-short-cycle, persistencia de estado
 
     bool _alertaCalor = false;
 
