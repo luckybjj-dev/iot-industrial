@@ -49,3 +49,25 @@ En una granja grande, no todos los sensores pueden depender del router WiFi prin
 ### 3. Calibración de Sensores vía Software
 - **Objetivo:** Permitir configurar *Offsets* a las lecturas del DHT22 y NTC.
 - **Impacto:** Corregir tolerancias de error físicas (-0.5°C o +1.5%) de hardware genérico directamente desde la interfaz de usuario, garantizando un margen de error menor al 1% exigido a nivel industrial.
+
+---
+
+## 🟣 Fase 4: End-Game, Visión Ciberfísica e IA (2028+)
+
+Lo que queda "en el tintero" para transformar este sistema en una tecnología pionera a nivel mundial:
+
+### 1. Visión Computacional (ESP32-CAM / Cámaras IP)
+- **Objetivo:** Instalar cámaras en el cultivo y aplicar modelos de *Computer Vision* (YOLO/OpenCV).
+- **Impacto:** El sistema dejará de ser ciego. Podrá medir el diámetro del sombrero del hongo o el color del tomate en tiempo real. En lugar de cambiar de etapa por "tiempo", el sistema cambiará la temperatura basándose en el **crecimiento físico real** del organismo.
+
+### 2. Actualizaciones OTA (Over-The-Air) Masivas (Fleet Management)
+- **Objetivo:** Gestor de firmware integrado en el Dashboard React.
+- **Impacto:** Si la granja escala a 500 nodos, no se pueden actualizar por USB uno por uno. El agricultor subirá un archivo `.bin` al Dashboard y todos los ESP32 se actualizarán automáticamente durante la noche.
+
+### 3. Gemelo Digital e Inteligencia Artificial (Auto-Tuning)
+- **Objetivo:** Conectar el Data Lake a modelos predictivos (Machine Learning).
+- **Impacto:** El sistema aprenderá qué microclimas exactos generaron las cosechas más pesadas en el pasado. La IA podrá proponer (o aplicar automáticamente) micro-ajustes a las curvas de *Crop Steering* para maximizar el rendimiento, prediciendo la fecha de cosecha exacta para el equipo de ventas.
+
+### 4. Integración ERP / Logística Comercial
+- **Objetivo:** Conectar Firebase con sistemas empresariales (SAP, Odoo).
+- **Impacto:** Cuando el sistema detecta que la fase de fructificación ha terminado (ya sea por tiempo o por visión computacional), genera automáticamente una orden de trabajo para el equipo de cosecha y una alerta al equipo de ventas con la estimación de kilos a vender.
