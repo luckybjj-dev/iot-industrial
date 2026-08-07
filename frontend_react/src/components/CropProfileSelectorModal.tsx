@@ -127,6 +127,31 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
       return;
     }
     const id = `custom_${Date.now()}`;
+    const defaultTargets = {
+      temperature: { day: { min: 20, max: 25 }, night: { min: 18, max: 22 } },
+      humidity: { min: 80, max: 90 },
+      vpd: { min: 0.5, max: 1.0 },
+      co2: { min: 400, max: 1000 },
+      fae: { ach: { min: 1, max: 4 } },
+      lighting: { photoperiod: '12/12' }
+    };
+
+    const phases = newProfileKingdom === 'FUNGI' 
+      ? [
+          { id: 'fase1', name: '1. Incubación', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) },
+          { id: 'fase2', name: '2. Consolidación', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) },
+          { id: 'fase3', name: '3. Inducción de primordios', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) },
+          { id: 'fase4', name: '4. Fructificación', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) },
+          { id: 'fase5', name: '5. Descanso', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) }
+        ]
+      : [
+          { id: 'fase1', name: '1. Germinación', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) },
+          { id: 'fase2', name: '2. Plántula', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) },
+          { id: 'fase3', name: '3. Cre. Vegetativo', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) },
+          { id: 'fase4', name: '4. Floración', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) },
+          { id: 'fase5', name: '5. Maduración', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) }
+        ];
+
     const newProfile: CropProfile = {
       id,
       kingdom: newProfileKingdom,
@@ -134,19 +159,7 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
       scientificName: 'Custom Species',
       description: newProfileDesc || 'Perfil personalizado',
       imageUrl: '',
-      phases: [{
-        id: 'fase1',
-        name: 'Fase Principal',
-        stageTips: '',
-        targets: {
-          temperature: { day: { min: 20, max: 25 }, night: { min: 18, max: 22 } },
-          humidity: { min: 80, max: 90 },
-          vpd: { min: 0.5, max: 1.0 },
-          co2: { min: 400, max: 1000 },
-          fae: { ach: { min: 1, max: 4 } },
-          lighting: { photoperiod: '12/12' }
-        }
-      }]
+      phases: phases
     };
     const newCustoms = { ...customProfiles, [id]: newProfile };
     setCustomProfiles(newCustoms);
