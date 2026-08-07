@@ -134,7 +134,7 @@ private:
     unsigned long _last_heater_switch = 0;
     unsigned long _last_fogger_switch = 0;
     unsigned long _last_extractor_switch = 0;
-    // Nota: La luz está exenta del timer.
+    unsigned long _last_light_switch = 0; // La luz no usa filtro anti-short-cycle, pero necesita persistencia de estado
 
     bool _alertaCalor = false;
 
