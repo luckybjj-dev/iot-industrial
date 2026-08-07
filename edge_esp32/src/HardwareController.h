@@ -39,6 +39,7 @@ constexpr float NTC_R_SERIE   = 10000.0f;
 struct SensorData {
     float tempAmb      = 0.0f; // Temp NTC 1
     float tempAmb2     = 0.0f; // Temp NTC 2 (Ambiente)
+    float tempPromedio = 0.0f; // Promedio de tempAmb y tempAmb2
     float humAmb       = 0.0f;
     /*
      * VPD (Déficit de Presión de Vapor - Vapor Pressure Deficit)

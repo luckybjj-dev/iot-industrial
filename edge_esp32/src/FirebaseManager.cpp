@@ -86,6 +86,10 @@ void FirebaseManager::publicarTelemetria() {
         json.set("co2_ppm", s.co2);
     }
 
+    if (s.tempPromedio != -999.0f) {
+        json.set("temp_promedio", s.tempPromedio);
+    }
+
     json.set("heater_on", a.heater_ON);
     json.set("cooler_on", a.cooler_ON);
     json.set("fogger_on", a.fogger_ON);
@@ -156,6 +160,10 @@ void FirebaseManager::publicarHistorial() {
     }
     if (s.co2Ok) {
         json.set("co2_ppm", s.co2);
+    }
+
+    if (s.tempPromedio != -999.0f) {
+        json.set("temp_promedio", s.tempPromedio);
     }
 
     json.set("heater_on", a.heater_ON);

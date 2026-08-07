@@ -1,6 +1,7 @@
 export interface TelemetriaFungi {
     temp_aire: number | null;
     temp_ambiente?: number | null;
+    temp_promedio?: number | null;
     humedad_aire: number | null;
     vpd: number | null;
     sensor_analogico: number | null;
@@ -35,6 +36,7 @@ export interface HistorialData {
     timestamp: number;
     temp_aire?: number;
     temp_ambiente?: number;
+    temp_promedio?: number;
     humedad_aire?: number;
     vpd?: number;
     sensor_analogico?: number;
