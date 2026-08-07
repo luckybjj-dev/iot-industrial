@@ -127,29 +127,106 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
       return;
     }
     const id = `custom_${Date.now()}`;
-    const defaultTargets = {
-      temperature: { day: { min: 20, max: 25 }, night: { min: 18, max: 22 } },
-      humidity: { min: 80, max: 90 },
-      vpd: { min: 0.5, max: 1.0 },
-      co2: { min: 400, max: 1000 },
-      fae: { ach: { min: 1, max: 4 } },
-      lighting: { photoperiod: '12/12' }
+    const fungiTargets = {
+      incubacion: {
+        temperature: { day: { min: 22, max: 26 }, night: { min: 22, max: 26 } },
+        humidity: { min: 80, max: 90 },
+        vpd: { min: 0.8, max: 1.2 },
+        co2: { min: 1000, max: 5000 },
+        fae: { ach: { min: 0, max: 1 } },
+        lighting: { photoperiod: '0/24' }
+      },
+      consolidacion: {
+        temperature: { day: { min: 22, max: 26 }, night: { min: 22, max: 26 } },
+        humidity: { min: 80, max: 90 },
+        vpd: { min: 0.8, max: 1.2 },
+        co2: { min: 1000, max: 5000 },
+        fae: { ach: { min: 0, max: 1 } },
+        lighting: { photoperiod: '0/24' }
+      },
+      induccion: {
+        temperature: { day: { min: 16, max: 20 }, night: { min: 16, max: 20 } },
+        humidity: { min: 95, max: 100 },
+        vpd: { min: 0.1, max: 0.3 },
+        co2: { min: 400, max: 800 },
+        fae: { ach: { min: 4, max: 8 } },
+        lighting: { photoperiod: '12/12' }
+      },
+      fructificacion: {
+        temperature: { day: { min: 18, max: 22 }, night: { min: 18, max: 22 } },
+        humidity: { min: 85, max: 95 },
+        vpd: { min: 0.4, max: 0.8 },
+        co2: { min: 400, max: 800 },
+        fae: { ach: { min: 4, max: 8 } },
+        lighting: { photoperiod: '12/12' }
+      },
+      descanso: {
+        temperature: { day: { min: 20, max: 24 }, night: { min: 20, max: 24 } },
+        humidity: { min: 70, max: 80 },
+        vpd: { min: 0.8, max: 1.2 },
+        co2: { min: 400, max: 1000 },
+        fae: { ach: { min: 1, max: 2 } },
+        lighting: { photoperiod: '0/24' }
+      }
+    };
+
+    const plantaeTargets = {
+      germinacion: {
+        temperature: { day: { min: 22, max: 28 }, night: { min: 20, max: 25 } },
+        humidity: { min: 80, max: 95 },
+        vpd: { min: 0.4, max: 0.8 },
+        co2: { min: 400, max: 800 },
+        fae: { ach: { min: 1, max: 2 } },
+        lighting: { photoperiod: '0/24' } // Frecuentemente oscuridad hasta brotar
+      },
+      plantula: {
+        temperature: { day: { min: 20, max: 25 }, night: { min: 18, max: 22 } },
+        humidity: { min: 60, max: 70 },
+        vpd: { min: 0.8, max: 1.2 },
+        co2: { min: 400, max: 800 },
+        fae: { ach: { min: 2, max: 4 } },
+        lighting: { photoperiod: '18/6' }
+      },
+      vegetativo: {
+        temperature: { day: { min: 22, max: 28 }, night: { min: 18, max: 24 } },
+        humidity: { min: 50, max: 70 },
+        vpd: { min: 0.8, max: 1.2 },
+        co2: { min: 400, max: 1000 },
+        fae: { ach: { min: 2, max: 6 } },
+        lighting: { photoperiod: '18/6' }
+      },
+      floracion: {
+        temperature: { day: { min: 20, max: 26 }, night: { min: 16, max: 22 } },
+        humidity: { min: 40, max: 50 },
+        vpd: { min: 1.0, max: 1.5 },
+        co2: { min: 400, max: 1200 },
+        fae: { ach: { min: 4, max: 8 } },
+        lighting: { photoperiod: '12/12' }
+      },
+      maduracion: {
+        temperature: { day: { min: 18, max: 24 }, night: { min: 15, max: 20 } },
+        humidity: { min: 40, max: 50 },
+        vpd: { min: 1.0, max: 1.5 },
+        co2: { min: 400, max: 800 },
+        fae: { ach: { min: 2, max: 6 } },
+        lighting: { photoperiod: '12/12' }
+      }
     };
 
     const phases = newProfileKingdom === 'FUNGI' 
       ? [
-          { id: 'fase1', name: '1. Incubación', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) },
-          { id: 'fase2', name: '2. Consolidación', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) },
-          { id: 'fase3', name: '3. Inducción de primordios', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) },
-          { id: 'fase4', name: '4. Fructificación', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) },
-          { id: 'fase5', name: '5. Descanso', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) }
+          { id: 'fase1', name: '1. Incubación', stageTips: '', targets: JSON.parse(JSON.stringify(fungiTargets.incubacion)) },
+          { id: 'fase2', name: '2. Consolidación', stageTips: '', targets: JSON.parse(JSON.stringify(fungiTargets.consolidacion)) },
+          { id: 'fase3', name: '3. Inducción de primordios', stageTips: '', targets: JSON.parse(JSON.stringify(fungiTargets.induccion)) },
+          { id: 'fase4', name: '4. Fructificación', stageTips: '', targets: JSON.parse(JSON.stringify(fungiTargets.fructificacion)) },
+          { id: 'fase5', name: '5. Descanso', stageTips: '', targets: JSON.parse(JSON.stringify(fungiTargets.descanso)) }
         ]
       : [
-          { id: 'fase1', name: '1. Germinación', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) },
-          { id: 'fase2', name: '2. Plántula', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) },
-          { id: 'fase3', name: '3. Cre. Vegetativo', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) },
-          { id: 'fase4', name: '4. Floración', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) },
-          { id: 'fase5', name: '5. Maduración', stageTips: '', targets: JSON.parse(JSON.stringify(defaultTargets)) }
+          { id: 'fase1', name: '1. Germinación', stageTips: '', targets: JSON.parse(JSON.stringify(plantaeTargets.germinacion)) },
+          { id: 'fase2', name: '2. Plántula', stageTips: '', targets: JSON.parse(JSON.stringify(plantaeTargets.plantula)) },
+          { id: 'fase3', name: '3. Cre. Vegetativo', stageTips: '', targets: JSON.parse(JSON.stringify(plantaeTargets.vegetativo)) },
+          { id: 'fase4', name: '4. Floración', stageTips: '', targets: JSON.parse(JSON.stringify(plantaeTargets.floracion)) },
+          { id: 'fase5', name: '5. Maduración', stageTips: '', targets: JSON.parse(JSON.stringify(plantaeTargets.maduracion)) }
         ];
 
     const newProfile: CropProfile = {
