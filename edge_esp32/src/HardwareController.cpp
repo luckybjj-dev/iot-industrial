@@ -62,9 +62,9 @@ void HardwareController::setLight(bool estado) {
         Serial.println(F("❌ [Hardware] Ignorando comando de Luz. Sistema en modo AUTO."));
         return;
     }
-    // Luz exenta de filtro de tiempo y protección (ignorarFiltro = true)
-    unsigned long dummyTime = 0;
-    _ejecutarAccion(PIN_LIGHT, _actuadores.light_ON, estado, dummyTime, millis(), true);
+    Serial.printf("[Hardware] setLight(%s) llamado. Estado actual: %s\n", estado ? "ON" : "OFF", _actuadores.light_ON ? "ON" : "OFF");
+    // Luz exenta de filtro anti-short-cycle (ignorarFiltro = true)
+    _ejecutarAccion(PIN_LIGHT, _actuadores.light_ON, estado, _last_light_switch, millis(), true);
 }
 
 void HardwareController::leerSensores() {
@@ -211,7 +211,6 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
         _ejecutarAccion(PIN_FOGGER, _actuadores.fogger_ON, req_fogger, _last_fogger_switch, now, false);
         
         // Luz exenta de filtro de tiempo
-        unsigned long dummyTime = 0;
-        _ejecutarAccion(PIN_LIGHT, _actuadores.light_ON, req_light, dummyTime, now, true);
+        _ejecutarAccion(PIN_LIGHT, _actuadores.light_ON, req_light, _last_light_switch, now, true);
     }
 }
