@@ -5,7 +5,7 @@ import { MetricCard } from './components/MetricCard';
 import { TelemetryDashboard } from './components/TelemetryDashboard';
 import { SemaforoEstabilidad } from './components/SemaforoEstabilidad';
 import { CropProfileSelectorModal } from './components/CropProfileSelectorModal';
-import { Thermometer, Droplets, Leaf, Activity, Wind, Power, Settings2, ShieldAlert, Sprout, X } from 'lucide-react';
+import { Thermometer, Droplets, Leaf, Activity, Wind, Power, Settings2, ShieldAlert, Sprout, X, Snowflake } from 'lucide-react';
 
 function App() {
   const [camaras, setCamaras] = useState<EstadoCamara[]>([]);
@@ -316,6 +316,14 @@ function App() {
                           target={getTarget('TEMP')}
                         />
                         <MetricCard
+                          title="Temp. Ambiente (NTC2)"
+                          value={camara.telemetria.temp_ambiente?.toFixed(1) || '--'}
+                          unit="°C"
+                          icon={Thermometer}
+                          colorClass="text-amber-400"
+                          status={!camara.telemetria.ntc2_ok ? 'DANGER' : 'STABLE'}
+                        />
+                        <MetricCard
                           title="Humedad Relativa"
                           value={camara.telemetria.humedad_aire?.toFixed(1) || '--'}
                           unit="%"
@@ -407,6 +415,7 @@ function App() {
                             { id: 'fogger_on', label: 'Niebla', icon: Droplets, val: camara.telemetria.fogger_on, locked: camara.telemetria.fogger_locked, activeBg: 'bg-cyan-500/20 text-cyan-500 border-cyan-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
                             { id: 'extractor_on', label: 'Extractor', icon: Wind, val: camara.telemetria.extractor_on, locked: camara.telemetria.extractor_locked, activeBg: 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
                             { id: 'heater_on', label: 'Calefactor', icon: Activity, val: camara.telemetria.heater_on, locked: camara.telemetria.heater_locked, activeBg: 'bg-amber-500/20 text-amber-500 border-amber-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
+                            { id: 'cooler_on', label: 'Enfriador', icon: Snowflake, val: camara.telemetria.cooler_on ?? false, locked: false, activeBg: 'bg-blue-500/20 text-blue-500 border-blue-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
                             { id: 'light_on', label: 'Luz', icon: Power, val: camara.telemetria.light_on, locked: false, activeBg: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
                           ].map((act) => (
                             <div key={act.id} className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5 relative">

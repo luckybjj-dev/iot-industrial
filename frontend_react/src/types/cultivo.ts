@@ -1,5 +1,6 @@
 export interface TelemetriaFungi {
     temp_aire: number | null;
+    temp_ambiente?: number | null;
     humedad_aire: number | null;
     vpd: number | null;
     sensor_analogico: number | null;
@@ -8,6 +9,7 @@ export interface TelemetriaFungi {
     fogger_on: boolean;
     extractor_on: boolean;
     heater_on: boolean;
+    cooler_on?: boolean;
     light_on: boolean;
 
     heater_locked?: boolean;
@@ -16,6 +18,7 @@ export interface TelemetriaFungi {
     
     dht_ok: boolean;
     analogico_ok: boolean;
+    ntc2_ok?: boolean;
     
     estado_operacional?: EstadoOperacional;
 }
@@ -31,6 +34,7 @@ export interface EstadoCamara {
 export interface HistorialData {
     timestamp: number;
     temp_aire?: number;
+    temp_ambiente?: number;
     humedad_aire?: number;
     vpd?: number;
     sensor_analogico?: number;
@@ -38,6 +42,7 @@ export interface HistorialData {
     fogger_on?: boolean;
     extractor_on?: boolean;
     heater_on?: boolean;
+    cooler_on?: boolean;
 }
 
 export type EstadoOperacional = 'NORMAL' | 'CALENTANDO' | 'ENFRIANDO' | 'HUMIDIFICANDO' | 'SAFE_MODE' | 'EMERGENCIA' | 'MANUAL';

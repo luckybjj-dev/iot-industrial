@@ -58,7 +58,7 @@ void DisplayManager::render() {
     _drawActuadores(_hw.getActuadores());
 
     // [EDUCACIONAL] Segunda línea separadora para el bloque inferior de red.
-    _tft.drawLine(0, 80, 160, 80, ST77XX_WHITE);
+    _tft.drawLine(0, 85, 160, 85, ST77XX_WHITE);
     _drawEstadoRed();
 }
 
@@ -109,6 +109,19 @@ void DisplayManager::_drawSensores(const SensorData& s) {
         _tft.setTextColor(ST77XX_RED);
         _tft.println(F("Error"));
     }
+
+    // NTC 2 (Temperatura Ambiente)
+    _tft.setCursor(85, 40);
+    _tft.setTextColor(ST77XX_WHITE);
+    _tft.print(F("NTC2: "));
+    if (s.ntc2Ok) {
+        _tft.setTextColor(ST77XX_GREEN);
+        _tft.print(s.tempAmb2, 1);
+        _tft.println(F(" C"));
+    } else {
+        _tft.setTextColor(ST77XX_RED);
+        _tft.println(F("Err"));
+    }
 }
 
 void DisplayManager::_drawActuadores(const ActuadorData& a) {
@@ -143,7 +156,14 @@ void DisplayManager::_drawActuadores(const ActuadorData& a) {
     _tft.setTextColor(ST77XX_WHITE);
     _tft.print(F("LUZ: "));
     _tft.setTextColor(a.light_ON ? ST77XX_GREEN : ST77XX_RED);
-    _tft.println(a.light_ON ? F("ON ") : F("OFF"));
+    _tft.print(a.light_ON ? F("ON ") : F("OFF"));
+
+    // Relé E (Frío - Peltier)
+    _tft.setCursor(5, 75);
+    _tft.setTextColor(ST77XX_WHITE);
+    _tft.print(F("FRI: "));
+    _tft.setTextColor(a.cooler_ON ? ST77XX_GREEN : ST77XX_RED);
+    _tft.println(a.cooler_ON ? F("ON ") : F("OFF"));
 }
 
 void DisplayManager::_drawEstadoRed() {
