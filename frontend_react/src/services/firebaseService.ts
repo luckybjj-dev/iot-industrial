@@ -1,4 +1,4 @@
-import { ref, onValue, update, set, query, limitToLast, get } from 'firebase/database';
+import { ref, onValue, update, set, remove, query, limitToLast, get } from 'firebase/database';
 import { database } from '../config/firebase';
 import type { EstadoCamara, TelemetriaFungi, HistorialData, ConfiguracionCultivo } from '../types/cultivo';
 
@@ -96,13 +96,17 @@ export const subscribeToDeviceConfig = (
  */
 /**
  * Enviar comando de actuador a ruta hija directa.
- * Escribir en /commands/light_on (no en /commands/) hace que el
- * streamCallback del ESP32 reciba el path exacto y procese el
- * primitivo por la rama 'else', más robusta para booleanos.
+ *
+ * IMPORTANTE: Primero borramos el valor (remove) y luego lo escribimos (set).
+ * Esto garantiza que Firebase SIEMPRE detecte un cambio de valor y dispare
+ * el stream callback en el ESP32, incluso si el valor nuevo es igual al
+ * valor retenido anteriormente (ej: commands/light_on = true persistido,
+ * pero la lógica AUTO apagó la luz físicamente sin actualizar commands/).
  */
 export const sendCommand = async (deviceId: string, actuator: string, state: any) => {
   const commandRef = ref(database, `devices/${deviceId}/commands/${actuator}`);
   try {
+    await remove(commandRef);   // Fuerza cambio: null → state (siempre dispara stream)
     await set(commandRef, state);
   } catch (error) {
     console.error('Error enviando comando a Firebase:', error);
