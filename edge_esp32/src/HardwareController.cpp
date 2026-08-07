@@ -112,6 +112,17 @@ void HardwareController::leerSensores() {
         _sensores.ntc2Ok = false;
     }
 
+    // Calcular Promedio de Temperatura Ambiente (Redundancia)
+    if (_sensores.dhtOk && _sensores.ntc2Ok) {
+        _sensores.tempPromedio = (_sensores.tempAmb + _sensores.tempAmb2) / 2.0f;
+    } else if (_sensores.dhtOk) {
+        _sensores.tempPromedio = _sensores.tempAmb;
+    } else if (_sensores.ntc2Ok) {
+        _sensores.tempPromedio = _sensores.tempAmb2;
+    } else {
+        _sensores.tempPromedio = -999.0f; // Ambos fallaron
+    }
+
     _sensores.co2Ok = false;
     _sensores.co2 = 400; 
 }
@@ -179,8 +190,8 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
         bool req_light = false;
         EstadoOperacional proxEstado = EstadoOperacional::NORMAL;
 
-        // Lectura segura de sensores
-        float tempActual = _sensores.analogicoOk ? _sensores.valorAnalogico : (_sensores.dhtOk ? _sensores.tempAmb : -999.0f);
+        // Lectura segura de sensores (Ambiental ahora usa tempPromedio)
+        float tempActual = _sensores.tempPromedio;
         float humActual = _sensores.dhtOk ? _sensores.humAmb : -999.0f;
         int co2Actual = _sensores.co2Ok ? _sensores.co2 : 400;
 

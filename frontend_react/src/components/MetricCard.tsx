@@ -8,6 +8,7 @@ interface MetricCardProps {
     colorClass: string;
     status?: 'STABLE' | 'WARNING' | 'DANGER';
     target?: string;
+    subtext?: React.ReactNode;
 }
 
 export const MetricCard: React.FC<MetricCardProps> = ({ 
@@ -17,7 +18,8 @@ export const MetricCard: React.FC<MetricCardProps> = ({
     icon: Icon, 
     colorClass,
     status = 'STABLE',
-    target
+    target,
+    subtext
 }) => {
     
     let borderClass = 'border-white/10';
@@ -53,6 +55,11 @@ export const MetricCard: React.FC<MetricCardProps> = ({
                     </span>
                     {unit && <span className="text-lg text-neutral-500 font-bold">{unit}</span>}
                 </div>
+                {subtext && (
+                    <div className="text-[10px] text-neutral-500 font-mono mt-0.5 leading-none">
+                        {subtext}
+                    </div>
+                )}
                 <div className="h-4 mt-1 flex items-center">
                     {target ? (
                         <div className="text-[11px] font-bold text-emerald-400 font-mono tracking-wider uppercase whitespace-nowrap">

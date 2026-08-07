@@ -308,20 +308,13 @@ function App() {
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                         <MetricCard
                           title="Temp. Ambiente"
-                          value={camara.telemetria.temp_aire?.toFixed(1) || '--'}
+                          value={camara.telemetria.temp_promedio?.toFixed(1) || '--'}
                           unit="°C"
                           icon={Thermometer}
                           colorClass="text-amber-400"
-                          status={!camara.telemetria.dht_ok ? 'DANGER' : 'STABLE'}
+                          status={(!camara.telemetria.dht_ok && !camara.telemetria.ntc2_ok) ? 'DANGER' : 'STABLE'}
                           target={getTarget('TEMP')}
-                        />
-                        <MetricCard
-                          title="Temp. Ambiente (NTC2)"
-                          value={camara.telemetria.temp_ambiente?.toFixed(1) || '--'}
-                          unit="°C"
-                          icon={Thermometer}
-                          colorClass="text-amber-400"
-                          status={!camara.telemetria.ntc2_ok ? 'DANGER' : 'STABLE'}
+                          subtext={`DHT: ${camara.telemetria.temp_aire?.toFixed(1) || '--'}° | NTC: ${camara.telemetria.temp_ambiente?.toFixed(1) || '--'}°`}
                         />
                         <MetricCard
                           title="Humedad Relativa"
