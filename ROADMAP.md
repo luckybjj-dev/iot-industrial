@@ -21,7 +21,21 @@ El sistema inyecta metas ambientales según la etapa fenológica, pero estas son
 
 ---
 
-## 🟡 Fase 2: Expansión de Nodos e ISA-95 (Q1 2027)
+## 🟡 Fase 2: Diseño del Producto Físico (Hardware Industrial) (Q1 2027)
+
+¡El software no flota en el aire! Para pasar de un prototipo de laboratorio (cables dupont y protoboards) a un producto comercializable y escalable, se requiere ingeniería electrónica e industrial pura.
+
+### 1. Diseño de Placa de Circuito Impreso (PCB Custom)
+- **Objetivo:** Diseñar una placa base (Motherboard) utilizando software EDA (KiCad o Altium) donde el módulo ESP32-WROOM-32E vaya soldado en superficie (SMD), eliminando la placa de desarrollo Wemos D1 R32.
+- **Impacto:** Elimina por completo los falsos contactos, cables sueltos y problemas de ruido electromagnético. Permite incluir en la misma placa relés de estado sólido (SSR), optoacopladores para aislar voltajes, fusibles de protección y borneras industriales seguras.
+
+### 2. Diseño Industrial de la Carcasa (Enclosure)
+- **Objetivo:** Modelado 3D (SolidWorks / Fusion360) de una carcasa protectora.
+- **Impacto:** Protección contra agua, polvo y humedad (Certificación IP65/IP67 vital para invernaderos). Debe contemplar rieles DIN para montaje en tableros eléctricos, prensaestopas para la salida segura de los cables de los sensores/relés y un bisel de precisión para encajar la pantalla TFT sin tornillos visibles, dándole la apariencia de un producto "Premium".
+
+---
+
+## 🟠 Fase 3: Expansión de Nodos e ISA-95 (Q2 2027)
 
 ### 1. Despliegue de Red Local en Malla (ESP-NOW)
 En una granja grande, no todos los sensores pueden depender del router WiFi principal.
@@ -37,7 +51,7 @@ En una granja grande, no todos los sensores pueden depender del router WiFi prin
 
 ---
 
-## 🔴 Fase 3: Seguridad y Fiabilidad Hardware (Q2 2027)
+## 🔴 Fase 4: Seguridad y Fiabilidad Hardware (Q3 2027)
 
 ### 1. Resiliencia Offline Definitiva (Registro SD)
 - **Objetivo:** Añadir soporte para una tarjeta MicroSD o usar la partición SPIFFS/LittleFS en el ESP32 para crear un *Datalogger* interno.
@@ -52,7 +66,7 @@ En una granja grande, no todos los sensores pueden depender del router WiFi prin
 
 ---
 
-## 🟣 Fase 4: End-Game, Visión Ciberfísica e IA (2028+)
+## 🟣 Fase 5: End-Game, Visión Ciberfísica e IA (2028+)
 
 Lo que queda "en el tintero" para transformar este sistema en una tecnología pionera a nivel mundial:
 
