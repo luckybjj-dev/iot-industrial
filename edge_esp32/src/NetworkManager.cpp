@@ -30,7 +30,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Fungi</title>
+    <title>Dashboard SCADA</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #121212; color: #e0e0e0; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }
         .container { background-color: #1e1e1e; padding: 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); width: 100%; max-width: 400px; margin-bottom: 20px; }
@@ -52,7 +52,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 </head>
 <body>
     <div class="container">
-        <h2>Cámara Fungi 2.0</h2>
+        <h2>Controlador SCADA 2.0</h2>
         <div class="tabs">
             <div class="tab active" onclick="switchTab(0)">Control Local</div>
             <div class="tab" onclick="switchTab(1)">Red Wi-Fi</div>
@@ -241,7 +241,7 @@ void NetworkManager::tareaRed(void * parametro) { // Función principal de FreeR
         WiFi.mode(WIFI_AP); // Conmutamos inmediatamente el chip de radio a modo Emisor (Access Point)
         
         String mac = WiFi.macAddress(); // Solicitamos al hardware su dirección MAC unívoca universal
-        String apName = "Fungi_Setup_" + mac.substring(mac.length() - 5, mac.length() - 3) + mac.substring(mac.length() - 2); // Creamos un SSID único combinando el final de la MAC sin los dos puntos (:)
+        String apName = "SCADA_Node_" + mac.substring(mac.length() - 5, mac.length() - 3) + mac.substring(mac.length() - 2); // Creamos un SSID único combinando el final de la MAC sin los dos puntos (:)
         
         WiFi.softAP(apName.c_str()); // Levantamos la antena emitiendo el SSID sin seguridad (Red Abierta) para atrapar el celular del usuario
         Serial.println("[RED] SSID Emitido: " + apName); // Documentamos en puerto serie la red que el usuario debe buscar
