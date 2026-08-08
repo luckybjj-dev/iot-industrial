@@ -233,6 +233,18 @@ function App() {
                 if (variable === 'TEMP') return `${crop.temp_ideal_min} - ${crop.temp_ideal_max} °C`;
                 if (variable === 'HUMEDAD') return `${crop.hum_ideal_min} - ${crop.hum_ideal_max} %`;
                 if (variable === 'CO2') return `< ${crop.co2_ideal_max} ppm`;
+                if (variable === 'VPD') {
+                  const calcVpd = (t: number, h: number) => {
+                    const svp = 0.61078 * Math.exp((17.27 * t) / (t + 237.3));
+                    const avp = svp * (h / 100.0);
+                    return svp - avp;
+                  };
+                  // El VPD mínimo se da con la temperatura más baja y la humedad más alta
+                  const minVpd = calcVpd(crop.temp_ideal_min, crop.hum_ideal_max).toFixed(2);
+                  // El VPD máximo se da con la temperatura más alta y la humedad más baja
+                  const maxVpd = calcVpd(crop.temp_ideal_max, crop.hum_ideal_min).toFixed(2);
+                  return `${minVpd} - ${maxVpd} kPa`;
+                }
                 return undefined;
               };
 
