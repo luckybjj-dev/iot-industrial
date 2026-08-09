@@ -71,10 +71,10 @@ void DisplayManager::_drawSensores(const SensorData& s) {
      * Por ejemplo, si hay error o peligro es ROJO, si todo está bien es VERDE o CIAN.
      */
 
-    // Temperatura Ambiental (Promedio de redundancia DHT22 + NTC2)
+    // Temperatura Ambiental (Promedio de redundancia DHT1 + DHT2)
     _tft.setCursor(5, 20);
     _tft.setTextColor(ST77XX_WHITE);
-    _tft.print(F("T.Amb: "));
+    _tft.print(F("T.Prom: "));
     if (s.tempPromedio != -999.0f) {
         _tft.setTextColor(ST77XX_YELLOW);
         _tft.print(s.tempPromedio, 1);
@@ -84,13 +84,13 @@ void DisplayManager::_drawSensores(const SensorData& s) {
         _tft.println(F("Error"));
     }
 
-    // Humedad Ambiental
+    // Humedad Ambiental (Promedio)
     _tft.setCursor(5, 30);
     _tft.setTextColor(ST77XX_WHITE);
-    _tft.print(F("Humed: "));
-    if (s.dhtOk) {
+    _tft.print(F("H.Prom: "));
+    if (s.humPromedio != -999.0f) {
         _tft.setTextColor(ST77XX_CYAN);
-        _tft.print(s.humAmb, 1);
+        _tft.print(s.humPromedio, 1);
         _tft.println(F(" %"));
     } else {
         _tft.setTextColor(ST77XX_RED);

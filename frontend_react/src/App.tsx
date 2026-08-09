@@ -319,23 +319,24 @@ function App() {
                       {/* HERO CARDS - Métricas */}
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                         <MetricCard
-                          title="Temp. Ambiente"
+                          title="Temp. Ambiente Prom."
                           value={camara.telemetria.temp_promedio?.toFixed(1) || '--'}
                           unit="°C"
                           icon={Thermometer}
                           colorClass="text-amber-400"
-                          status={(!camara.telemetria.dht_ok && !camara.telemetria.ntc2_ok) ? 'DANGER' : 'STABLE'}
+                          status={(!camara.telemetria.dht_ok && !camara.telemetria.dht2_ok) ? 'DANGER' : 'STABLE'}
                           target={getTarget('TEMP')}
-                          subtext={`DHT: ${camara.telemetria.temp_aire?.toFixed(1) || '--'}° | NTC: ${camara.telemetria.temp_ambiente?.toFixed(1) || '--'}°`}
+                          subtext={`DHT1: ${camara.telemetria.temp_dht1?.toFixed(1) || '--'}° | DHT2: ${camara.telemetria.temp_dht2?.toFixed(1) || '--'}°`}
                         />
                         <MetricCard
-                          title="Humedad Relativa"
-                          value={camara.telemetria.humedad_aire?.toFixed(1) || '--'}
+                          title="Humedad Ambiente Prom."
+                          value={camara.telemetria.humedad_promedio?.toFixed(1) || '--'}
                           unit="%"
                           icon={Droplets}
                           colorClass="text-cyan-400"
-                          status={!camara.telemetria.dht_ok ? 'DANGER' : 'STABLE'}
+                          status={(!camara.telemetria.dht_ok && !camara.telemetria.dht2_ok) ? 'DANGER' : 'STABLE'}
                           target={getTarget('HUMEDAD')}
+                          subtext={`DHT1: ${camara.telemetria.hum_dht1?.toFixed(1) || '--'}% | DHT2: ${camara.telemetria.hum_dht2?.toFixed(1) || '--'}%`}
                         />
                         <MetricCard
                           title="Temp. Sustrato"
@@ -351,7 +352,19 @@ function App() {
                           unit="kPa"
                           icon={Activity}
                           colorClass="text-purple-400"
-                          status={camara.telemetria.vpd && (camara.telemetria.vpd < 0.4 || camara.telemetria.vpd > 1.6) ? 'WARNING' : 'STABLE'}
+                          status={
+                            (() => {
+                              if (camara.telemetria.vpd === null || camara.telemetria.vpd === undefined || !crop) return 'STABLE';
+                              const calcVpd = (t: number, h: number) => {
+                                const svp = 0.61078 * Math.exp((17.27 * t) / (t + 237.3));
+                                const avp = svp * (h / 100.0);
+                                return svp - avp;
+                              };
+                              const minVpd = calcVpd(crop.temp_ideal_min, crop.hum_ideal_max);
+                              const maxVpd = calcVpd(crop.temp_ideal_max, crop.hum_ideal_min);
+                              return (camara.telemetria.vpd < minVpd || camara.telemetria.vpd > maxVpd) ? 'WARNING' : 'STABLE';
+                            })()
+                          }
                           target={getTarget('VPD')}
                         />
                         <MetricCard

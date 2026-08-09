@@ -33,7 +33,7 @@ En `FirebaseManager.cpp`, se abre un canal persistente (Server-Sent Events) cont
 ### `HardwareController.cpp`
 *   **Failsafes Físicos:** El cerebro del control de estado. Evalúa cada lectura de sensor contra los umbrales de las reglas inyectadas.
 *   **VPD Calculator:** Incluye la lógica para calcular el *Vapor Pressure Deficit* (Déficit de Presión de Vapor) basado en algoritmos agronómicos.
-*   **Protección Anti-Ciclo:** Evita que los relés hagan un encendido/apagado constante (flickering) mediante histéresis.
+*   **Protección Anti-Ciclo:** Evita que los relés hagan un encendido/apagado constante (c) mediante histéresis.
 
 ### `FileManager.cpp`
 *   **LittleFS:** Gestiona el sistema de archivos no volátil en la flash del ESP32.

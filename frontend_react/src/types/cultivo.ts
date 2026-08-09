@@ -1,8 +1,12 @@
 export interface TelemetriaFungi {
-    temp_aire: number | null;
-    temp_ambiente?: number | null;
+    temp_aire?: number | null;
+    temp_dht1?: number | null;
+    temp_dht2?: number | null;
     temp_promedio?: number | null;
-    humedad_aire: number | null;
+    humedad_aire?: number | null;
+    hum_dht1?: number | null;
+    hum_dht2?: number | null;
+    humedad_promedio?: number | null;
     vpd: number | null;
     sensor_analogico: number | null;
     co2_ppm: number | null;
@@ -18,8 +22,8 @@ export interface TelemetriaFungi {
     extractor_locked?: boolean;
     
     dht_ok: boolean;
+    dht2_ok?: boolean;
     analogico_ok: boolean;
-    ntc2_ok?: boolean;
     
     estado_operacional?: EstadoOperacional;
 }

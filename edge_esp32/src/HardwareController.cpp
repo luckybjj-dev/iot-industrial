@@ -1,6 +1,6 @@
 #include "HardwareController.h"
 
-HardwareController::HardwareController() : _dht(DHTPIN, DHTTYPE) {
+HardwareController::HardwareController() {
 }
 
 void HardwareController::begin() {
@@ -18,7 +18,8 @@ void HardwareController::begin() {
     digitalWrite(PIN_EXTRACTOR, LOW);
     digitalWrite(PIN_LIGHT, HIGH); // Relé de Luz es Activo LOW
 
-    _dht.begin();
+    _dht.setup(DHTPIN, DHTesp::DHT22);
+    _dht2.setup(DHT2PIN, DHTesp::DHT22);
     
     Serial.println(F("✅ [Hardware] Inicializado correctamente."));
 }
@@ -79,19 +80,33 @@ void HardwareController::setCooler(bool estado) {
 }
 
 void HardwareController::leerSensores() {
-    float t = _dht.readTemperature();
-    float h = _dht.readHumidity();
+    // 1. Leer DHT1
+    float t = _dht.getTemperature();
+    float h = _dht.getHumidity();
 
     if (isnan(t) || isnan(h)) {
         _sensores.dhtOk = false;
-        Serial.println(F("❌ [Sensor] Fallo al leer DHT22"));
+        Serial.println(F("❌ [Sensor] Fallo al leer DHT1"));
     } else {
         _sensores.dhtOk = true;
         _sensores.tempAmb = t;
         _sensores.humAmb = h;
-        _sensores.vpd = calcularVPD(t, h);
     }
 
+    // 2. Leer DHT2
+    float t2 = _dht2.getTemperature();
+    float h2 = _dht2.getHumidity();
+
+    if (isnan(t2) || isnan(h2)) {
+        _sensores.dht2Ok = false;
+        Serial.println(F("❌ [Sensor] Fallo al leer DHT2"));
+    } else {
+        _sensores.dht2Ok = true;
+        _sensores.tempAmb2 = t2;
+        _sensores.humAmb2 = h2;
+    }
+
+    // 3. Leer NTC 1 (Sustrato)
     int valorADC = analogRead(PIN_ANALOGICO);
     if (valorADC > 0 && valorADC < 4095) {
         _sensores.analogicoOk = true;
@@ -102,25 +117,26 @@ void HardwareController::leerSensores() {
         _sensores.analogicoOk = false;
     }
 
-    int valorADC2 = analogRead(PIN_NTC_2);
-    if (valorADC2 > 0 && valorADC2 < 4095) {
-        _sensores.ntc2Ok = true;
-        float resistencia2 = NTC_R_SERIE / (4095.0f / (float)valorADC2 - 1.0f);
-        float tempK2 = 1.0f / (1.0f / (NTC_T_NOMINAL + 273.15f) + (1.0f / NTC_BETA) * log(resistencia2 / NTC_R_NOMINAL));
-        _sensores.tempAmb2 = tempK2 - 273.15f; 
-    } else {
-        _sensores.ntc2Ok = false;
-    }
-
-    // Calcular Promedio de Temperatura Ambiente (Redundancia)
-    if (_sensores.dhtOk && _sensores.ntc2Ok) {
+    // 4. Calcular Promedios con Fallback de Seguridad
+    if (_sensores.dhtOk && _sensores.dht2Ok) {
         _sensores.tempPromedio = (_sensores.tempAmb + _sensores.tempAmb2) / 2.0f;
+        _sensores.humPromedio = (_sensores.humAmb + _sensores.humAmb2) / 2.0f;
     } else if (_sensores.dhtOk) {
         _sensores.tempPromedio = _sensores.tempAmb;
-    } else if (_sensores.ntc2Ok) {
+        _sensores.humPromedio = _sensores.humAmb;
+    } else if (_sensores.dht2Ok) {
         _sensores.tempPromedio = _sensores.tempAmb2;
+        _sensores.humPromedio = _sensores.humAmb2;
     } else {
         _sensores.tempPromedio = -999.0f; // Ambos fallaron
+        _sensores.humPromedio = -999.0f;  // Ambos fallaron
+    }
+
+    // 5. Calcular VPD unificado (usando promedios)
+    if (_sensores.tempPromedio != -999.0f && _sensores.humPromedio != -999.0f) {
+        _sensores.vpd = calcularVPD(_sensores.tempPromedio, _sensores.humPromedio);
+    } else {
+        _sensores.vpd = 0.0f;
     }
 
     _sensores.co2Ok = false;
@@ -192,7 +208,7 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
 
         // Lectura segura de sensores (Ambiental ahora usa tempPromedio)
         float tempActual = _sensores.tempPromedio;
-        float humActual = _sensores.dhtOk ? _sensores.humAmb : -999.0f;
+        float humActual = (_sensores.dhtOk || _sensores.dht2Ok) ? _sensores.humPromedio : -999.0f;
         int co2Actual = _sensores.co2Ok ? _sensores.co2 : 400;
 
         // Falla catastrófica de sensores: Apagar por seguridad (Safe Mode)

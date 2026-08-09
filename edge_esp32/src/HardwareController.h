@@ -9,21 +9,20 @@
 // sistema.
 // ============================================================
 #include <Arduino.h>
-#include <DHT.h>
+#include "DHTesp.h"
 #include "FileManager.h"
 
 // --- Pines Físicos Semánticos ---
-#define DHTPIN    27
-#define DHTTYPE   DHT22
+#define DHTPIN        27 // DHT1
+#define DHT2PIN       26 // DHT2 (Restaurado a su pin original, el cable era el culpable!)
+#define DHTTYPE       DHT22
 #define PIN_ANALOGICO 34 // NTC o Humedad de Suelo
 
 #define PIN_HEATER    4 // Control Térmico (Calefactor - Asignado a GPIO 4)
 #define PIN_COOLER    17 // Control Térmico (Enfriador Peltier - Asignado a GPIO 17)
 #define PIN_FOGGER    25 // Control Hídrico (Humidificador)
-#define PIN_EXTRACTOR 26 // Control de Gases / Aire (Ventilador)
+#define PIN_EXTRACTOR 32 // Control de Gases / Aire (Ventilador - Reasignado a 32 por conflicto con DHT2)
 #define PIN_LIGHT     16 // Control de Iluminación
-
-#define PIN_NTC_2     35 // Sonda de Temperatura Ambiente 2
 
 // Constantes NTC Steinhart-Hart (por defecto)
 // Utilizadas para calcular la temperatura a partir de la resistencia del termistor NTC
@@ -37,10 +36,12 @@ constexpr float NTC_R_SERIE   = 10000.0f;
 // Almacena el estado actual de las variables climáticas.
 // -----------------------------------------------------------
 struct SensorData {
-    float tempAmb      = 0.0f; // Temp NTC 1
-    float tempAmb2     = 0.0f; // Temp NTC 2 (Ambiente)
+    float tempAmb      = 0.0f; // Temp DHT1
+    float tempAmb2     = 0.0f; // Temp DHT2
     float tempPromedio = 0.0f; // Promedio de tempAmb y tempAmb2
-    float humAmb       = 0.0f;
+    float humAmb       = 0.0f; // Humedad DHT1
+    float humAmb2      = 0.0f; // Humedad DHT2
+    float humPromedio  = 0.0f; // Promedio de humAmb y humAmb2
     /*
      * VPD (Déficit de Presión de Vapor - Vapor Pressure Deficit)
      * Es una métrica crucial en el cultivo que indica la diferencia 
@@ -52,9 +53,9 @@ struct SensorData {
     float valorAnalogico= 0.0f; // Temp Sustrato o Humedad Suelo
     int   co2          = 0;    // ppm
     
-    bool  dhtOk        = false; // Estado de salud del sensor DHT
+    bool  dhtOk        = false; // Estado de salud del DHT1
+    bool  dht2Ok       = false; // Estado de salud del DHT2
     bool  analogicoOk  = false; // Estado de salud del sensor analógico
-    bool  ntc2Ok       = false; // Estado de salud de la sonda NTC 2
     bool  co2Ok        = false; // Estado de salud del sensor de CO2
 };
 
@@ -128,7 +129,8 @@ public:
     bool isExtractorLocked(unsigned long now) const { return (now - _last_extractor_switch < MIN_RELAY_TIME_MS && _last_extractor_switch != 0); }
 
 private:
-    DHT          _dht;
+    DHTesp       _dht;
+    DHTesp       _dht2;
     SensorData   _sensores;
     ActuadorData _actuadores;
     ConfiguracionCultivo _config; // El cerebro dinámico (umbrales de control)

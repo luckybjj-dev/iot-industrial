@@ -56,10 +56,14 @@ ConfiguracionCultivo FileManager::cargarConfiguracion() {
     _configActual.failsafes.max_internal_temp_limit_c = failsafe["max_internal_temp_limit_c"] | 35.0;
 
     JsonObject crop = doc["crop"];
+    _configActual.crop.kingdom        = crop["kingdom"] | "FUNGI";
     _configActual.crop.temp_ideal_min = crop["temp_ideal_min"] | 20.0f;
     _configActual.crop.temp_ideal_max = crop["temp_ideal_max"] | 24.0f;
     _configActual.crop.temp_crit_min  = crop["temp_crit_min"] | 15.0f;
     _configActual.crop.temp_crit_max  = crop["temp_crit_max"] | 28.0f;
+    
+    _configActual.crop.temp_sustrato_ideal    = crop["temp_sustrato_ideal"] | 24.0f;
+    _configActual.crop.temp_sustrato_crit_max = crop["temp_sustrato_crit_max"] | 27.0f;
     
     _configActual.crop.hum_ideal_min  = crop["hum_ideal_min"] | 85.0f;
     _configActual.crop.hum_ideal_max  = crop["hum_ideal_max"] | 95.0f;
@@ -87,10 +91,14 @@ void FileManager::_crearConfiguracionPorDefecto() {
     _configActual.failsafes.max_internal_temp_limit_c = 35.0; // Evitar apagar todo muy rápido
 
     // Setup de parámetros seguros de Fungi (Oyster Mushrooms por ejemplo)
+    _configActual.crop.kingdom        = "FUNGI";
     _configActual.crop.temp_ideal_min = 18.0f;
     _configActual.crop.temp_ideal_max = 24.0f;
     _configActual.crop.temp_crit_min  = 10.0f;
     _configActual.crop.temp_crit_max  = 29.0f;
+    
+    _configActual.crop.temp_sustrato_ideal    = 24.0f;
+    _configActual.crop.temp_sustrato_crit_max = 27.0f;
     
     _configActual.crop.hum_ideal_min = 85.0f;
     _configActual.crop.hum_ideal_max = 95.0f;
@@ -117,10 +125,14 @@ bool FileManager::guardarConfiguracion(const ConfiguracionCultivo& config) {
     failsafe["max_internal_temp_limit_c"] = config.failsafes.max_internal_temp_limit_c;
 
     JsonObject crop = doc.createNestedObject("crop");
+    crop["kingdom"]        = config.crop.kingdom;
     crop["temp_ideal_min"] = config.crop.temp_ideal_min;
     crop["temp_ideal_max"] = config.crop.temp_ideal_max;
     crop["temp_crit_min"]  = config.crop.temp_crit_min;
     crop["temp_crit_max"]  = config.crop.temp_crit_max;
+    
+    crop["temp_sustrato_ideal"]    = config.crop.temp_sustrato_ideal;
+    crop["temp_sustrato_crit_max"] = config.crop.temp_sustrato_crit_max;
     
     crop["hum_ideal_min"] = config.crop.hum_ideal_min;
     crop["hum_ideal_max"] = config.crop.hum_ideal_max;
@@ -169,10 +181,14 @@ bool FileManager::guardarConfiguracionJson(const String& jsonString) {
     
     if (doc.containsKey("crop")) {
         JsonObject crop = doc["crop"];
+        nuevaConfig.crop.kingdom        = crop["kingdom"] | _configActual.crop.kingdom;
         nuevaConfig.crop.temp_ideal_min = crop["temp_ideal_min"] | _configActual.crop.temp_ideal_min;
         nuevaConfig.crop.temp_ideal_max = crop["temp_ideal_max"] | _configActual.crop.temp_ideal_max;
         nuevaConfig.crop.temp_crit_min  = crop["temp_crit_min"] | _configActual.crop.temp_crit_min;
         nuevaConfig.crop.temp_crit_max  = crop["temp_crit_max"] | _configActual.crop.temp_crit_max;
+        
+        nuevaConfig.crop.temp_sustrato_ideal    = crop["temp_sustrato_ideal"] | _configActual.crop.temp_sustrato_ideal;
+        nuevaConfig.crop.temp_sustrato_crit_max = crop["temp_sustrato_crit_max"] | _configActual.crop.temp_sustrato_crit_max;
         
         nuevaConfig.crop.hum_ideal_min = crop["hum_ideal_min"] | _configActual.crop.hum_ideal_min;
         nuevaConfig.crop.hum_ideal_max = crop["hum_ideal_max"] | _configActual.crop.hum_ideal_max;

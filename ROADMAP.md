@@ -6,16 +6,20 @@ El sistema ha alcanzando una madurez estructural, siendo resiliente a cortes de 
 
 ## 🟢 Fase 1: Ajuste Fino y Control Avanzado (Q4 2026)
 
-### 1. Control PID para Modulación (PWM)
+### 1. Redundancia Ambiental Dual (2x DHT22)
+- **Objetivo:** Retirar la sonda NTC2 de ambiente y reemplazarla por un segundo DHT22.
+- **Impacto:** Permite promediar tanto la Temperatura como la Humedad desde dos puntos físicos de la nave. Esto crea un cálculo de VPD a prueba de fallos y protege al cultivo contra el desgaste (drift) típico de los sensores de humedad genéricos. Prerrequisito absoluto antes del control PID.
+
+### 2. Control PID para Modulación (PWM)
 Actualmente, los actuadores térmicos operan bajo una lógica determinista binaria de ON/OFF (Histéresis simple).
 - **Objetivo:** Implementar un controlador PID (Proporcional, Integral, Derivativo) en la Máquina de Estados del ESP32.
 - **Impacto:** Permitirá variar la velocidad de los extractores (PWM) y la intensidad de módulos Peltier/Calefactores, logrando una curva de estabilidad térmica suave (sin picos) y reduciendo drásticamente el consumo eléctrico industrial.
 
-### 2. Crop Steering Algorítmico Dinámico
+### 3. Crop Steering Algorítmico Dinámico
 El sistema inyecta metas ambientales según la etapa fenológica, pero estas son estáticas.
 - **Objetivo:** Permitir que el Dashboard (React) automatice curvas graduales diarias. Ejemplo: Bajar 1°C de temperatura diariamente durante una semana para simular la llegada del otoño en el cultivo de Shiitake, sin intervención manual.
 
-### 3. Alarmas y Notificaciones Push
+### 4. Alarmas y Notificaciones Push
 - **Objetivo:** Implementar Firebase Cloud Messaging (FCM) o integración webhooks (Slack/WhatsApp/SMS).
 - **Impacto:** El agricultor recibirá alertas instantáneas si la cámara entra en `SAFE_MODE` o si las temperaturas exceden rangos críticos por un periodo sostenido.
 

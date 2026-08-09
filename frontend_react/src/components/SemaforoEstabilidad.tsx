@@ -19,12 +19,21 @@ export const SemaforoEstabilidad: React.FC<Props> = ({ telemetria, crop, modo_op
       };
     }
 
-    if (!telemetria.dht_ok || !telemetria.analogico_ok) {
+    if ((!telemetria.dht_ok && !telemetria.dht2_ok) || !telemetria.analogico_ok) {
       return {
         estado: 'FALLO CRÍTICO',
-        mensaje: 'Pérdida de comunicación con sensores. Failsafe activado.',
+        mensaje: 'Pérdida de comunicación con ambos sensores DHT o Sustrato. Failsafe activado.',
         colorClass: 'text-red-400 bg-red-950/30 border-red-500/50',
         Icon: AlertOctagon
+      };
+    }
+
+    if (!telemetria.dht_ok || !telemetria.dht2_ok) {
+      return {
+        estado: 'ADVERTENCIA DE HARDWARE',
+        mensaje: 'Un sensor DHT está desconectado. Operando con redundancia (Fallback).',
+        colorClass: 'text-yellow-400 bg-yellow-950/30 border-yellow-500/50',
+        Icon: AlertTriangle
       };
     }
 

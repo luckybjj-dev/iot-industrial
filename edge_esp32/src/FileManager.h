@@ -29,20 +29,17 @@
  */
 // --- Perfil Agronómico de Control (Capa 1) ---
 struct CropProfile {
-    float temp_ideal_min = 20.0f;
-    float temp_ideal_max = 24.0f;
-    float temp_crit_min = 15.0f;
-    float temp_crit_max = 28.0f;
-    
-    float hum_ideal_min = 85.0f;
-    float hum_ideal_max = 95.0f;
-    float hum_crit_min = 70.0f;
-    
-    int co2_ideal_min = 400;
-    int co2_ideal_max = 800;
-    int co2_crit_max = 1200;
-    
-    int light_hours_on = 12;
+    float temp_ideal_min;
+    float temp_ideal_max;
+    float temp_crit_min;
+    float temp_crit_max;
+    float hum_ideal_min;
+    float hum_ideal_max;
+    float hum_crit_min;
+    float co2_ideal_min;
+    float co2_ideal_max;
+    float co2_crit_max;
+    int light_hours_on;
 };
 
 struct FailsafesConfig {

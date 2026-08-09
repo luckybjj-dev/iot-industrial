@@ -71,23 +71,29 @@ void FirebaseManager::publicarTelemetria() {
 
     FirebaseJson json;
 
+    if (s.dhtOk || s.dht2Ok) {
+        json.set("vpd", (double)s.vpd);
+    }
     if (s.dhtOk) {
-        json.set("temp_aire", s.tempAmb);
-        json.set("humedad_aire", s.humAmb);
-        json.set("vpd", s.vpd);
+        json.set("temp_dht1", (double)s.tempAmb);
+        json.set("hum_dht1", (double)s.humAmb);
+    }
+    if (s.dht2Ok) {
+        json.set("temp_dht2", (double)s.tempAmb2);
+        json.set("hum_dht2", (double)s.humAmb2);
     }
     if (s.analogicoOk) {
-        json.set("sensor_analogico", s.valorAnalogico);
-    }
-    if (s.ntc2Ok) {
-        json.set("temp_ambiente", s.tempAmb2);
+        json.set("sensor_analogico", (double)s.valorAnalogico);
     }
     if (s.co2Ok) {
-        json.set("co2_ppm", s.co2);
+        json.set("co2_ppm", (int)s.co2);
     }
 
     if (s.tempPromedio != -999.0f) {
-        json.set("temp_promedio", s.tempPromedio);
+        json.set("temp_promedio", (double)s.tempPromedio);
+    }
+    if (s.humPromedio != -999.0f) {
+        json.set("humedad_promedio", (double)s.humPromedio);
     }
 
     json.set("heater_on", a.heater_ON);
@@ -102,8 +108,8 @@ void FirebaseManager::publicarTelemetria() {
     json.set("extractor_locked", !a.extractor_ON && _hw.isExtractorLocked(now));
 
     json.set("dht_ok", s.dhtOk);
+    json.set("dht2_ok", s.dht2Ok);
     json.set("analogico_ok", s.analogicoOk);
-    json.set("ntc2_ok", s.ntc2Ok);
 
     // Enviar el estado actual del modo de operación y la máquina de estados al Dashboard
     json.set("modo_operacion", _hw.getModoOperacion() == ModoOperacion::AUTO ? "AUTO" : "MANUAL");
@@ -147,23 +153,29 @@ void FirebaseManager::publicarHistorial() {
     double epoch_ms = (double)tv.tv_sec * 1000.0 + (double)tv.tv_usec / 1000.0;
     json.set("timestamp", epoch_ms);
 
+    if (s.dhtOk || s.dht2Ok) {
+        json.set("vpd", (double)s.vpd);
+    }
     if (s.dhtOk) {
-        json.set("temp_aire", s.tempAmb);
-        json.set("humedad_aire", s.humAmb);
-        json.set("vpd", s.vpd);
+        json.set("temp_dht1", (double)s.tempAmb);
+        json.set("hum_dht1", (double)s.humAmb);
+    }
+    if (s.dht2Ok) {
+        json.set("temp_dht2", (double)s.tempAmb2);
+        json.set("hum_dht2", (double)s.humAmb2);
     }
     if (s.analogicoOk) {
-        json.set("sensor_analogico", s.valorAnalogico);
-    }
-    if (s.ntc2Ok) {
-        json.set("temp_ambiente", s.tempAmb2);
+        json.set("sensor_analogico", (double)s.valorAnalogico);
     }
     if (s.co2Ok) {
-        json.set("co2_ppm", s.co2);
+        json.set("co2_ppm", (int)s.co2);
     }
 
     if (s.tempPromedio != -999.0f) {
-        json.set("temp_promedio", s.tempPromedio);
+        json.set("temp_promedio", (double)s.tempPromedio);
+    }
+    if (s.humPromedio != -999.0f) {
+        json.set("humedad_promedio", (double)s.humPromedio);
     }
 
     json.set("heater_on", a.heater_ON);
