@@ -6,11 +6,11 @@ El sistema ha alcanzando una madurez estructural, siendo resiliente a cortes de 
 
 ## 🟢 Fase 1: Ajuste Fino y Control Avanzado (Q4 2026)
 
-### 1. Redundancia Ambiental Dual (2x DHT22)
+### 1. ~~Redundancia Ambiental Dual (2x DHT22)~~ [COMPLETADO]
 - **Objetivo:** Retirar la sonda NTC2 de ambiente y reemplazarla por un segundo DHT22.
 - **Impacto:** Permite promediar tanto la Temperatura como la Humedad desde dos puntos físicos de la nave. Esto crea un cálculo de VPD a prueba de fallos y protege al cultivo contra el desgaste (drift) típico de los sensores de humedad genéricos. Prerrequisito absoluto antes del control PID.
 
-### 2. Control PID para Modulación (PWM)
+### 2. ~~Control PID para Modulación (PWM)~~ [COMPLETADO]
 Actualmente, los actuadores térmicos operan bajo una lógica determinista binaria de ON/OFF (Histéresis simple).
 - **Objetivo:** Implementar un controlador PID (Proporcional, Integral, Derivativo) en la Máquina de Estados del ESP32.
 - **Impacto:** Permitirá variar la velocidad de los extractores (PWM) y la intensidad de módulos Peltier/Calefactores, logrando una curva de estabilidad térmica suave (sin picos) y reduciendo drásticamente el consumo eléctrico industrial.

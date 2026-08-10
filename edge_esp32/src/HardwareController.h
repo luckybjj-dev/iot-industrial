@@ -11,6 +11,7 @@
 #include <Arduino.h>
 #include "DHTesp.h"
 #include "FileManager.h"
+#include <PID_v1.h>
 
 // --- Pines Físicos Semánticos ---
 #define DHTPIN        27 // DHT1
@@ -134,6 +135,12 @@ private:
     SensorData   _sensores;
     ActuadorData _actuadores;
     ConfiguracionCultivo _config; // El cerebro dinámico (umbrales de control)
+
+    // Variables para el control PID del calefactor (Time-Proportioning)
+    double _pidInput, _pidOutput, _pidSetpoint;
+    PID _heaterPID;
+    unsigned long _windowStartTime;
+    const unsigned long PID_WINDOW_SIZE = 5000; // 5 segundos, optimizado para Relé de Estado Sólido (SSR)
 
     ModoOperacion _modoActual = ModoOperacion::AUTO;
     EstadoOperacional _estadoActual = EstadoOperacional::NORMAL;

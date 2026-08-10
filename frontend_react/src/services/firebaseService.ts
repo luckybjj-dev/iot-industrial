@@ -52,13 +52,13 @@ export const sendConfigRules = async (deviceId: string, config: Partial<Configur
     // Preparar el payload de actualización
     const updates: Record<string, any> = {};
     
-    if (config.crop) {
+    if (config.crop !== undefined) {
       updates['crop'] = config.crop;
     }
-    if (config.activeProfileName) {
+    if (config.activeProfileName !== undefined) {
       updates['activeProfileName'] = config.activeProfileName;
     }
-    if (config.activePhaseName) {
+    if (config.activePhaseName !== undefined) {
       updates['activePhaseName'] = config.activePhaseName;
     }
 

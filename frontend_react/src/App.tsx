@@ -5,6 +5,7 @@ import { MetricCard } from './components/MetricCard';
 import { TelemetryDashboard } from './components/TelemetryDashboard';
 import { SemaforoEstabilidad } from './components/SemaforoEstabilidad';
 import { CropProfileSelectorModal } from './components/CropProfileSelectorModal';
+import CropStatePanel from './components/CropStatePanel';
 import { Thermometer, Droplets, Leaf, Activity, Wind, Power, Settings2, ShieldAlert, Sprout, X, Snowflake } from 'lucide-react';
 
 function App() {
@@ -315,6 +316,9 @@ function App() {
                         crop={crop ?? null} 
                         modo_operacion={modo} 
                       />
+
+                      {/* Panel Dinámico de Crop Steering */}
+                      <CropStatePanel deviceId={camara.deviceId} config={config} />
 
                       {/* HERO CARDS - Métricas */}
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">

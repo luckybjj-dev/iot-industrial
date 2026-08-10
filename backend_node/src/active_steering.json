@@ -1,0 +1,143 @@
+[
+  {
+    "deviceId": "ESP32_7C9EBD618F54",
+    "startDateISO": "2026-08-10T05:25:34.413Z",
+    "phases": [
+      {
+        "name": "1. Incubación",
+        "exitCondition": {
+          "type": "TIME",
+          "durationDays": 14
+        },
+        "config": {
+          "kingdom": "FUNGI",
+          "temp_ideal_min": 23,
+          "temp_ideal_max": 25,
+          "temp_crit_min": 20,
+          "temp_crit_max": 28,
+          "temp_sustrato_ideal": 23,
+          "temp_sustrato_crit_max": 28,
+          "hum_ideal_min": 65,
+          "hum_ideal_max": 75,
+          "hum_crit_min": 55,
+          "co2_ideal_min": 5000,
+          "co2_ideal_max": 15000,
+          "co2_crit_max": 15300,
+          "light_hours_on": 0
+        },
+        "transitionToNext": {
+          "durationHours": 24,
+          "strategy": "LINEAR"
+        }
+      },
+      {
+        "name": "2. Consolidación",
+        "exitCondition": {
+          "type": "TIME",
+          "durationDays": 14
+        },
+        "config": {
+          "kingdom": "FUNGI",
+          "temp_ideal_min": 21,
+          "temp_ideal_max": 23,
+          "temp_crit_min": 18,
+          "temp_crit_max": 26,
+          "temp_sustrato_ideal": 21,
+          "temp_sustrato_crit_max": 26,
+          "hum_ideal_min": 70,
+          "hum_ideal_max": 80,
+          "hum_crit_min": 60,
+          "co2_ideal_min": 4000,
+          "co2_ideal_max": 8000,
+          "co2_crit_max": 8300,
+          "light_hours_on": 0
+        },
+        "transitionToNext": {
+          "durationHours": 24,
+          "strategy": "LINEAR"
+        }
+      },
+      {
+        "name": "3. Inducción de Primordios",
+        "exitCondition": {
+          "type": "TIME",
+          "durationDays": 14
+        },
+        "config": {
+          "kingdom": "FUNGI",
+          "temp_ideal_min": 17,
+          "temp_ideal_max": 19,
+          "temp_crit_min": 14,
+          "temp_crit_max": 22,
+          "temp_sustrato_ideal": 17,
+          "temp_sustrato_crit_max": 22,
+          "hum_ideal_min": 94,
+          "hum_ideal_max": 97,
+          "hum_crit_min": 84,
+          "co2_ideal_min": 600,
+          "co2_ideal_max": 800,
+          "co2_crit_max": 1100,
+          "light_hours_on": 12
+        },
+        "transitionToNext": {
+          "durationHours": 24,
+          "strategy": "LINEAR"
+        }
+      },
+      {
+        "name": "4. Fructificación",
+        "exitCondition": {
+          "type": "TIME",
+          "durationDays": 14
+        },
+        "config": {
+          "kingdom": "FUNGI",
+          "temp_ideal_min": 17,
+          "temp_ideal_max": 19,
+          "temp_crit_min": 14,
+          "temp_crit_max": 22,
+          "temp_sustrato_ideal": 17,
+          "temp_sustrato_crit_max": 22,
+          "hum_ideal_min": 90,
+          "hum_ideal_max": 94,
+          "hum_crit_min": 80,
+          "co2_ideal_min": 600,
+          "co2_ideal_max": 900,
+          "co2_crit_max": 1200,
+          "light_hours_on": 12
+        },
+        "transitionToNext": {
+          "durationHours": 24,
+          "strategy": "LINEAR"
+        }
+      },
+      {
+        "name": "5. Recuperación",
+        "exitCondition": {
+          "type": "TIME",
+          "durationDays": 14
+        },
+        "config": {
+          "kingdom": "FUNGI",
+          "temp_ideal_min": 18,
+          "temp_ideal_max": 20,
+          "temp_crit_min": 15,
+          "temp_crit_max": 23,
+          "temp_sustrato_ideal": 18,
+          "temp_sustrato_crit_max": 23,
+          "hum_ideal_min": 88,
+          "hum_ideal_max": 92,
+          "hum_crit_min": 78,
+          "co2_ideal_min": 1000,
+          "co2_ideal_max": 1500,
+          "co2_crit_max": 1800,
+          "light_hours_on": 8
+        },
+        "transitionToNext": {
+          "durationHours": 24,
+          "strategy": "LINEAR"
+        }
+      }
+    ]
+  }
+]

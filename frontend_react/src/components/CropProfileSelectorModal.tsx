@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, Sprout, Play, Search, BookOpen, Edit3, Save, Plus, Trash2 } from 'lucide-react';
 import type { DeviceCropProfile } from '../types/cultivo';
-import { CROP_PROFILES, generateDeviceProfile } from '../data/CropProfiles';
+import { CROP_PROFILES, generateDeviceProfile, getCustomProfiles } from '../data/CropProfiles';
 import type { CropProfile, PhaseTargets } from '../data/CropProfiles';
+import { startSteeringPlan } from '../services/steeringService';
+import type { SteeringProfile } from '../types/steering';
 
 interface Props {
   deviceId: string;
@@ -40,14 +42,7 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
   const [newProfileKingdom, setNewProfileKingdom] = useState<'FUNGI' | 'PLANTAE'>('FUNGI');
 
   useEffect(() => {
-    const saved = localStorage.getItem('CUSTOM_PROFILES');
-    if (saved) {
-      try {
-        setCustomProfiles(JSON.parse(saved));
-      } catch (e) {
-        console.error('Error parsing custom profiles', e);
-      }
-    }
+    setCustomProfiles(getCustomProfiles());
   }, []);
 
   if (!isOpen) return null;
@@ -129,42 +124,34 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
     const id = `custom_${Date.now()}`;
     const fungiTargets = {
       incubacion: {
-        temperature: { day: { min: 22, max: 26 }, night: { min: 22, max: 26 } },
-        humidity: { min: 80, max: 90 },
-        vpd: { min: 0.8, max: 1.2 },
-        co2: { min: 1000, max: 5000 },
-        fae: { ach: { min: 0, max: 1 } },
-        lighting: { photoperiod: '0/24' }
-      },
-      consolidacion: {
-        temperature: { day: { min: 22, max: 26 }, night: { min: 22, max: 26 } },
-        humidity: { min: 80, max: 90 },
-        vpd: { min: 0.8, max: 1.2 },
-        co2: { min: 1000, max: 5000 },
+        temperature: { day: { min: 20, max: 25 }, night: { min: 20, max: 25 } },
+        humidity: { min: 70, max: 80 },
+        vpd: { min: 0.5, max: 0.8 },
+        co2: { min: 4000, max: 10000 },
         fae: { ach: { min: 0, max: 1 } },
         lighting: { photoperiod: '0/24' }
       },
       induccion: {
-        temperature: { day: { min: 16, max: 20 }, night: { min: 16, max: 20 } },
-        humidity: { min: 95, max: 100 },
+        temperature: { day: { min: 10, max: 15 }, night: { min: 10, max: 15 } },
+        humidity: { min: 90, max: 95 },
         vpd: { min: 0.1, max: 0.3 },
-        co2: { min: 400, max: 800 },
+        co2: { min: 400, max: 1000 },
         fae: { ach: { min: 4, max: 8 } },
         lighting: { photoperiod: '12/12' }
       },
       fructificacion: {
-        temperature: { day: { min: 18, max: 22 }, night: { min: 18, max: 22 } },
-        humidity: { min: 85, max: 95 },
-        vpd: { min: 0.4, max: 0.8 },
-        co2: { min: 400, max: 800 },
+        temperature: { day: { min: 15, max: 20 }, night: { min: 15, max: 20 } },
+        humidity: { min: 80, max: 90 },
+        vpd: { min: 0.3, max: 0.6 },
+        co2: { min: 400, max: 1000 },
         fae: { ach: { min: 4, max: 8 } },
         lighting: { photoperiod: '12/12' }
       },
       descanso: {
-        temperature: { day: { min: 20, max: 24 }, night: { min: 20, max: 24 } },
-        humidity: { min: 70, max: 80 },
-        vpd: { min: 0.8, max: 1.2 },
-        co2: { min: 400, max: 1000 },
+        temperature: { day: { min: 15, max: 20 }, night: { min: 15, max: 20 } },
+        humidity: { min: 85, max: 90 },
+        vpd: { min: 0.2, max: 0.5 },
+        co2: { min: 1000, max: 3000 },
         fae: { ach: { min: 1, max: 2 } },
         lighting: { photoperiod: '0/24' }
       }
@@ -172,41 +159,33 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
 
     const plantaeTargets = {
       germinacion: {
-        temperature: { day: { min: 22, max: 28 }, night: { min: 20, max: 25 } },
-        humidity: { min: 80, max: 95 },
+        temperature: { day: { min: 20, max: 25 }, night: { min: 20, max: 25 } },
+        humidity: { min: 65, max: 80 },
         vpd: { min: 0.4, max: 0.8 },
-        co2: { min: 400, max: 800 },
+        co2: { min: 400, max: 400 },
         fae: { ach: { min: 1, max: 2 } },
-        lighting: { photoperiod: '0/24' } // Frecuentemente oscuridad hasta brotar
-      },
-      plantula: {
-        temperature: { day: { min: 20, max: 25 }, night: { min: 18, max: 22 } },
-        humidity: { min: 60, max: 70 },
-        vpd: { min: 0.8, max: 1.2 },
-        co2: { min: 400, max: 800 },
-        fae: { ach: { min: 2, max: 4 } },
         lighting: { photoperiod: '18/6' }
       },
       vegetativo: {
-        temperature: { day: { min: 22, max: 28 }, night: { min: 18, max: 24 } },
-        humidity: { min: 50, max: 70 },
-        vpd: { min: 0.8, max: 1.2 },
-        co2: { min: 400, max: 1000 },
+        temperature: { day: { min: 22, max: 29 }, night: { min: 18, max: 24 } },
+        humidity: { min: 50, max: 65 },
+        vpd: { min: 0.8, max: 1.1 },
+        co2: { min: 800, max: 1200 },
         fae: { ach: { min: 2, max: 6 } },
         lighting: { photoperiod: '18/6' }
       },
       floracion: {
-        temperature: { day: { min: 20, max: 26 }, night: { min: 16, max: 22 } },
+        temperature: { day: { min: 18, max: 26 }, night: { min: 16, max: 22 } },
         humidity: { min: 40, max: 50 },
         vpd: { min: 1.0, max: 1.5 },
-        co2: { min: 400, max: 1200 },
+        co2: { min: 1000, max: 1500 },
         fae: { ach: { min: 4, max: 8 } },
         lighting: { photoperiod: '12/12' }
       },
       maduracion: {
-        temperature: { day: { min: 18, max: 24 }, night: { min: 15, max: 20 } },
-        humidity: { min: 40, max: 50 },
-        vpd: { min: 1.0, max: 1.5 },
+        temperature: { day: { min: 16, max: 22 }, night: { min: 15, max: 20 } },
+        humidity: { min: 30, max: 45 },
+        vpd: { min: 1.2, max: 1.6 },
         co2: { min: 400, max: 800 },
         fae: { ach: { min: 2, max: 6 } },
         lighting: { photoperiod: '12/12' }
@@ -215,18 +194,16 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
 
     const phases = newProfileKingdom === 'FUNGI' 
       ? [
-          { id: 'fase1', name: '1. Incubación', stageTips: '', targets: JSON.parse(JSON.stringify(fungiTargets.incubacion)) },
-          { id: 'fase2', name: '2. Consolidación', stageTips: '', targets: JSON.parse(JSON.stringify(fungiTargets.consolidacion)) },
-          { id: 'fase3', name: '3. Inducción de primordios', stageTips: '', targets: JSON.parse(JSON.stringify(fungiTargets.induccion)) },
-          { id: 'fase4', name: '4. Fructificación', stageTips: '', targets: JSON.parse(JSON.stringify(fungiTargets.fructificacion)) },
-          { id: 'fase5', name: '5. Descanso', stageTips: '', targets: JSON.parse(JSON.stringify(fungiTargets.descanso)) }
+          { id: 'fase1', name: '1. Incubación / Colonización', stageTips: 'Oscuridad total. Alto CO2 favorece el crecimiento vegetativo.', targets: JSON.parse(JSON.stringify(fungiTargets.incubacion)) },
+          { id: 'fase2', name: '2. Inducción (Pinning)', stageTips: 'Shock térmico y lumínico. Ventilación agresiva para bajar el CO2.', targets: JSON.parse(JSON.stringify(fungiTargets.induccion)) },
+          { id: 'fase3', name: '3. Fructificación', stageTips: 'Mantener humedad alta pero sin condensación en los cuerpos.', targets: JSON.parse(JSON.stringify(fungiTargets.fructificacion)) },
+          { id: 'fase4', name: '4. Descanso / Re-flush', stageTips: 'Preparación para el siguiente ciclo reproductivo.', targets: JSON.parse(JSON.stringify(fungiTargets.descanso)) }
         ]
       : [
-          { id: 'fase1', name: '1. Germinación', stageTips: '', targets: JSON.parse(JSON.stringify(plantaeTargets.germinacion)) },
-          { id: 'fase2', name: '2. Plántula', stageTips: '', targets: JSON.parse(JSON.stringify(plantaeTargets.plantula)) },
-          { id: 'fase3', name: '3. Cre. Vegetativo', stageTips: '', targets: JSON.parse(JSON.stringify(plantaeTargets.vegetativo)) },
-          { id: 'fase4', name: '4. Floración', stageTips: '', targets: JSON.parse(JSON.stringify(plantaeTargets.floracion)) },
-          { id: 'fase5', name: '5. Maduración', stageTips: '', targets: JSON.parse(JSON.stringify(plantaeTargets.maduracion)) }
+          { id: 'fase1', name: '1. Germinación / Esquejes', stageTips: 'VPD bajo (alta humedad) para favorecer raíces tiernas.', targets: JSON.parse(JSON.stringify(plantaeTargets.germinacion)) },
+          { id: 'fase2', name: '2. Crecimiento Vegetativo', stageTips: 'VPD medio, alta luz para promover hojas y estructura.', targets: JSON.parse(JSON.stringify(plantaeTargets.vegetativo)) },
+          { id: 'fase3', name: '3. Floración', stageTips: 'VPD alto (humedad baja) estricto para evitar moho en flores. CO2 al máximo.', targets: JSON.parse(JSON.stringify(plantaeTargets.floracion)) },
+          { id: 'fase4', name: '4. Maduración / Lavado', stageTips: 'Temperaturas nocturnas bajas para simular otoño. Suspender fertilizantes.', targets: JSON.parse(JSON.stringify(plantaeTargets.maduracion)) }
         ];
 
     const newProfile: CropProfile = {
@@ -285,14 +262,14 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
   };
 
   const handleSaveInjection = async () => {
-    if (!phase) return;
+    if (!phase || !profile) return;
     
     setIsSaving(true);
     try {
       // Usar targets editados si existen, sino los originales
       const finalPhase = { ...phase, targets: editedTargets || phase.targets };
       
-      let finalProfileName = profile?.commonName || 'Desconocido';
+      let finalProfileName = profile.commonName || 'Desconocido';
 
       if (isEditing) {
         // Generar un clon customizado para guardar los cambios en localStorage
@@ -312,8 +289,49 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
         localStorage.setItem('CUSTOM_PROFILES', JSON.stringify(newCustoms));
       }
 
+      // 🚀 Transformar todo el CropProfile de la enciclopedia a SteeringProfile para el motor dinámico
+      const steeringPhases = profile.phases.map(p => {
+        // Si estamos editando, usar los targets editados para la fase activa, si no, usar los de la enciclopedia
+        const t = (p.id === phase.id && editedTargets) ? editedTargets : p.targets;
+        const parseH = (v: string) => isNaN(parseInt(v)) ? 12 : parseInt(v);
+        const lightHours = parseH((t.lighting?.photoperiod || '12/12').split('/')[0]);
+
+        return {
+            name: p.name,
+            exitCondition: { type: 'TIME' as const, durationDays: p.duration_days || 14 },
+            config: {
+                kingdom: profile.kingdom,
+                temp_ideal_min: t.temperature.day.min,
+                temp_ideal_max: t.temperature.day.max,
+                temp_crit_min: t.temperature.day.min - 3, 
+                temp_crit_max: t.temperature.day.max + 3,
+                temp_sustrato_ideal: t.temperature.day.min,
+                temp_sustrato_crit_max: t.temperature.day.max + 3,
+                hum_ideal_min: t.humidity.min,
+                hum_ideal_max: t.humidity.max,
+                hum_crit_min: Math.max(0, t.humidity.min - 10),
+                co2_ideal_min: t.co2.min || 400,
+                co2_ideal_max: t.co2.max,
+                co2_crit_max: t.co2.max + 300,
+                light_hours_on: lightHours
+            },
+            transitionToNext: { durationHours: 24, strategy: 'LINEAR' as const }
+        };
+      });
+
+      const steeringProfile: SteeringProfile = {
+          deviceId: deviceId,
+          startDateISO: new Date().toISOString(),
+          phases: steeringPhases
+      };
+
+      // 1. Iniciar el motor en el Backend
+      await startSteeringPlan(steeringProfile);
+
+      // 2. Mantener la llamada estática por compatibilidad visual con la UI antigua de React
       const deviceProfile = generateDeviceProfile(finalPhase);
       await onSave(deviceProfile, finalProfileName, phase.name);
+      
       onClose();
     } catch (e) {
       alert('Error inyectando el perfil al ESP32');

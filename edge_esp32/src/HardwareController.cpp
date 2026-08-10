@@ -1,6 +1,6 @@
 #include "HardwareController.h"
 
-HardwareController::HardwareController() {
+HardwareController::HardwareController() : _heaterPID(&_pidInput, &_pidOutput, &_pidSetpoint, 2.0, 5.0, 1.0, DIRECT) {
 }
 
 void HardwareController::begin() {
@@ -20,6 +20,10 @@ void HardwareController::begin() {
 
     _dht.setup(DHTPIN, DHTesp::DHT22);
     _dht2.setup(DHT2PIN, DHTesp::DHT22);
+
+    _heaterPID.SetMode(AUTOMATIC);
+    _heaterPID.SetOutputLimits(0, PID_WINDOW_SIZE);
+    _windowStartTime = millis();
     
     Serial.println(F("✅ [Hardware] Inicializado correctamente."));
 }
@@ -215,28 +219,49 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
         if (tempActual == -999.0f) {
             proxEstado = EstadoOperacional::SAFE_MODE;
         } else {
+            // Actualizar PID de calefacción
+            _pidInput = tempActual;
+            _pidSetpoint = _config.crop.temp_ideal_min; // Objetivo para calentar hasta el inicio de la zona ideal
+            _heaterPID.Compute();
+
+            // Lógica de Time-Proportioning (PWM Lento)
+            if (now - _windowStartTime > PID_WINDOW_SIZE) {
+                _windowStartTime += PID_WINDOW_SIZE;
+            }
+
             // Jerarquía de Supervivencia:
-            // 1. Calor Extremo o Failsafe Absoluto
-            if (tempActual >= _config.failsafes.max_internal_temp_limit_c || tempActual >= _config.crop.temp_crit_max) {
+            // 1. Calor Extremo (Ambiente o Sustrato) o Failsafe Absoluto
+            float tempSustrato = _sensores.analogicoOk ? _sensores.valorAnalogico : -999.0f;
+
+            if (tempActual >= _config.failsafes.max_internal_temp_limit_c || tempActual >= _config.crop.temp_crit_max || (tempSustrato != -999.0f && tempSustrato >= _config.crop.temp_sustrato_crit_max)) {
                 req_extractor = true;
                 req_cooler = true;
+                req_heater = false; // Seguridad extra
                 proxEstado = EstadoOperacional::EMERGENCIA;
+                
+                // Enfriar el sustrato activando aire o simplemente parando calor.
             } 
             // 2. Toxicidad de Gases (CO2)
             else if (co2Actual >= _config.crop.co2_crit_max) {
                 req_extractor = true;
                 if (proxEstado == EstadoOperacional::NORMAL) proxEstado = EstadoOperacional::NORMAL; // O EMERGENCIA
             }
-            // 3. Frío Extremo o Demanda de Calor
-            else if (tempActual <= _config.crop.temp_ideal_min) {
-                req_heater = true;
-                proxEstado = EstadoOperacional::CALENTANDO;
-            }
-            // 4. Demanda de Frío
+            // 3. Demanda de Frío Ambiental
             else if (tempActual >= _config.crop.temp_ideal_max) {
                 req_cooler = true;
                 req_extractor = true; // Refrescar 
+                req_heater = false;
                 proxEstado = EstadoOperacional::ENFRIANDO;
+            }
+            // 4. Demanda de Calor (Controlado por PID)
+            else if (tempActual <= _config.crop.temp_ideal_min || _pidOutput > 0) {
+                // Si la temperatura es menor al ideal, o si el PID todavía nos pide estar encendidos en esta ventana
+                if (_pidOutput > (now - _windowStartTime)) {
+                    req_heater = true;
+                    proxEstado = EstadoOperacional::CALENTANDO;
+                } else {
+                    req_heater = false;
+                }
             }
 
             // 5. Demanda de Humedad (solo si no hay calor extremo, ya que la extracción ganaría)
@@ -260,10 +285,10 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
         // 2. CAPA 3: FILTRO DE HARDWARE Y EJECUCIÓN (Anti-Short Cycle)
         // =========================================================
         _ejecutarAccion(PIN_EXTRACTOR, _actuadores.extractor_ON, req_extractor, _last_extractor_switch, now, false);
-        _ejecutarAccion(PIN_HEATER, _actuadores.heater_ON, req_heater, _last_heater_switch, now, false);
         _ejecutarAccion(PIN_FOGGER, _actuadores.fogger_ON, req_fogger, _last_fogger_switch, now, false);
         
-        // Peltier exento de filtro de tiempo
+        // Calefactor y Peltier exentos de filtro de tiempo gracias al SSR
+        _ejecutarAccion(PIN_HEATER, _actuadores.heater_ON, req_heater, _last_heater_switch, now, true);
         _ejecutarAccion(PIN_COOLER, _actuadores.cooler_ON, req_cooler, _last_cooler_switch, now, true);
         
         // Luz exenta de filtro de tiempo
