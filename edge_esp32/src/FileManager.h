@@ -29,10 +29,13 @@
  */
 // --- Perfil Agronómico de Control (Capa 1) ---
 struct CropProfile {
+    String kingdom;
     float temp_ideal_min;
     float temp_ideal_max;
     float temp_crit_min;
     float temp_crit_max;
+    float temp_sustrato_ideal;
+    float temp_sustrato_crit_max;
     float hum_ideal_min;
     float hum_ideal_max;
     float hum_crit_min;

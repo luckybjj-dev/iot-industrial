@@ -167,12 +167,13 @@ function App() {
   // updateConfigField ahora viene del import de firebaseService.ts
   // Usa update() en la raíz /commands/ (correcto para campos de config)
 
-  const handleSaveRules = async (deviceId: string, crop: DeviceCropProfile, profileName?: string, phaseName?: string) => {
+  const handleSaveRules = async (deviceId: string, crop: DeviceCropProfile, profileName?: string, phaseName?: string, planState?: any) => {
     try {
       await sendConfigRules(deviceId, { 
         crop: crop,
         activeProfileName: profileName || 'Desconocido',
-        activePhaseName: phaseName || 'Desconocida'
+        activePhaseName: phaseName || 'Desconocida',
+        ...planState
       });
     } catch (error) {
       console.error("Error saving crop profile:", error);
@@ -308,48 +309,67 @@ function App() {
                   </div>
 
                   {camara.telemetria ? (
-                    <div className="space-y-8 relative z-10">
-                      
-                      {/* Semáforo Inteligente */}
-                      <SemaforoEstabilidad 
-                        telemetria={camara.telemetria} 
-                        crop={crop ?? null} 
-                        modo_operacion={modo} 
-                      />
+                      <div className="space-y-8 relative z-10">
+                        
+                        {/* Panel Dinámico de Crop Steering */}
+                        <CropStatePanel deviceId={camara.deviceId} config={config} />
 
-                      {/* Panel Dinámico de Crop Steering */}
-                      <CropStatePanel deviceId={camara.deviceId} config={config} />
-
-                      {/* HERO CARDS - Métricas */}
+                        {/* Semáforo Inteligente */}
+                        <SemaforoEstabilidad 
+                          telemetria={camara.telemetria} 
+                          crop={crop ?? null} 
+                          modo_operacion={modo} 
+                        />
+  
+                        {/* HERO CARDS - Métricas */}
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-                        <MetricCard
-                          title="Temp. Ambiente Prom."
-                          value={camara.telemetria.temp_promedio?.toFixed(1) || '--'}
-                          unit="°C"
-                          icon={Thermometer}
-                          colorClass="text-amber-400"
-                          status={(!camara.telemetria.dht_ok && !camara.telemetria.dht2_ok) ? 'DANGER' : 'STABLE'}
-                          target={getTarget('TEMP')}
-                          subtext={`DHT1: ${camara.telemetria.temp_dht1?.toFixed(1) || '--'}° | DHT2: ${camara.telemetria.temp_dht2?.toFixed(1) || '--'}°`}
-                        />
-                        <MetricCard
-                          title="Humedad Ambiente Prom."
-                          value={camara.telemetria.humedad_promedio?.toFixed(1) || '--'}
-                          unit="%"
-                          icon={Droplets}
-                          colorClass="text-cyan-400"
-                          status={(!camara.telemetria.dht_ok && !camara.telemetria.dht2_ok) ? 'DANGER' : 'STABLE'}
-                          target={getTarget('HUMEDAD')}
-                          subtext={`DHT1: ${camara.telemetria.hum_dht1?.toFixed(1) || '--'}% | DHT2: ${camara.telemetria.hum_dht2?.toFixed(1) || '--'}%`}
-                        />
-                        <MetricCard
-                          title="Temp. Sustrato"
-                          value={camara.telemetria.sensor_analogico?.toFixed(1) || '--'}
-                          unit="°C"
-                          icon={Leaf}
-                          colorClass="text-emerald-400"
-                          status={!camara.telemetria.analogico_ok ? 'DANGER' : 'STABLE'}
-                        />
+                          <MetricCard
+                            title="Temp. Ambiente Prom."
+                            value={camara.telemetria.temp_promedio?.toFixed(1) || '--'}
+                            unit="°C"
+                            icon={Thermometer}
+                            colorClass="text-amber-400"
+                            status={(() => {
+                              if (!camara.telemetria.dht_ok && !camara.telemetria.dht2_ok) return 'DANGER';
+                              if (!crop || camara.telemetria.temp_promedio == null) return 'STABLE';
+                              if (camara.telemetria.temp_promedio < crop.temp_crit_min || camara.telemetria.temp_promedio > crop.temp_crit_max) return 'DANGER';
+                              if (camara.telemetria.temp_promedio < crop.temp_ideal_min || camara.telemetria.temp_promedio > crop.temp_ideal_max) return 'WARNING';
+                              return 'STABLE';
+                            })()}
+                            target={getTarget('TEMP')}
+                            subtext={`DHT1: ${camara.telemetria.temp_dht1?.toFixed(1) || '--'}° | DHT2: ${camara.telemetria.temp_dht2?.toFixed(1) || '--'}°`}
+                          />
+                          <MetricCard
+                            title="Humedad Ambiente Prom."
+                            value={camara.telemetria.humedad_promedio?.toFixed(1) || '--'}
+                            unit="%"
+                            icon={Droplets}
+                            colorClass="text-cyan-400"
+                            status={(() => {
+                              if (!camara.telemetria.dht_ok && !camara.telemetria.dht2_ok) return 'DANGER';
+                              if (!crop || camara.telemetria.humedad_promedio == null) return 'STABLE';
+                              if (camara.telemetria.humedad_promedio < crop.hum_crit_min) return 'DANGER';
+                              if (camara.telemetria.humedad_promedio < crop.hum_ideal_min || camara.telemetria.humedad_promedio > crop.hum_ideal_max) return 'WARNING';
+                              return 'STABLE';
+                            })()}
+                            target={getTarget('HUMEDAD')}
+                            subtext={`DHT1: ${camara.telemetria.hum_dht1?.toFixed(1) || '--'}% | DHT2: ${camara.telemetria.hum_dht2?.toFixed(1) || '--'}%`}
+                          />
+                          <MetricCard
+                            title="Temp. Sustrato"
+                            value={camara.telemetria.sensor_analogico?.toFixed(1) || '--'}
+                            unit="°C"
+                            icon={Leaf}
+                            colorClass="text-emerald-400"
+                            status={(() => {
+                              if (!camara.telemetria.analogico_ok) return 'DANGER';
+                              if (!crop || camara.telemetria.sensor_analogico == null) return 'STABLE';
+                              if (camara.telemetria.sensor_analogico > crop.temp_sustrato_crit_max) return 'DANGER';
+                              if (camara.telemetria.sensor_analogico > crop.temp_sustrato_ideal + 1 || camara.telemetria.sensor_analogico < crop.temp_sustrato_ideal - 1) return 'WARNING';
+                              return 'STABLE';
+                            })()}
+                            target={crop ? `~ ${crop.temp_sustrato_ideal} °C` : undefined}
+                          />
                         <MetricCard
                           title="VPD (Déficit Presión)"
                           value={camara.telemetria.vpd?.toFixed(2) || '--'}
@@ -371,14 +391,20 @@ function App() {
                           }
                           target={getTarget('VPD')}
                         />
-                        <MetricCard
-                          title="Nivel CO2"
-                          value={camara.telemetria.co2_ppm?.toString() || '--'}
-                          unit="ppm"
-                          icon={Wind}
-                          colorClass="text-sky-400"
-                          target={getTarget('CO2')}
-                        />
+                          <MetricCard
+                            title="Nivel CO2"
+                            value={camara.telemetria.co2_ppm?.toString() || '--'}
+                            unit="ppm"
+                            icon={Wind}
+                            colorClass="text-sky-400"
+                            status={(() => {
+                              if (!crop || camara.telemetria.co2_ppm == null) return 'STABLE';
+                              if (camara.telemetria.co2_ppm > crop.co2_crit_max) return 'DANGER';
+                              if (camara.telemetria.co2_ppm < crop.co2_ideal_min || camara.telemetria.co2_ppm > crop.co2_ideal_max) return 'WARNING';
+                              return 'STABLE';
+                            })()}
+                            target={getTarget('CO2')}
+                          />
                       </div>
                       
                       {/* ACTUADORES & GRAFICO */}
@@ -470,7 +496,11 @@ function App() {
 
                         {/* GRÁFICO HISTÓRICO UNIFICADO (TELEMETRÍA) */}
                         <div className="xl:col-span-3">
-                          <TelemetryDashboard topology={null} />
+                          <TelemetryDashboard 
+                            deviceId={camara.deviceId} 
+                            targetSubstrateTemp={crop?.temp_sustrato_ideal} 
+                            realtimeTelemetry={camara.telemetria}
+                          />
                         </div>
                       </div>
 
@@ -487,8 +517,8 @@ function App() {
                       deviceId={camara.deviceId}
                       isOpen={true}
                       onClose={() => setEditingRulesFor(null)}
-                      onSave={async (newRules, profileName, phaseName) => {
-                        await handleSaveRules(camara.deviceId, newRules, profileName, phaseName);
+                      onSave={async (newRules, profileName, phaseName, planState) => {
+                        await handleSaveRules(camara.deviceId, newRules, profileName, phaseName, planState);
                       }}
                     />
                   )}
@@ -503,3 +533,6 @@ function App() {
 }
 
 export default App;
+
+
+

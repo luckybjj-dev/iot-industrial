@@ -7,10 +7,12 @@ import type { HistorialData } from '../types/cultivo';
 import { Activity } from 'lucide-react';
 
 interface HistoryChartProps {
+  targetSubstrateTemp?: number;
   deviceId: string;
 }
 
-export const HistoryChart: React.FC<HistoryChartProps> = ({ deviceId }) => {
+import { ReferenceLine } from 'recharts';
+export const HistoryChart: React.FC<HistoryChartProps> = ({ deviceId, targetSubstrateTemp }) => {
   const [data, setData] = useState<HistorialData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +80,9 @@ export const HistoryChart: React.FC<HistoryChartProps> = ({ deviceId }) => {
       
       <ResponsiveContainer width="100%" height="85%">
         <ComposedChart data={formattedData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          {targetSubstrateTemp !== undefined && (
+            <ReferenceLine y={targetSubstrateTemp} yAxisId="left" stroke="#10b981" strokeDasharray="3 3" label={{ position: 'top', value: 'Objetivo Sustrato', fill: '#10b981', fontSize: 10 }} />
+          )}
           <defs>
             <linearGradient id="colorTemp" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.3}/>
@@ -196,3 +201,4 @@ export const HistoryChart: React.FC<HistoryChartProps> = ({ deviceId }) => {
     </div>
   );
 };
+

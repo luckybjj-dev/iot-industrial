@@ -21,7 +21,7 @@ void HardwareController::begin() {
     _dht.setup(DHTPIN, DHTesp::DHT22);
     _dht2.setup(DHT2PIN, DHTesp::DHT22);
 
-    _heaterPID.SetMode(AUTOMATIC);
+    _heaterPID.SetMode(1); // 1 = AUTOMATIC in PID_v1
     _heaterPID.SetOutputLimits(0, PID_WINDOW_SIZE);
     _windowStartTime = millis();
     
@@ -145,6 +145,29 @@ void HardwareController::leerSensores() {
 
     _sensores.co2Ok = false;
     _sensores.co2 = 400; 
+
+    // --- 6. Aplicar Filtro EWMA ---
+    if (!_sensores.ewmaInitialized) {
+        // Inicialización en la primera pasada para evitar arrastre desde cero
+        _sensores.ewma_temp = _sensores.tempPromedio != -999.0f ? _sensores.tempPromedio : 20.0f;
+        _sensores.ewma_hum = _sensores.humPromedio != -999.0f ? _sensores.humPromedio : 50.0f;
+        _sensores.ewma_sustrato = _sensores.analogicoOk ? _sensores.valorAnalogico : 20.0f;
+        _sensores.ewma_vpd = _sensores.vpd;
+        _sensores.ewma_co2 = _sensores.co2;
+        _sensores.ewmaInitialized = true;
+    } else {
+        if (_sensores.tempPromedio != -999.0f) 
+            _sensores.ewma_temp = (ALPHA_EWMA * _sensores.tempPromedio) + ((1.0f - ALPHA_EWMA) * _sensores.ewma_temp);
+        
+        if (_sensores.humPromedio != -999.0f) 
+            _sensores.ewma_hum = (ALPHA_EWMA * _sensores.humPromedio) + ((1.0f - ALPHA_EWMA) * _sensores.ewma_hum);
+            
+        if (_sensores.analogicoOk) 
+            _sensores.ewma_sustrato = (ALPHA_EWMA * _sensores.valorAnalogico) + ((1.0f - ALPHA_EWMA) * _sensores.ewma_sustrato);
+            
+        _sensores.ewma_vpd = (ALPHA_EWMA * _sensores.vpd) + ((1.0f - ALPHA_EWMA) * _sensores.ewma_vpd);
+        _sensores.ewma_co2 = (ALPHA_EWMA * (float)_sensores.co2) + ((1.0f - ALPHA_EWMA) * _sensores.ewma_co2);
+    }
 }
 
 float HardwareController::calcularVPD(float tempC, float humRH) {
@@ -210,10 +233,10 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
         bool req_light = false;
         EstadoOperacional proxEstado = EstadoOperacional::NORMAL;
 
-        // Lectura segura de sensores (Ambiental ahora usa tempPromedio)
-        float tempActual = _sensores.tempPromedio;
-        float humActual = (_sensores.dhtOk || _sensores.dht2Ok) ? _sensores.humPromedio : -999.0f;
-        int co2Actual = _sensores.co2Ok ? _sensores.co2 : 400;
+        // Lectura segura de sensores (Ambiental ahora usa EWMA)
+        float tempActual = _sensores.ewma_temp;
+        float humActual = (_sensores.dhtOk || _sensores.dht2Ok) ? _sensores.ewma_hum : -999.0f;
+        int co2Actual = _sensores.co2Ok ? (int)_sensores.ewma_co2 : 400;
 
         // Falla catastrófica de sensores: Apagar por seguridad (Safe Mode)
         if (tempActual == -999.0f) {
@@ -231,7 +254,7 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
 
             // Jerarquía de Supervivencia:
             // 1. Calor Extremo (Ambiente o Sustrato) o Failsafe Absoluto
-            float tempSustrato = _sensores.analogicoOk ? _sensores.valorAnalogico : -999.0f;
+            float tempSustrato = _sensores.analogicoOk ? _sensores.ewma_sustrato : -999.0f;
 
             if (tempActual >= _config.failsafes.max_internal_temp_limit_c || tempActual >= _config.crop.temp_crit_max || (tempSustrato != -999.0f && tempSustrato >= _config.crop.temp_sustrato_crit_max)) {
                 req_extractor = true;

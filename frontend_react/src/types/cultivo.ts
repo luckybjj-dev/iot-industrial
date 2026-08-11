@@ -53,11 +53,23 @@ export interface HistorialData {
 
 export type EstadoOperacional = 'NORMAL' | 'CALENTANDO' | 'ENFRIANDO' | 'HUMIDIFICANDO' | 'SAFE_MODE' | 'EMERGENCIA' | 'MANUAL';
 
+export interface PhaseTargets {
+  temperature: { 
+    day: { min: number; max: number }; 
+    night: { min: number; max: number }; 
+    substrate?: { min: number; max: number };
+  };
+  humidity: { min: number; max: number };
+}
+
 export interface DeviceCropProfile {
     temp_ideal_min: number;
     temp_ideal_max: number;
     temp_crit_min: number;
     temp_crit_max: number;
+    
+    temp_sustrato_ideal: number;
+    temp_sustrato_crit_max: number;
     
     hum_ideal_min: number;
     hum_ideal_max: number;

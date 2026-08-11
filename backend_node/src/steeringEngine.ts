@@ -1,8 +1,7 @@
 import * as cron from 'node-cron';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set } from 'firebase/database';
+import { getDatabase, ref, onValue, set } from 'firebase/database';
 import * as dotenv from 'dotenv';
-import * as fs from 'fs';
 import * as path from 'path';
 
 dotenv.config();
@@ -16,23 +15,8 @@ const app = initializeApp(firebaseConfig);
 export const db = getDatabase(app);
 
 // ---------------------------------------------------------
-// ESTRUCTURAS DE DATOS (ARQUITECTURA NIVEL 1, 2 y 3)
+// ESTRUCTURAS DE DATOS 
 // ---------------------------------------------------------
-
-export interface TransitionStrategy {
-    durationHours: number;
-    strategy: 'STEP' | 'LINEAR';
-}
-
-export interface PhaseCondition {
-    type: 'TIME' | 'TELEMETRY' | 'MANUAL';
-    durationDays?: number; // Usado si type === 'TIME'
-    
-    // Para el futuro (Condiciones Biológicas/Ambientales)
-    metric?: string; 
-    operator?: '>' | '<' | '>=' | '<=';
-    value?: number;
-}
 
 export interface CropConfig {
     kingdom: string;
@@ -51,56 +35,14 @@ export interface CropConfig {
     light_hours_on: number;
 }
 
-export interface CropPhase {
-    name: string;
-    exitCondition: PhaseCondition; // Qué debe pasar para salir de esta fase
-    config: CropConfig;            // Setpoints (Nivel 2)
-    transitionToNext?: TransitionStrategy; // Estrategia de transición a la sig. fase (Nivel 3)
-}
-
-export interface SteeringProfile {
-    deviceId: string;
-    startDateISO: string;
-    phases: CropPhase[];
-}
-
-const STORAGE_PATH = path.join(__dirname, 'active_steering.json');
-let activeProfiles: SteeringProfile[] = [];
-
-// ---------------------------------------------------------
-// PERSISTENCIA BÁSICA
-// ---------------------------------------------------------
-function loadProfiles() {
-    if (fs.existsSync(STORAGE_PATH)) {
-        try {
-            const data = fs.readFileSync(STORAGE_PATH, 'utf-8');
-            activeProfiles = JSON.parse(data);
-            console.log(`[Steering Engine] Cargados ${activeProfiles.length} perfiles dinámicos.`);
-        } catch (e) {
-            console.error('[Steering Engine] Error leyendo active_steering.json', e);
-        }
-    }
-}
-
-function saveProfiles() {
-    fs.writeFileSync(STORAGE_PATH, JSON.stringify(activeProfiles, null, 2));
-}
-
-// ---------------------------------------------------------
-// CONTROL DE PERFILES
-// ---------------------------------------------------------
-export function startSteering(profile: SteeringProfile) {
-    activeProfiles = activeProfiles.filter(p => p.deviceId !== profile.deviceId);
-    activeProfiles.push(profile);
-    saveProfiles();
-    console.log(`[Steering Engine] Perfil dinámico INICIADO para el nodo: ${profile.deviceId}`);
-    evaluateSteering();
-}
-
-export function stopSteering(deviceId: string) {
-    activeProfiles = activeProfiles.filter(p => p.deviceId !== deviceId);
-    saveProfiles();
-    console.log(`[Steering Engine] Perfil dinámico DETENIDO para el nodo: ${deviceId}`);
+export interface PlanState {
+    activeProfileName: string;
+    activePhaseName: string;
+    phaseStartTime: number; // ms
+    duration_days: number;
+    transition_hours: number;
+    currentPhaseConfig: CropConfig;
+    nextPhaseConfig: CropConfig | null;
 }
 
 // ---------------------------------------------------------
@@ -109,11 +51,10 @@ export function stopSteering(deviceId: string) {
 function interpolateConfig(current: CropConfig, next: CropConfig, progressPercent: number): CropConfig {
     const p = Math.max(0, Math.min(1, progressPercent)); // Clampear entre 0 y 1
     
-    // Función auxiliar para interpolar números
     const lerp = (start: number, end: number) => start + (end - start) * p;
 
     return {
-        kingdom: current.kingdom, // Mantenemos el string
+        kingdom: current.kingdom,
         temp_ideal_min: lerp(current.temp_ideal_min, next.temp_ideal_min),
         temp_ideal_max: lerp(current.temp_ideal_max, next.temp_ideal_max),
         temp_crit_min: lerp(current.temp_crit_min, next.temp_crit_min),
@@ -126,76 +67,76 @@ function interpolateConfig(current: CropConfig, next: CropConfig, progressPercen
         co2_ideal_min: lerp(current.co2_ideal_min, next.co2_ideal_min),
         co2_ideal_max: lerp(current.co2_ideal_max, next.co2_ideal_max),
         co2_crit_max: lerp(current.co2_crit_max, next.co2_crit_max),
-        // La luz es discreta, podríamos redondear
+        // La luz es discreta, redondeamos
         light_hours_on: Math.round(lerp(current.light_hours_on, next.light_hours_on))
     };
+}
+
+// ---------------------------------------------------------
+// ESTADO EN MEMORIA
+// ---------------------------------------------------------
+// Este engine ahora se suscribe a toda la rama `devices`
+let devicesData: Record<string, any> = {};
+
+function startListeningToFirebase() {
+    const devicesRef = ref(db, 'devices');
+    onValue(devicesRef, (snapshot) => {
+        if (snapshot.exists()) {
+            devicesData = snapshot.val();
+        } else {
+            devicesData = {};
+        }
+    }, (error) => {
+        console.error('[Steering Engine] Error escuchando Firebase RTDB:', error);
+    });
 }
 
 // ---------------------------------------------------------
 // MOTOR DE EVALUACIÓN MÁQUINA DE ESTADOS
 // ---------------------------------------------------------
 export async function evaluateSteering() {
-    if (activeProfiles.length === 0) return;
+    const deviceIds = Object.keys(devicesData);
+    if (deviceIds.length === 0) return;
 
-    const now = new Date();
+    const now = Date.now();
 
-    for (const profile of activeProfiles) {
-        const startDate = new Date(profile.startDateISO);
-        const diffMs = now.getTime() - startDate.getTime();
-        const diffHours = diffMs / (1000 * 60 * 60);
-
-        let hoursAccumulator = 0;
-        let activePhaseIndex = -1;
-
-        // Determinar en qué fase temporal nos encontramos (MVP: Solo TIME exitConditions)
-        for (let i = 0; i < profile.phases.length; i++) {
-            const phase = profile.phases[i]!;
-            
-            // MVP: Por ahora asumimos que todas las fases tienen condición TIME
-            // En el futuro aquí se evaluaría la telemetría (ver respuesta en chat)
-            const phaseDurationHours = (phase.exitCondition.durationDays || 0) * 24;
-            hoursAccumulator += phaseDurationHours;
-
-            if (diffHours < hoursAccumulator) {
-                activePhaseIndex = i;
-                break;
-            }
-        }
-
-        if (activePhaseIndex === -1) {
-            console.log(`[Steering Engine] El plan para ${profile.deviceId} ha finalizado.`);
-            stopSteering(profile.deviceId);
+    for (const deviceId of deviceIds) {
+        const device = devicesData[deviceId];
+        const planState: PlanState | undefined = device.plan_state;
+        
+        // Si no hay plan activo, ignorar
+        if (!planState || !planState.phaseStartTime || !planState.duration_days) {
             continue;
         }
 
-        const currentPhase = profile.phases[activePhaseIndex]!;
-        let targetConfig = currentPhase.config;
+        const durationMs = planState.duration_days * 24 * 60 * 60 * 1000;
+        const transitionMs = (planState.transition_hours || 0) * 60 * 60 * 1000;
+        
+        const phaseEndTime = planState.phaseStartTime + durationMs;
+        const transitionStartTime = phaseEndTime - transitionMs;
 
-        // ¿Tenemos transición hacia la siguiente fase?
-        if (currentPhase.transitionToNext && currentPhase.transitionToNext.strategy === 'LINEAR') {
-            const nextPhase = profile.phases[activePhaseIndex + 1];
-            if (nextPhase) {
-                // Cuántas horas quedan en la fase actual
-                const hoursLeftInPhase = hoursAccumulator - diffHours;
-                const transitionDur = currentPhase.transitionToNext.durationHours;
+        let targetConfig = planState.currentPhaseConfig;
 
-                // Si entramos en la ventana de transición (el final de la fase)
-                if (hoursLeftInPhase <= transitionDur) {
-                    const hoursIntoTransition = transitionDur - hoursLeftInPhase;
-                    const progressPercent = hoursIntoTransition / transitionDur;
-                    
-                    targetConfig = interpolateConfig(currentPhase.config, nextPhase.config, progressPercent);
-                    console.log(`[Steering Engine] ${profile.deviceId} en transición LINEAL (${(progressPercent*100).toFixed(1)}%) -> ${nextPhase.name}`);
-                }
-            }
+        // Si ya pasó el tiempo total (debería avanzar manualmente o en el futuro autmatizado)
+        // Por ahora lo dejamos mantenido en la interpolación máxima o en currentPhase si no hay next
+        if (now >= transitionStartTime && planState.nextPhaseConfig && transitionMs > 0) {
+            const timeInTransition = now - transitionStartTime;
+            const progressPercent = Math.min(1, timeInTransition / transitionMs);
+            
+            targetConfig = interpolateConfig(planState.currentPhaseConfig, planState.nextPhaseConfig, progressPercent);
+            console.log(`[Steering Engine] ${deviceId} en transición (${(progressPercent*100).toFixed(1)}%)`);
         }
 
-        // Enviar a Firebase RTDB
+        // Inyectar a commands/crop
         try {
-            const deviceRef = ref(db, `devices/${profile.deviceId}/commands/crop`);
-            await set(deviceRef, targetConfig);
+            if (targetConfig) {
+                const deviceRef = ref(db, `devices/${deviceId}/commands/crop`);
+                await set(deviceRef, targetConfig);
+            } else {
+                console.warn(`[Steering Engine] targetConfig es undefined para ${deviceId}. No se actualizará.`);
+            }
         } catch (error) {
-            console.error(`[Steering Engine] Falló la inyección RTDB para ${profile.deviceId}:`, error);
+            console.error(`[Steering Engine] Falló la inyección RTDB para ${deviceId}:`, error);
         }
     }
 }
@@ -204,9 +145,13 @@ export async function evaluateSteering() {
 // INICIALIZACIÓN
 // ---------------------------------------------------------
 export function initSteeringEngine() {
-    loadProfiles();
-    cron.schedule('0 * * * *', () => {
+    startListeningToFirebase();
+    // Evaluar cada 5 minutos
+    cron.schedule('*/5 * * * *', () => {
         evaluateSteering();
     });
-    console.log('[Steering Engine] Motor activado (Soporte Transiciones V2).');
+    console.log('[Steering Engine] Motor activado (Soporte Transiciones V3 RTDB). Evaluando cada 5 min.');
+    
+    // Trigger initial evaluation after a short delay to allow firebase data to load
+    setTimeout(() => evaluateSteering(), 5000);
 }

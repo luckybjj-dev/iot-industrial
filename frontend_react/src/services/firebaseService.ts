@@ -43,35 +43,6 @@ export const subscribeToAllDevices = (
 };
 
 /**
- * Enviar configuración dinámica (Rule Engine y Failsafes)
- */
-export const sendConfigRules = async (deviceId: string, config: Partial<ConfiguracionCultivo>) => {
-  try {
-    const configRef = ref(database, `devices/${deviceId}/commands`);
-    
-    // Preparar el payload de actualización
-    const updates: Record<string, any> = {};
-    
-    if (config.crop !== undefined) {
-      updates['crop'] = config.crop;
-    }
-    if (config.activeProfileName !== undefined) {
-      updates['activeProfileName'] = config.activeProfileName;
-    }
-    if (config.activePhaseName !== undefined) {
-      updates['activePhaseName'] = config.activePhaseName;
-    }
-
-    if (Object.keys(updates).length > 0) {
-      await update(configRef, updates);
-    }
-  } catch (error) {
-    console.error('Error enviando configuración a Firebase:', error);
-    throw error;
-  }
-};
-
-/**
  * Escuchar la configuración actual de un dispositivo
  */
 export const subscribeToDeviceConfig = (
@@ -92,8 +63,60 @@ export const subscribeToDeviceConfig = (
 };
 
 /**
- * Enviar comando de actuador (Overrides manuales)
+ * Enviar configuración dinámica (Rule Engine y Failsafes)
  */
+export const sendConfigRules = async (deviceId: string, config: any) => {
+  try {
+    if (config === null) {
+      // Detener plan: Borrar estado del plan pero retener el perfil base de crop para los failsafes
+      await remove(ref(database, `devices/${deviceId}/plan_state`));
+      const configRef = ref(database, `devices/${deviceId}/commands`);
+      await update(configRef, {
+          activePhaseName: null,
+          activeProfileName: null
+      });
+      return;
+    }
+
+    const configRef = ref(database, `devices/${deviceId}/commands`);
+    
+    // Preparar el payload de actualización para commands
+    const updates: Record<string, any> = {};
+    
+    if (config.crop !== undefined) {
+      updates['crop'] = config.crop;
+    }
+    if (config.activeProfileName !== undefined) {
+      updates['activeProfileName'] = config.activeProfileName;
+    }
+    if (config.activePhaseName !== undefined) {
+      updates['activePhaseName'] = config.activePhaseName;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await update(configRef, updates);
+    }
+    
+    // Si viene la configuración completa del plan de steering (con currentPhaseConfig)
+    if (config.currentPhaseConfig) {
+      const planRef = ref(database, `devices/${deviceId}/plan_state`);
+      const planState = {
+          activeProfileName: config.activeProfileName,
+          activePhaseName: config.activePhaseName,
+          phaseStartTime: config.phaseStartTime,
+          duration_days: config.duration_days,
+          transition_hours: config.transition_hours,
+          currentPhaseConfig: config.currentPhaseConfig,
+          nextPhaseConfig: config.nextPhaseConfig || null
+      };
+      await set(planRef, planState);
+    }
+  } catch (error) {
+    console.error('Error enviando configuración a Firebase:', error);
+    throw error;
+  }
+};
+
 /**
  * Enviar comando de actuador a ruta hija directa.
  *
@@ -106,7 +129,7 @@ export const subscribeToDeviceConfig = (
 export const sendCommand = async (deviceId: string, actuator: string, state: any) => {
   const commandRef = ref(database, `devices/${deviceId}/commands/${actuator}`);
   try {
-    await remove(commandRef);   // Fuerza cambio: null → state (siempre dispara stream)
+    await remove(commandRef);   // Fuerza cambio: null -> state (siempre dispara stream)
     await set(commandRef, state);
   } catch (error) {
     console.error('Error enviando comando a Firebase:', error);
@@ -165,4 +188,22 @@ export const updateConfigField = async (deviceId: string, field: string, value: 
     console.error('Error actualizando config en Firebase:', error);
     throw error;
   }
+};
+
+/**
+ * Escuchar el estado del Plan (Steering Engine)
+ */
+export const subscribeToPlanState = (
+  deviceId: string,
+  callback: (planState: any) => void
+) => {
+  const planRef = ref(database, `devices/${deviceId}/plan_state`);
+  const unsubscribe = onValue(planRef, (snapshot: any) => {
+    if (snapshot.exists()) {
+      callback(snapshot.val());
+    } else {
+      callback(null);
+    }
+  });
+  return unsubscribe;
 };

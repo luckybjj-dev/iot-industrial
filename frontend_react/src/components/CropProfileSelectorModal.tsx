@@ -3,19 +3,18 @@ import { X, Sprout, Play, Search, BookOpen, Edit3, Save, Plus, Trash2 } from 'lu
 import type { DeviceCropProfile } from '../types/cultivo';
 import { CROP_PROFILES, generateDeviceProfile, getCustomProfiles } from '../data/CropProfiles';
 import type { CropProfile, PhaseTargets } from '../data/CropProfiles';
-import { startSteeringPlan } from '../services/steeringService';
-import type { SteeringProfile } from '../types/steering';
 
-interface Props {
-  deviceId: string;
+
+interface CropProfileSelectorModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (crop: DeviceCropProfile, profileName: string, phaseName: string) => Promise<void>;
+  onSave: (deviceProfile: DeviceCropProfile, profileName?: string, phaseName?: string, planState?: any) => Promise<void>;
+  deviceId?: string; // Para mostrar el nombre de la cámara
 }
 
 type TabType = 'FUNGI' | 'PLANTAE' | 'CUSTOM';
 
-export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, onClose, onSave }) => {
+export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> = ({ deviceId, isOpen, onClose, onSave }) => {
   const [activeTab, setActiveTab] = useState<TabType>('FUNGI');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProfileId, setSelectedProfileId] = useState<string>('fungi_pleurotus_ostreatus');
@@ -32,6 +31,8 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
   // Fotoperiodo separado en horas numéricas para validar que sumen 24h
   const [editLightHours, setEditLightHours] = useState<number>(12);
   const [editDarkHours, setEditDarkHours] = useState<number>(12);
+  const [editDuration, setEditDuration] = useState<number>(14);
+  const [editTransition, setEditTransition] = useState<number>(48);
   const [editProfileName, setEditProfileName] = useState<string>('');
   const [editProfileDesc, setEditProfileDesc] = useState<string>('');
   
@@ -71,10 +72,66 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
     setEditedTargets(null);
   };
 
-  const handleSelectPhase = (id: string) => {
-    setSelectedPhaseId(id);
+  const handleSelectPhase = (nextPhaseId: string) => {
+    if (isEditing) {
+      if (!phase || !profile) return;
+      
+      // Auto-guardar la fase actual antes de cambiar de pestaa
+      const finalPhase = { 
+          ...phase, 
+          targets: editedTargets || phase.targets, 
+          duration_days: editDuration, 
+          transition_hours: editTransition 
+      };
+      
+      const customId = profile.id.startsWith('custom_') ? profile.id : `custom_${profile.id}_${Date.now()}`;
+      const finalProfileName = editProfileName || profile.commonName;
+      
+      const updatedProfile = { 
+        ...profile, 
+        id: customId, 
+        commonName: finalProfileName,
+        description: editProfileDesc || profile.description,
+        phases: profile.phases.map(p => p.id === phase.id ? finalPhase : p) 
+      };
+      
+      const newCustoms = { ...customProfiles, [customId]: updatedProfile };
+      setCustomProfiles(newCustoms);
+      localStorage.setItem('CUSTOM_PROFILES', JSON.stringify(newCustoms));
+
+      const nextPhaseRaw = updatedProfile.phases.find(p => p.id === nextPhaseId) || updatedProfile.phases[0];
+
+      if (!profile.id.startsWith('custom_')) {
+         setSelectedProfileId(customId);
+      }
+      setSelectedPhaseId(nextPhaseId);
+      
+      // Cargar inputs con la nueva fase
+      setEditedTargets(JSON.parse(JSON.stringify(nextPhaseRaw.targets)));
+      const parts = (nextPhaseRaw.targets.lighting?.photoperiod || '12/12').split('/');
+      const parseH = (v: string) => isNaN(parseInt(v)) ? 12 : parseInt(v);
+      setEditLightHours(parseH(parts[0]));
+      setEditDarkHours(parseH(parts[1]));
+      setEditDuration(nextPhaseRaw.duration_days || 14);
+      setEditTransition(nextPhaseRaw.transition_hours || 48);
+
+      return;
+    }
+
+    setSelectedPhaseId(nextPhaseId);
     setIsEditing(false);
     setEditedTargets(null);
+  };
+
+  const handleResetCurrentPhase = () => {
+    if (!phase) return;
+    setEditedTargets(JSON.parse(JSON.stringify(phase.targets)));
+    setEditDuration(phase.duration_days || 14);
+    setEditTransition(phase.transition_hours || 48);
+    const parts = (phase.targets.lighting?.photoperiod || '12/12').split('/');
+    const parseH = (v: string) => isNaN(parseInt(v)) ? 12 : parseInt(v);
+    setEditLightHours(parseH(parts[0]));
+    setEditDarkHours(parseH(parts[1]));
   };
 
   const startEditing = () => {
@@ -85,6 +142,8 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
       const parseH = (v: string) => isNaN(parseInt(v)) ? 12 : parseInt(v);
       setEditLightHours(parseH(parts[0]));
       setEditDarkHours(parseH(parts[1]));
+      setEditDuration(phase.duration_days || 14);
+      setEditTransition(phase.transition_hours || 48);
       setEditProfileName(profile.commonName);
       setEditProfileDesc(profile.description);
       setIsEditing(true);
@@ -229,6 +288,8 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
       const parseH = (v: string) => isNaN(parseInt(v)) ? 12 : parseInt(v);
       setEditLightHours(parseH(parts[0]));
       setEditDarkHours(parseH(parts[1]));
+      setEditDuration(newProfile.phases[0].duration_days || 14);
+      setEditTransition(newProfile.phases[0].transition_hours || 48);
       setEditProfileName(newProfile.commonName);
       setEditProfileDesc(newProfile.description);
       setIsEditing(true);
@@ -238,7 +299,12 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
   const handleSaveEditsOnly = () => {
     if (!phase || !profile) return;
     
-    const finalPhase = { ...phase, targets: editedTargets || phase.targets };
+    const finalPhase = { 
+        ...phase, 
+        targets: editedTargets || phase.targets, 
+        duration_days: editDuration, 
+        transition_hours: editTransition 
+    };
     const customId = profile.id.startsWith('custom_') ? profile.id : `custom_${profile.id}_${Date.now()}`;
     const finalProfileName = editProfileName || profile.commonName;
     
@@ -267,7 +333,12 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
     setIsSaving(true);
     try {
       // Usar targets editados si existen, sino los originales
-      const finalPhase = { ...phase, targets: editedTargets || phase.targets };
+      const finalPhase = { 
+        ...phase, 
+        targets: editedTargets || phase.targets, 
+        duration_days: isEditing ? editDuration : (phase.duration_days || 14), 
+        transition_hours: isEditing ? editTransition : (phase.transition_hours || 48) 
+      };
       
       let finalProfileName = profile.commonName || 'Desconocido';
 
@@ -289,49 +360,24 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
         localStorage.setItem('CUSTOM_PROFILES', JSON.stringify(newCustoms));
       }
 
-      // 🚀 Transformar todo el CropProfile de la enciclopedia a SteeringProfile para el motor dinámico
-      const steeringPhases = profile.phases.map(p => {
-        // Si estamos editando, usar los targets editados para la fase activa, si no, usar los de la enciclopedia
-        const t = (p.id === phase.id && editedTargets) ? editedTargets : p.targets;
-        const parseH = (v: string) => isNaN(parseInt(v)) ? 12 : parseInt(v);
-        const lightHours = parseH((t.lighting?.photoperiod || '12/12').split('/')[0]);
+      const deviceProfile = generateDeviceProfile(finalPhase);
+      
+      const currentPhaseIndex = profile.phases.findIndex(p => p.id === phase.id);
+      const nextPhaseRaw = profile.phases[currentPhaseIndex + 1];
+      const nextPhaseConfig = nextPhaseRaw ? generateDeviceProfile({ ...nextPhaseRaw, duration_days: nextPhaseRaw.duration_days || 14, transition_hours: nextPhaseRaw.transition_hours || 48 }) : null;
 
-        return {
-            name: p.name,
-            exitCondition: { type: 'TIME' as const, durationDays: p.duration_days || 14 },
-            config: {
-                kingdom: profile.kingdom,
-                temp_ideal_min: t.temperature.day.min,
-                temp_ideal_max: t.temperature.day.max,
-                temp_crit_min: t.temperature.day.min - 3, 
-                temp_crit_max: t.temperature.day.max + 3,
-                temp_sustrato_ideal: t.temperature.day.min,
-                temp_sustrato_crit_max: t.temperature.day.max + 3,
-                hum_ideal_min: t.humidity.min,
-                hum_ideal_max: t.humidity.max,
-                hum_crit_min: Math.max(0, t.humidity.min - 10),
-                co2_ideal_min: t.co2.min || 400,
-                co2_ideal_max: t.co2.max,
-                co2_crit_max: t.co2.max + 300,
-                light_hours_on: lightHours
-            },
-            transitionToNext: { durationHours: 24, strategy: 'LINEAR' as const }
-        };
-      });
-
-      const steeringProfile: SteeringProfile = {
-          deviceId: deviceId,
-          startDateISO: new Date().toISOString(),
-          phases: steeringPhases
+      const planState = {
+        phaseStartTime: Date.now(),
+        duration_days: finalPhase.duration_days,
+        transition_hours: finalPhase.transition_hours,
+        currentPhaseConfig: deviceProfile,
+        nextPhaseConfig: nextPhaseConfig
       };
 
-      // 1. Iniciar el motor en el Backend
-      await startSteeringPlan(steeringProfile);
-
-      // 2. Mantener la llamada estática por compatibilidad visual con la UI antigua de React
-      const deviceProfile = generateDeviceProfile(finalPhase);
-      await onSave(deviceProfile, finalProfileName, phase.name);
+      // 2. Mantener la llamada estática por compatibilidad y enviar el planState
+      await onSave(deviceProfile, finalProfileName, finalPhase.name, planState);
       
+      setIsSaving(false);
       onClose();
     } catch (e) {
       alert('Error inyectando el perfil al ESP32');
@@ -355,7 +401,7 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
             <div className="w-full">
               <div className="flex justify-between items-center mb-1">
                 <h4 className="text-white font-bold">Resumen del Perfil</h4>
-                {!isEditing && activeTab === 'CUSTOM' && (
+                {!isEditing && (
                   <button onClick={startEditing} className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 bg-blue-500/10 px-3 py-1.5 rounded-lg transition-colors">
                     <Edit3 size={16} /> Editar Perfil Completo
                   </button>
@@ -365,7 +411,7 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
                     <button onClick={() => setIsEditing(false)} className="flex items-center gap-2 text-sm text-neutral-400 hover:text-white bg-white/5 px-3 py-1.5 rounded-lg transition-colors">
                       Cancelar
                     </button>
-                    <button onClick={() => setEditedTargets(JSON.parse(JSON.stringify(phase?.targets || {})))} className="flex items-center gap-2 text-sm text-orange-400 hover:text-orange-300 bg-orange-500/10 px-3 py-1.5 rounded-lg transition-colors" title="Restablecer a valores iniciales">
+                    <button onClick={handleResetCurrentPhase} className="flex items-center gap-2 text-sm text-orange-400 hover:text-orange-300 bg-orange-500/10 px-3 py-1.5 rounded-lg transition-colors" title="Restablecer a valores iniciales">
                       Restablecer
                     </button>
                     <button 
@@ -414,7 +460,7 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center border-b border-white/10 pb-2">
-          <h3 className="text-lg font-semibold text-purple-400">3. Variables Objetivo (SCADA)</h3>
+          <h3 className="text-lg font-semibold text-purple-400">3. Configuración de Fase</h3>
           <div className="text-sm text-neutral-400 italic">
             {!isEditing ? 'Haz clic en "Editar Perfil Completo" arriba para modificar.' : 'Edita los valores SCADA a continuación.'}
           </div>
@@ -427,6 +473,15 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
               <input type="number" value={t.temperature.day.min} onChange={e => setEditedTargets({...t, temperature: {...t.temperature, day: {...t.temperature.day, min: Number(e.target.value)}}})} className="w-16 bg-black text-white p-1 rounded border border-white/20 text-center" />
               <span>-</span>
               <input type="number" value={t.temperature.day.max} onChange={e => setEditedTargets({...t, temperature: {...t.temperature, day: {...t.temperature.day, max: Number(e.target.value)}}})} className="w-16 bg-black text-white p-1 rounded border border-white/20 text-center" />
+            </div>
+          )}
+
+          {/* Temp Sustrato */}
+          {renderField('Temp. Sustrato (°C)', t.temperature.substrate ? `${t.temperature.substrate.min}° - ${t.temperature.substrate.max}°` : 'Auto (Derivada)', 
+            <div className="flex gap-2 items-center">
+              <input type="number" value={t.temperature.substrate?.min || ''} placeholder="Mín" onChange={e => setEditedTargets({...t, temperature: {...t.temperature, substrate: {...(t.temperature.substrate || {max: t.temperature.day.max}), min: Number(e.target.value)}}})} className="w-16 bg-black text-white p-1 rounded border border-white/20 text-center text-sm" />
+              <span>-</span>
+              <input type="number" value={t.temperature.substrate?.max || ''} placeholder="Máx" onChange={e => setEditedTargets({...t, temperature: {...t.temperature, substrate: {...(t.temperature.substrate || {min: t.temperature.day.min}), max: Number(e.target.value)}}})} className="w-16 bg-black text-white p-1 rounded border border-white/20 text-center text-sm" />
             </div>
           )}
 
@@ -484,8 +539,24 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
                   : 'text-red-400 bg-red-500/10'
               }`}>
                 {editLightHours}h + {editDarkHours}h = {editLightHours + editDarkHours}h
-                {editLightHours + editDarkHours === 24 ? ' ✓' : ` ✗ (faltan ${24 - editLightHours - editDarkHours}h)`}
+                {editLightHours + editDarkHours === 24 ? ' ✓' : ` ⚠️ (faltan ${24 - editLightHours - editDarkHours}h)`}
               </div>
+            </div>
+          )}
+
+          {/* Duración (Días) */}
+          {renderField('Duración Fase (Días)', `${phase.duration_days || 14} días`, 
+            <div className="flex gap-2 items-center">
+              <input type="number" min={1} value={editDuration} onChange={e => setEditDuration(Math.max(1, Number(e.target.value)))} className="w-16 bg-black text-white p-1 rounded border border-white/20 text-center" />
+              <span className="text-neutral-400 text-xs">días</span>
+            </div>
+          )}
+
+          {/* Transición (Horas) */}
+          {renderField('Transición Suave (Hrs)', `${phase.transition_hours || 48} horas`, 
+            <div className="flex gap-2 items-center">
+              <input type="number" min={0} value={editTransition} onChange={e => setEditTransition(Math.max(0, Number(e.target.value)))} className="w-16 bg-black text-white p-1 rounded border border-white/20 text-center" />
+              <span className="text-neutral-400 text-xs">horas</span>
             </div>
           )}
         </div>
@@ -599,19 +670,22 @@ export const CropProfileSelectorModal: React.FC<Props> = ({ deviceId, isOpen, on
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-blue-400 border-b border-white/10 pb-2">2. Etapa Fenológica</h3>
                   <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                    {profile.phases.map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={() => handleSelectPhase(p.id)}
-                        className={`px-4 py-2.5 rounded-lg border whitespace-nowrap transition-all text-sm ${
-                          selectedPhaseId === p.id 
-                            ? 'bg-blue-500/20 border-blue-500 text-white font-medium shadow-[0_0_10px_rgba(59,130,246,0.2)]' 
-                            : 'bg-black/40 border-white/10 text-neutral-400 hover:border-white/30'
-                        }`}
-                      >
-                        {p.name}
-                      </button>
-                    ))}
+                    {profile.phases.map((p) => {
+                      const isSelected = selectedPhaseId === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => handleSelectPhase(p.id)}
+                          className={`px-4 py-2.5 rounded-lg border whitespace-nowrap transition-all text-sm ${
+                            isSelected 
+                              ? 'bg-blue-500/20 border-blue-500 text-white font-medium shadow-[0_0_10px_rgba(59,130,246,0.2)]' 
+                              : 'bg-black/40 border-white/10 text-neutral-400 hover:border-white/30'
+                          }`}
+                        >
+                          {p.name}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}

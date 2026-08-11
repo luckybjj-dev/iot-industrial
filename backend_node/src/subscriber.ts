@@ -6,7 +6,7 @@ import * as dotenv from 'dotenv';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { ref, onValue } from 'firebase/database';
-import { initSteeringEngine, startSteering, stopSteering, SteeringProfile, db } from './steeringEngine';
+import { initSteeringEngine, db } from './steeringEngine';
 
 // --------------------------------------------------------------------
 // 1. CONFIGURACIÓN DE ENTORNO Y CREDENCIALES
@@ -111,30 +111,6 @@ app.get('/api/health', (req: Request, res: Response) => {
         estado: 'OK',
         mensaje: 'Cerebro Central Fungi operativo (Firebase RTDB).',
     });
-});
-
-// Endpoint para iniciar Crop Steering Dinámico
-app.post('/api/cultivo/steering/start', apiKeyMiddleware, (req: Request, res: Response) => {
-    const profile: SteeringProfile = req.body;
-    
-    if (!profile || !profile.deviceId || !profile.startDateISO || !profile.phases) {
-        return res.status(400).json({ error: 'Faltan parámetros obligatorios para el Steering Profile' });
-    }
-
-    startSteering(profile);
-    res.json({ mensaje: `Algoritmo dinámico iniciado para ${profile.deviceId}` });
-});
-
-// Endpoint para detener Crop Steering Dinámico
-app.post('/api/cultivo/steering/stop', apiKeyMiddleware, (req: Request, res: Response) => {
-    const { deviceId } = req.body;
-    
-    if (!deviceId) {
-        return res.status(400).json({ error: 'Falta parámetro deviceId' });
-    }
-
-    stopSteering(deviceId);
-    res.json({ mensaje: `Algoritmo dinámico detenido para ${deviceId}` });
 });
 
 // --------------------------------------------------------------------

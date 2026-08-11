@@ -12,6 +12,9 @@
 #include "DHTesp.h"
 #include "FileManager.h"
 #include <PID_v1.h>
+// La librería PID_v1.h define macros MANUAL y AUTOMATIC que colisionan con nuestro enum ModoOperacion.
+#undef MANUAL
+#undef AUTOMATIC
 
 // --- Pines Físicos Semánticos ---
 #define DHTPIN        27 // DHT1
@@ -31,6 +34,10 @@ constexpr float NTC_BETA      = 3950.0f;
 constexpr float NTC_R_NOMINAL = 10000.0f;
 constexpr float NTC_T_NOMINAL = 25.0f;
 constexpr float NTC_R_SERIE   = 10000.0f;
+
+// Constante Filtro EWMA (Exponentially Weighted Moving Average)
+// 0.1 = 10% lectura nueva, 90% inercia acumulada. Filtra ruidos bruscos.
+constexpr float ALPHA_EWMA    = 0.1f;
 
 // -----------------------------------------------------------
 // Struct de datos de sensor
@@ -58,6 +65,14 @@ struct SensorData {
     bool  dht2Ok       = false; // Estado de salud del DHT2
     bool  analogicoOk  = false; // Estado de salud del sensor analógico
     bool  co2Ok        = false; // Estado de salud del sensor de CO2
+
+    // --- Filtros Industriales (EWMA) ---
+    bool  ewmaInitialized = false; // Bandera para inicializar el filtro sin arrastre de ceros
+    float ewma_temp       = 0.0f;
+    float ewma_hum        = 0.0f;
+    float ewma_sustrato   = 0.0f;
+    float ewma_vpd        = 0.0f;
+    float ewma_co2        = 0.0f;
 };
 
 // -----------------------------------------------------------

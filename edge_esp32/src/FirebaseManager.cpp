@@ -71,9 +71,17 @@ void FirebaseManager::publicarTelemetria() {
 
     FirebaseJson json;
 
-    if (s.dhtOk || s.dht2Ok) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    double epoch_ms = (double)tv.tv_sec * 1000.0 + (double)tv.tv_usec / 1000.0;
+    json.set("timestamp", epoch_ms);
+
+    if (s.ewmaInitialized) {
+        json.set("vpd", (double)s.ewma_vpd);
+    } else if (s.dhtOk || s.dht2Ok) {
         json.set("vpd", (double)s.vpd);
     }
+    
     if (s.dhtOk) {
         json.set("temp_dht1", (double)s.tempAmb);
         json.set("hum_dht1", (double)s.humAmb);
@@ -82,17 +90,26 @@ void FirebaseManager::publicarTelemetria() {
         json.set("temp_dht2", (double)s.tempAmb2);
         json.set("hum_dht2", (double)s.humAmb2);
     }
-    if (s.analogicoOk) {
+    if (s.ewmaInitialized && s.analogicoOk) {
+        json.set("sensor_analogico", (double)s.ewma_sustrato);
+    } else if (s.analogicoOk) {
         json.set("sensor_analogico", (double)s.valorAnalogico);
     }
-    if (s.co2Ok) {
+    if (s.ewmaInitialized && s.co2Ok) {
+        json.set("co2_ppm", (int)s.ewma_co2);
+    } else if (s.co2Ok) {
         json.set("co2_ppm", (int)s.co2);
     }
 
-    if (s.tempPromedio != -999.0f) {
+    if (s.ewmaInitialized && s.tempPromedio != -999.0f) {
+        json.set("temp_promedio", (double)s.ewma_temp);
+    } else if (s.tempPromedio != -999.0f) {
         json.set("temp_promedio", (double)s.tempPromedio);
     }
-    if (s.humPromedio != -999.0f) {
+    
+    if (s.ewmaInitialized && s.humPromedio != -999.0f) {
+        json.set("humedad_promedio", (double)s.ewma_hum);
+    } else if (s.humPromedio != -999.0f) {
         json.set("humedad_promedio", (double)s.humPromedio);
     }
 
@@ -153,9 +170,12 @@ void FirebaseManager::publicarHistorial() {
     double epoch_ms = (double)tv.tv_sec * 1000.0 + (double)tv.tv_usec / 1000.0;
     json.set("timestamp", epoch_ms);
 
-    if (s.dhtOk || s.dht2Ok) {
+    if (s.ewmaInitialized) {
+        json.set("vpd", (double)s.ewma_vpd);
+    } else if (s.dhtOk || s.dht2Ok) {
         json.set("vpd", (double)s.vpd);
     }
+    
     if (s.dhtOk) {
         json.set("temp_dht1", (double)s.tempAmb);
         json.set("hum_dht1", (double)s.humAmb);
@@ -164,17 +184,26 @@ void FirebaseManager::publicarHistorial() {
         json.set("temp_dht2", (double)s.tempAmb2);
         json.set("hum_dht2", (double)s.humAmb2);
     }
-    if (s.analogicoOk) {
+    if (s.ewmaInitialized && s.analogicoOk) {
+        json.set("sensor_analogico", (double)s.ewma_sustrato);
+    } else if (s.analogicoOk) {
         json.set("sensor_analogico", (double)s.valorAnalogico);
     }
-    if (s.co2Ok) {
+    if (s.ewmaInitialized && s.co2Ok) {
+        json.set("co2_ppm", (int)s.ewma_co2);
+    } else if (s.co2Ok) {
         json.set("co2_ppm", (int)s.co2);
     }
 
-    if (s.tempPromedio != -999.0f) {
+    if (s.ewmaInitialized && s.tempPromedio != -999.0f) {
+        json.set("temp_promedio", (double)s.ewma_temp);
+    } else if (s.tempPromedio != -999.0f) {
         json.set("temp_promedio", (double)s.tempPromedio);
     }
-    if (s.humPromedio != -999.0f) {
+    
+    if (s.ewmaInitialized && s.humPromedio != -999.0f) {
+        json.set("humedad_promedio", (double)s.ewma_hum);
+    } else if (s.humPromedio != -999.0f) {
         json.set("humedad_promedio", (double)s.humPromedio);
     }
 

@@ -70,7 +70,7 @@ static unsigned long _ultimoCiclo = 0;
 static constexpr long INTERVALO_CICLO = 5000L; // ms
 
 static unsigned long _ultimoHistorial = 0;
-static constexpr long INTERVALO_HISTORIAL = 10000L; // ms
+static constexpr long INTERVALO_HISTORIAL = 300000L; // ms (5 minutos)
 
 static bool _otaIniciado = false;
 
