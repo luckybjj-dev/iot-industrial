@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { ConfiguracionCultivo } from '../types/cultivo';
 import { getAllProfiles, generateDeviceProfile } from '../data/CropProfiles';
 import { sendConfigRules, subscribeToPlanState } from '../services/firebaseService';
-import { SkipBack, SkipForward, Square, Clock } from 'lucide-react';
+import { SkipBack, SkipForward, Square, Clock, Pause, Play } from 'lucide-react';
 
 interface CropStatePanelProps {
     deviceId: string;
@@ -63,12 +63,25 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config }) => 
     const isActive = !!(activeProfileName && activePhaseName);
 
     const handleStopPlan = async () => {
+        if (!window.confirm("¿Seguro que deseas detener el ciclo por completo? Se perderá el progreso actual.")) return;
         setLoading(true);
         try {
             await sendConfigRules(deviceId, null);
         } catch (e) {
             console.error('Error al detener plan:', e);
             alert('Error al detener el plan en la base de datos.');
+        }
+        setLoading(false);
+    };
+
+    const handlePausePlan = async () => {
+        if (!window.confirm(planState?.isPaused ? "¿Deseas reanudar el ciclo de cultivo?" : "¿Seguro que deseas pausar el ciclo? La automatización de clima se congelará.")) return;
+        setLoading(true);
+        try {
+            await sendConfigRules(deviceId, { ...planState, isPaused: !planState?.isPaused });
+        } catch (e) {
+            console.error('Error al pausar plan:', e);
+            alert('Error al pausar el plan.');
         }
         setLoading(false);
     };
@@ -91,7 +104,10 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config }) => 
 
         let targetIndex = direction === 'NEXT' ? currentIndex + 1 : currentIndex - 1;
 
-        if (direction === 'NEXT') {
+        if (planState?.transitioningTo && direction === 'NEXT') {
+            targetIndex = phases.findIndex(p => p.name === planState.transitioningTo);
+            if (!window.confirm(`La transición ya estaba en curso. ¿Deseas forzar el salto final hacia: ${phases[targetIndex].name}?`)) return;
+        } else if (direction === 'NEXT') {
             const isFungiEnd = targetIndex >= phases.length && profile.kingdom === 'FUNGI';
             
             if (isFungiEnd) {
@@ -126,7 +142,8 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config }) => 
                             duration_days: currentPhase.duration_days || 14,
                             transition_hours: currentTHours,
                             currentPhaseConfig,
-                            nextPhaseConfig
+                            nextPhaseConfig,
+                            transitioningTo: phases[targetIndex].name
                         });
                         alert('Transición continua iniciada. El reloj se ha adelantado a las últimas horas de esta fase.');
                     } catch (e) {
@@ -251,9 +268,14 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config }) => 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* Fase Actual */}
                             <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex flex-col justify-center">
-                                <span className="text-neutral-500 text-[10px] font-bold uppercase tracking-widest mb-1">Fase Biológica</span>
-                                <span className="text-amber-400 font-black text-lg uppercase tracking-wider truncate" title={activePhaseName}>
-                                    {activePhaseName?.replace(/^\d+\.\s*/, '')}
+                                <span className="text-neutral-500 text-[10px] font-bold uppercase tracking-widest mb-1 flex items-center gap-1">
+                                    Fase Biológica
+                                    {planState?.isPaused && (
+                                        <span className="text-yellow-400 bg-yellow-400/20 px-1 py-0.5 rounded text-[8px] animate-pulse">PAUSADO</span>
+                                    )}
+                                </span>
+                                <span className="text-amber-400 font-black text-lg uppercase tracking-wider truncate" title={planState?.transitioningTo ? `Transición hacia ${planState.transitioningTo}` : activePhaseName}>
+                                    {planState?.transitioningTo ? `Transición...` : activePhaseName?.replace(/^\d+\.\s*/, '')}
                                 </span>
                             </div>
                             
@@ -291,6 +313,14 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config }) => 
                                     title="Retroceder Fase"
                                 >
                                     <SkipBack size={16} />
+                                </button>
+                                <button 
+                                    className="p-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/20 rounded-lg transition-colors disabled:opacity-50" 
+                                    onClick={handlePausePlan}
+                                    disabled={loading}
+                                    title={planState?.isPaused ? "Reanudar Plan" : "Pausar Plan"}
+                                >
+                                    {planState?.isPaused ? <Play size={16} /> : <Pause size={16} />}
                                 </button>
                                 <button 
                                     className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg transition-colors disabled:opacity-50" 

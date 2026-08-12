@@ -4,18 +4,24 @@ import {
 } from 'recharts';
 import { Activity, Thermometer, Droplets, Wind, Database } from 'lucide-react';
 import { fetchDeviceHistory } from '../services/firebaseService';
-import type { HistorialData } from '../types/cultivo';
+import type { HistorialData, DeviceCropProfile } from '../types/cultivo';
 
 interface Props {
   deviceId: string;
-  targetSubstrateTemp?: number;
+  config?: DeviceCropProfile;
   realtimeTelemetry?: any;
 }
 
-export const TelemetryDashboard: React.FC<Props> = ({ deviceId, targetSubstrateTemp, realtimeTelemetry }) => {
+export const TelemetryDashboard: React.FC<Props> = ({ deviceId, config, realtimeTelemetry }) => {
   const [data, setData] = useState<HistorialData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [timeWindow, setTimeWindow] = useState<number>(1); // days
+  const [hiddenLines, setHiddenLines] = useState<Record<string, boolean>>({
+    temp_ambiente: false,
+    temp_sustrato: false,
+    hum_ambiente: false,
+    vpd_calculado: false
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -143,23 +149,47 @@ export const TelemetryDashboard: React.FC<Props> = ({ deviceId, targetSubstrateT
 
   // Calcular promedios para la ventana actual
   const averages = useMemo(() => {
-    if (chartData.length === 0) return { temp: 0, hum: 0, vpd: 0 };
+    if (chartData.length === 0) return { tempAmb: 0, tempSus: 0, hum: 0, vpd: 0 };
     
-    let sumTemp = 0, sumHum = 0, sumVpd = 0;
-    let countTemp = 0, countHum = 0, countVpd = 0;
+    let sumTempAmb = 0, sumTempSus = 0, sumHum = 0, sumVpd = 0;
+    let countTempAmb = 0, countTempSus = 0, countHum = 0, countVpd = 0;
     
     chartData.forEach(d => {
-      if (d.temp_ambiente !== undefined) { sumTemp += d.temp_ambiente; countTemp++; }
+      if (d.temp_ambiente !== undefined) { sumTempAmb += d.temp_ambiente; countTempAmb++; }
+      if (d.temp_sustrato !== undefined) { sumTempSus += d.temp_sustrato; countTempSus++; }
       if (d.hum_ambiente !== undefined) { sumHum += d.hum_ambiente; countHum++; }
       if (d.vpd_calculado !== undefined) { sumVpd += d.vpd_calculado; countVpd++; }
     });
     
     return {
-      temp: countTemp > 0 ? (sumTemp / countTemp).toFixed(1) : '--',
+      tempAmb: countTempAmb > 0 ? (sumTempAmb / countTempAmb).toFixed(1) : '--',
+      tempSus: countTempSus > 0 ? (sumTempSus / countTempSus).toFixed(1) : '--',
       hum: countHum > 0 ? (sumHum / countHum).toFixed(1) : '--',
       vpd: countVpd > 0 ? (sumVpd / countVpd).toFixed(2) : '--'
     };
   }, [chartData]);
+
+  const handleLegendClick = (e: any) => {
+    const { dataKey } = e;
+    setHiddenLines(prev => ({
+      ...prev,
+      [dataKey]: !prev[dataKey]
+    }));
+  };
+
+  const renderLegendText = (value: string, entry: any) => {
+    const { dataKey } = entry;
+    const isHidden = hiddenLines[dataKey];
+    return (
+      <span style={{ 
+        color: isHidden ? '#ffffff50' : '#fff', 
+        textDecoration: isHidden ? 'line-through' : 'none', 
+        transition: 'all 0.3s ease' 
+      }}>
+        {value}
+      </span>
+    );
+  };
 
   const formatXAxis = (tickItem: number) => {
     const date = new Date(tickItem);
@@ -220,18 +250,25 @@ export const TelemetryDashboard: React.FC<Props> = ({ deviceId, targetSubstrateT
       </div>
 
       {/* QUICK STATS */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
           <Thermometer className="text-orange-400" size={32} />
           <div>
-            <div className="text-neutral-400 text-sm">Temp Promedio</div>
-            <div className="text-2xl font-bold text-white">{averages.temp}°C</div>
+            <div className="text-neutral-400 text-sm">Temp. Amb. Prom.</div>
+            <div className="text-2xl font-bold text-white">{averages.tempAmb}°C</div>
+          </div>
+        </div>
+        <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
+          <Thermometer className="text-emerald-400" size={32} />
+          <div>
+            <div className="text-neutral-400 text-sm">Temp. Sus. Prom.</div>
+            <div className="text-2xl font-bold text-white">{averages.tempSus}°C</div>
           </div>
         </div>
         <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
           <Droplets className="text-blue-400" size={32} />
           <div>
-            <div className="text-neutral-400 text-sm">Hum Promedio</div>
+            <div className="text-neutral-400 text-sm">Hum. Promedio</div>
             <div className="text-2xl font-bold text-white">{averages.hum}%</div>
           </div>
         </div>
@@ -292,28 +329,90 @@ export const TelemetryDashboard: React.FC<Props> = ({ deviceId, targetSubstrateT
               dy={10}
             />
             
-            {/* Y Axis Left: Temp & Hum */}
+            {/* Y Axis Left: Temperaturas (Naranja) */}
             <YAxis 
               yAxisId="left" 
-              stroke="#ffffff50" 
-              tick={{ fill: '#ffffff50', fontSize: 12 }}
-              dx={-10}
+              stroke="#fb923c" 
+              tick={{ fill: '#fb923c', fontSize: 11 }}
+              dx={-5}
+              domain={([dataMin, dataMax]) => {
+                let min = dataMin;
+                let max = dataMax;
+                if (config?.temp_ideal_min !== undefined) min = Math.min(min, Number(config.temp_ideal_min));
+                if (config?.temp_ideal_max !== undefined) max = Math.max(max, Number(config.temp_ideal_max));
+                if (config?.temp_sustrato_ideal !== undefined) {
+                  min = Math.min(min, Number(config.temp_sustrato_ideal));
+                  max = Math.max(max, Number(config.temp_sustrato_ideal));
+                }
+                return [Math.floor(min - 2), Math.ceil(max + 2)];
+              }}
             />
-            {/* Y Axis Right: VPD */}
+            {/* Y Axis Right: Humedad (Azul) */}
             <YAxis 
               yAxisId="right" 
               orientation="right" 
-              stroke="#ffffff50" 
-              tick={{ fill: '#ffffff50', fontSize: 12 }}
-              dx={10}
+              stroke="#60a5fa" 
+              tick={{ fill: '#60a5fa', fontSize: 11 }}
+              dx={5}
+              domain={([dataMin, dataMax]) => {
+                let min = dataMin;
+                let max = dataMax;
+                if (config?.hum_ideal_min !== undefined) min = Math.min(min, Number(config.hum_ideal_min));
+                if (config?.hum_ideal_max !== undefined) max = Math.max(max, Number(config.hum_ideal_max));
+                return [Math.max(0, Math.floor(min - 5)), Math.min(100, Math.ceil(max + 5))];
+              }}
+            />
+            {/* Y Axis Right: VPD (Morado) */}
+            <YAxis 
+              yAxisId="vpd" 
+              orientation="right" 
+              stroke="#c084fc" 
+              tick={{ fill: '#c084fc', fontSize: 11 }}
+              dx={5}
+              domain={[0, 'auto']}
             />
 
             <Tooltip content={<CustomTooltip />} />
-            <Legend verticalAlign="top" height={36} iconType="circle" />
+            <Legend 
+              verticalAlign="top" 
+              height={36} 
+              iconType="circle" 
+              onClick={handleLegendClick}
+              formatter={renderLegendText}
+              wrapperStyle={{ cursor: 'pointer', userSelect: 'none' }}
+            />
             
-            {targetSubstrateTemp !== undefined && (
+            {/* Banda Ideal Temperatura Ambiente */}
+            {config?.temp_ideal_min !== undefined && config?.temp_ideal_max !== undefined && !hiddenLines['temp_ambiente'] && (
+              <ReferenceArea 
+                yAxisId="left" 
+                y1={Number(config.temp_ideal_min)} 
+                y2={Number(config.temp_ideal_max)} 
+                fill="#fb923c" 
+                fillOpacity={0.15}
+                stroke="#fb923c"
+                strokeOpacity={0.4}
+                strokeDasharray="4 4"
+              />
+            )}
+            
+            {/* Banda Ideal Humedad */}
+            {config?.hum_ideal_min !== undefined && config?.hum_ideal_max !== undefined && !hiddenLines['hum_ambiente'] && (
+              <ReferenceArea 
+                yAxisId="right" 
+                y1={Number(config.hum_ideal_min)} 
+                y2={Number(config.hum_ideal_max)} 
+                fill="#60a5fa" 
+                fillOpacity={0.15}
+                stroke="#60a5fa"
+                strokeOpacity={0.4}
+                strokeDasharray="4 4"
+              />
+            )}
+
+            {config?.temp_sustrato_ideal !== undefined && !hiddenLines['temp_sustrato'] && (
               <ReferenceLine 
-                y={targetSubstrateTemp} 
+                y={Number(config.temp_sustrato_ideal)} 
                 yAxisId="left" 
                 stroke="#10b981" 
                 strokeDasharray="3 3" 
@@ -343,6 +442,7 @@ export const TelemetryDashboard: React.FC<Props> = ({ deviceId, targetSubstrateT
               fill="url(#colorTemp)"
               strokeWidth={2}
               connectNulls={true}
+              hide={hiddenLines['temp_ambiente']}
             />
             <Line 
               yAxisId="left"
@@ -354,6 +454,7 @@ export const TelemetryDashboard: React.FC<Props> = ({ deviceId, targetSubstrateT
               dot={false}
               activeDot={{ r: 6, fill: "#10b981", stroke: "#000", strokeWidth: 2 }}
               connectNulls={true}
+              hide={hiddenLines['temp_sustrato']}
             />
             <Area 
               yAxisId="right"
@@ -365,9 +466,10 @@ export const TelemetryDashboard: React.FC<Props> = ({ deviceId, targetSubstrateT
               fill="url(#colorHum)"
               strokeWidth={2}
               connectNulls={true}
+              hide={hiddenLines['hum_ambiente']}
             />
             <Line 
-              yAxisId="right"
+              yAxisId="vpd"
               type="monotone" 
               dataKey="vpd_calculado" 
               name="VPD (kPa)"
@@ -376,6 +478,7 @@ export const TelemetryDashboard: React.FC<Props> = ({ deviceId, targetSubstrateT
               dot={false}
               activeDot={{ r: 6, fill: "#c084fc", stroke: "#000", strokeWidth: 2 }}
               connectNulls={true}
+              hide={hiddenLines['vpd_calculado']}
             />
           </ComposedChart>
         </ResponsiveContainer>

@@ -498,7 +498,7 @@ function App() {
                         <div className="xl:col-span-3">
                           <TelemetryDashboard 
                             deviceId={camara.deviceId} 
-                            targetSubstrateTemp={crop?.temp_sustrato_ideal} 
+                            config={crop} 
                             realtimeTelemetry={camara.telemetria}
                           />
                         </div>

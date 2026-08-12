@@ -85,7 +85,10 @@ export const sendConfigRules = async (deviceId: string, config: any) => {
     
     if (config.crop !== undefined) {
       updates['crop'] = config.crop;
+    } else if (config.currentPhaseConfig !== undefined) {
+      updates['crop'] = config.currentPhaseConfig;
     }
+
     if (config.activeProfileName !== undefined) {
       updates['activeProfileName'] = config.activeProfileName;
     }
@@ -107,7 +110,9 @@ export const sendConfigRules = async (deviceId: string, config: any) => {
           duration_days: config.duration_days,
           transition_hours: config.transition_hours,
           currentPhaseConfig: config.currentPhaseConfig,
-          nextPhaseConfig: config.nextPhaseConfig || null
+          nextPhaseConfig: config.nextPhaseConfig || null,
+          isPaused: config.isPaused || false,
+          transitioningTo: config.transitioningTo || null
       };
       await set(planRef, planState);
     }

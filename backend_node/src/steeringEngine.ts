@@ -43,6 +43,8 @@ export interface PlanState {
     transition_hours: number;
     currentPhaseConfig: CropConfig;
     nextPhaseConfig: CropConfig | null;
+    isPaused?: boolean;
+    transitioningTo?: string;
 }
 
 // ---------------------------------------------------------
@@ -106,6 +108,12 @@ export async function evaluateSteering() {
         
         // Si no hay plan activo, ignorar
         if (!planState || !planState.phaseStartTime || !planState.duration_days) {
+            continue;
+        }
+
+        // Si el plan está en pausa, no actualizamos el tiempo de inicio ni forzamos la configuración.
+        // El ESP32 seguirá operando con los últimos valores que se le enviaron.
+        if (planState.isPaused) {
             continue;
         }
 
