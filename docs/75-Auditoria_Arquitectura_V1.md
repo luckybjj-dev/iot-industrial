@@ -1,89 +1,98 @@
-# Auditoría Técnica y Estratégica Definitiva — Arquitectura SCADA V1 (AgriEdge OS)
+# Auditoría Histórica y Arquitectónica Definitiva — AgriEdge OS (V1)
+**Documento Maestro Consolidado (Basado en 74 Reportes Históricos)**
 
-**Fecha:** Agosto de 2026  
-**Rol del Auditor:** Arquitecto de Software Senior — Sistemas Embebidos IoT / DevOps / Ciencias Agronómicas  
-**Alcance de la Auditoría:** Refactorización Integral a V1, Migración desde MQTT a Firebase RTDB, Filtrado Digital Industrial, Backend Node.js y Frontend React SCADA.
-
----
-
-## 1. 📊 ESTADO EJECUTIVO DEL PROYECTO (EL HITO V1)
-
-El proyecto ha madurado desde un MVP experimental (Cámara Fungi) a un sistema industrial completo y agnóstico denominado **AgriEdge OS (V1)**. Esta auditoría exhaustiva unifica el conocimiento extraído a través de 74 reportes de sprint previos, contrastando los hallazgos críticos del reporte #64 con las resoluciones definitivas de los últimos sprints.
-
-El sistema se compone ahora de un ecosistema fuertemente desacoplado de 4 pilares:
-1. **Edge Node (ESP32 C++)**: Inteligencia en el lazo cerrado, autonomía total offline, y filtrado matemático.
-2. **Central Hub (Firebase RTDB)**: Única fuente de la verdad (SSOT), gestionando estados en tiempo real sin brokers intermediarios.
-3. **Steering Engine (Node.js)**: Orquestador cronológico y puente histórico (InfluxDB).
-4. **SCADA Dashboard (React)**: Interfaz Humano-Máquina reactiva de latencia ultra-baja.
+**Fecha de Compilación:** Agosto de 2026
+**Rol del Auditor:** Arquitecto de Software Senior IoT / Agrónomo de Precisión.
+**Alcance:** Consolidación enciclopédica del historial de pivotes, deuda técnica, investigación agronómica y arquitectura del proyecto desde el Informe 01 al 74.
 
 ---
 
-## 2. 🏗️ CAPA 1: EDGE NODE (FIRMWARE ESP32 C++)
+## 1. 📖 LA EVOLUCIÓN DEL PROYECTO (CRONOLOGÍA DE PIVOTES)
 
-El código C++ ha sido la pieza más desafiante. Se ha estabilizado la arquitectura modular orientada a objetos (OOP) y se han solucionado múltiples deudas de rendimiento.
+El ecosistema actual es el resultado de múltiples iteraciones bajo la metodología Lean Startup, fallando rápido y pivotando estratégicamente.
 
-### 2.1 Gestión de Memoria y Actualizaciones Over-The-Air (OTA)
-*   **Flash y Particiones (`min_spiffs.csv`):** El firmware actual ocupa ~1.75MB de los 1.9MB asignados a la partición `app0`. El margen para actualizaciones OTA es estrecho (~150KB). 
-*   **Corrección OTA:** En la auditoría #64 se detectó que el OTA fallaba (WDT Timeout) debido a la competencia de CPU por las tareas SSL de Firebase. Se ha documentado la necesidad de agregar callbacks `ArduinoOTA.onStart([]() { Firebase.end(); })` para matar los sockets antes del volcado a Flash. Además, se requiere aplicar una contraseña (`setPassword`) para evitar flasheos maliciosos en red local.
-*   **RAM y Fragmentación:** El uso de `DynamicJsonDocument` dentro de los loops de red ha sido un punto crítico. La adopción de variables `StaticJsonDocument` y arreglos de caracteres estáticos (`char[]`) es la solución recomendada para evitar fragmentación del Heap a lo largo de los meses.
+### Fase 1: El Origen (Monitoreo Predictivo Industrial)
+*   **Contexto:** El proyecto nació como un sistema de monitoreo predictivo de motores para minería (cintas transportadoras).
+*   **Stack Inicial:** ESP32 programado en Arduino IDE, conectado a un Broker MQTT (HiveMQ), con un backend Node.js (`subscriber.js`) que inyectaba telemetría a InfluxDB Cloud.
+*   **Pivote:** Tras validar la infraestructura de telemetría y el OTA (Over-The-Air), se decidió pivotar el dominio hacia el sector agrícola de precisión.
 
-### 2.2 Motor Termodinámico Industrial (HardwareController)
-La clase `HardwareController` actúa como el árbitro (PLC) del sistema, evaluando métricas a 5 segundos de intervalo.
-*   **Filtro Digital EWMA (Exponentially Weighted Moving Average):** Las métricas crudas de los sensores (DHT22 y NTC) generaban "ruido" que activaba falsamente los relés. Implementamos el estándar industrial EWMA (con `alpha = 0.1`). Esto significa que el hardware descarta el 90% del ruido instantáneo basándose en su inercia térmica histórica, entregando curvas perfectas (suaves) tanto al PID como al dashboard web.
-*   **Control PID de Modulación Lenta (Time-Proportioning):** Se abandonó el control *Bang-Bang* (On/Off basado en ifs brutos). Ahora, un lazo Proporcional-Integral-Derivativo (PID) calcula el esfuerzo térmico y genera un PWM ultra lento (ventana de 5 segundos), ideal para Relés de Estado Sólido (SSR) sin desgaste electromecánico.
-*   **Anti-Short-Cycle vs Histéresis:** El firmware protege el desgaste mecánico apagando relés instantáneamente ante emergencias, pero impidiendo el re-encendido por 3 minutos (debouncing de potencia).
+### Fase 2: Cámara Fungi Inteligente y el Full-Stack
+*   **Contexto:** Se rediseñó el sistema para el control termodinámico micelial (Fungi).
+*   **Desarrollo Frontend:** Nace la SPA en React + Vite + Tailwind CSS v4 con un diseño Glassmorphic.
+*   **Saneamiento de Bucle (Edge):** Se mitigaron los problemas de *Heap Exhaustion* en el ESP32 aplicando la macro `F()` (PROGMEM) y se estandarizó el uso de `client_id` dinámicos basados en la MAC.
 
-### 2.3 Resiliencia a Caídas y Sensórica
-*   **Sensores y Calibración:** El DHT22 cuenta con control de errores (`isnan`). El termistor (NTC de sustrato) utiliza la Ecuación de Steinhart-Hart (Beta 3950). *Deuda pendiente:* Integrar calibración del conversor analógico/digital (`esp_adc_cal_characterize`) para eliminar el sesgo nativo del hardware de Espressif (error ~2°C).
-*   **Portal Cautivo WiFi y Operación Offline:** El sistema sobrevive sin WiFi, levantando un portal cautivo temporal (AP Fallback `Fungi_Setup_XX`). El ESP32 sigue controlando la cámara basándose en el último `CropProfile` guardado en memoria flash (LittleFS).
+### Fase 3: Hardware-in-the-Loop (HIL) y Resiliencia
+*   **Asignación de Relés Segura:** Se evitaron los pines conflictivos de boot (Strapping pins). La Manta Calefactora se movió al `GPIO 32` (Output-capable RTC), el Humidificador al `25` y el FAE (Ventilador) al `26`.
+*   **Latido Inverso (Watchdog):** En lugar de que el ESP32 hiciese ping al servidor, el Node.js emitía un latido cada 10s. El ESP32 reaccionaba visualmente en su pantalla TFT (ST7735) indicando `ONLINE`, `RESCATE AP` o `SERVIDOR CAIDO`.
+*   **Null-Safety UI:** Para evitar crashes de InfluxDB, el ESP32 aprendió a enviar explícitamente `null` si el DHT22 fallaba (verificado por `isnan`).
 
----
+### Fase 4: La Gran Refactorización OOP (Demolición del Monolito)
+*   **El Problema:** `main.cpp` se convirtió en un "God Object" inmanejable de casi 500 líneas lleno de variables globales. Además, el entorno Arduino IDE era limitante.
+*   **Solución:** Migración a **PlatformIO (VS Code)**. Reducción de `main.cpp` a 87 líneas instanciando 5 clases puras: `HardwareController`, `NetworkManager`, `FirebaseManager`, `DisplayManager` y `FileManager`.
 
-## 3. ☁️ CAPA 2: CENTRAL HUB Y BACKEND (NODE.JS)
-
-### 3.1 El Pivote Definitivo: Firebase RTDB vs MQTT
-Se determinó en el ADR-001 y siguientes reportes que mantener un Broker MQTT para telemetría y Firebase para persistencia era un anti-patrón de alta fricción.
-*   **Resolución:** Abandono completo de MQTT. Todo (comandos, telemetría y configuración de cultivo) se canaliza mediante Streams Persistentes (Server-Sent Events) nativos del SDK de Firebase. Esto simplifica la infraestructura, provee control de desconexión implícito, offline-caching y un JSON arbóreo global (SSOT).
-
-### 3.2 Crop Steering Engine (Motor de Transiciones)
-Ubicado en `backend_node/src/steeringEngine.ts`. 
-*   **Lógica Agronómica Agnóstica:** El sistema no conoce "especies" (tomates o setas), solo lee un JSON abstracto con Fases, Setpoints y Duraciones.
-*   **Interpolación Lineal (Lerp):** El backend corre un Cron-job cada 5 minutos. Si el cultivo entra en una "ventana de transición" (ej. 24 horas de otoño simulado), el Node.js calcula un % de progreso y mezcla los setpoints matemáticamente entre la fase actual y la futura, empujando los valores progresivos hacia el ESP32. Esto evita el shock térmico fisiológico.
-
-### 3.3 El Puente Hacia InfluxDB
-Ubicado en `backend_node/src/subscriber.ts`.
-*   El backend escucha la telemetría viva de Firebase, pero **aplica Rate Limiting (1 vez por minuto por dispositivo)** antes de enviar el punto a InfluxDB (Serie de Tiempo / Data Warehouse). Esto es crítico para no saturar la base de datos a largo plazo ni disparar los costos en la nube.
+### Fase 5: El Pivote Serverless y el Motor Agnóstico (V1)
+*   **El Adiós a MQTT:** Mantener un broker MQTT, un backend Node.js 24/7 y la UI causaba latencias innecesarias y altos costos de servidor. Se adoptó **Firebase Realtime Database (RTDB)** de forma nativa para comandos y telemetría, reduciendo el costo fijo a $0 y obteniendo *offline-caching* gratis.
+*   **El PLC Agnóstico:** Se eliminaron reglas de histéresis hardcodeadas en C++ como `if (isFungi)`. El ESP32 mutó a un PLC universal que lee JSON desde `LittleFS`.
 
 ---
 
-## 4. 💻 CAPA 3: INTERFAZ SCADA (REACT FRONTEND)
+## 2. 🧠 ARQUITECTURA DE CONTROL (EL ALGORITMO RACIONAL)
 
-El dashboard `frontend_react` fue elevado a estándar SCADA industrial, primando la usabilidad diagnóstica (Data Visualization) y la latencia imperceptible.
+La lógica de control del hardware (Capa 3 de la Topología ISA-95 del proyecto) es el corazón del ecosistema. Opera bajo un sistema de **3 Capas Deterministas**.
 
-### 4.1 Arquitectura Optimista (Zero-Backend Delay)
-*   **Bypass de Inyección de Fases (`CropStatePanel.tsx`):** Cuando el operador decide forzar o avanzar una fase fenológica en el dashboard, no hace un request HTTP a Node.js para que éste procese la orden y responda (round-trip pesado). La UI de React muta los comandos instantáneamente empujando a `devices/{id}/commands/crop` en Firebase. El ESP32 recibe el cambio en <200ms por su Stream, actualizando sus relés en tiempo real.
+### A. Filtrado Digital Industrial (EWMA)
+Se erradicó el muestreo "instantáneo" que provocaba aliasing.
+*   **Mecanismo:** El `HardwareController` lee los sensores DHT22 y NTC cada 5 segundos y aplica un **Filtro de Media Móvil Ponderada Exponencialmente (EWMA)** con $\alpha = 0.1$.
+*   **Efecto:** El 90% del ruido eléctrico transitorio se descarta, garantizando que el relé no oscile ante ráfagas de aire espurias.
 
-### 4.2 Visualización de Precisión y Auto-Escalado (`TelemetryDashboard.tsx`)
-*   Se utilizan Gráficos Unificados con *Recharts*.
-*   **Problema resuelto:** Inicialmente, si el operador quería ver una sola curva (ej. Temperatura) aislando el resto de ruido, Recharts escalaba los ejes en base a la data histórica ignorando la franja verde objetivo (ReferenceArea). Si la temperatura caía brutalmente, la banda verde quedaba fuera del monitor.
-*   **Solución Algorítmica:** Se implementó una función dinámica en la propiedad `domain` del Eje Y que intercepta el `dataMin` y `dataMax` histórico y fuerza la inclusión aritmética de los variables ideales (`temp_ideal_min`, `temp_ideal_max`). De esta forma, el operario siempre tiene contexto visual de qué tan lejos está del objetivo, sin importar cuánto aísle la gráfica.
+### B. El Árbitro de Conflictos y Failsafes Térmicos
+El motor de estados (`NORMAL`, `COOLING`, `SAFE_MODE`, `EMERGENCIA`) posee una jerarquía estricta de supervivencia:
+1.  **Veto por Sustrato (Inercia Térmica Máxima):** Si la sonda NTC del sustrato supera $28.0^\circ\text{C}$, se apaga la calefacción y se fuerza extracción (`EMERGENCIA_SUSTRATO_CALIENTE`). Si cae de $15.0^\circ\text{C}$, forzamos calefacción.
+2.  **Redundancia Ambiental:** Se incorporó soporte para un segundo termistor ambiental (NTC2 en `GPIO 35`) para generar un `tempPromedio`. Si ambos sensores ambientales mueren, el sistema asume `SAFE_MODE`.
+3.  **Protección de Hardware (Anti-Short Cycle):** Los relés tienen un bloqueo temporal de 180 segundos post-estado para proteger componentes electromecánicos y relés de estado sólido (SSR).
+4.  **FreeRTOS Task Pinning:** La FSM y sensores corren blindados en el **Core 1**, dejando las costosas operaciones SSL/Criptografía de Firebase para el **Core 0**.
+
+---
+
+## 3. 🌱 INVESTIGACIÓN AGRONÓMICA PROFUNDA (REINO FUNGI Y PLANTAE)
+
+La arquitectura agnóstica fue validada estructurando los parámetros termodinámicos de las especies más exigentes de la industria *Controlled Environment Agriculture (CEA)*.
+
+### A. Fungi (Control por Osmosis y CO2)
+*   El micelio genera **calor metabólico (termogénesis)**, por lo que el núcleo del bloque siempre estará entre 2°C a 5°C más caliente que el aire.
+*   **Pleurotus ostreatus / Lentinula edodes:** Requieren 4 fases universales: Incubación, Pinning (Inducción térmica), Fructificación y Descanso.
+*   El umbral crítico es el CO2: Sobre 1,000 ppm, los hongos desarrollan tallos alargados y sombreros enanos (elongación).
+
+### B. Plantae (Control por VPD y DLI)
+*   Al revés que los hongos, la transpiración foliar hace que la raíz esté 1°C a 2°C más **fría** que el ambiente.
+*   **Cannabis sativa / Tomate:** El factor vital no es solo la temperatura, sino el **VPD (Déficit de Presión de Vapor)**. En etapa vegetativa exigen 0.8 a 1.0 kPa, y en floración exigen >1.2 kPa para maximizar flujo de savia y evitar *Botrytis cinerea* (Botritis).
+*   **Steering Transicional:** Se implementó interpolación Lineal (Lerp) en el backend (Node.js) para que al pasar de Fase Vegetativa a Floración, los setpoints cambien de a 0.1°C por hora (evitando estrés biológico).
 
 ---
 
-## 5. 🛑 CRITICIDADES Y ROADMAP HACIA V2
+## 4. 💻 FRONTEND REACT SCADA Y EXPERIENCIA DE USUARIO
 
-Pese al altísimo grado de madurez del ecosistema, el proyecto arrastra algunas deudas técnicas que deben agendarse en próximos sprints:
-
-### Riesgos y Vulnerabilidades Actuales
-1.  **Seguridad Crítica (Remediada Parcialmente):** El archivo `Secrets.h` fue un vector de vulnerabilidad. Se debe asegurar su persistencia en el `.gitignore` y proceder a rotar todas las Auth Keys de Firebase en producción.
-2.  **Calibración y Desviaciones Analógicas:** El ESP32 requiere `esp_adc_cal_characterize` para el termistor NTC para ser 100% confiable en el cálculo del VPD y la humedad del sustrato.
-3.  **Seguridad de Acceso Local (OTA):** Inyección imperativa de contraseña en el flujo de ArduinoOTA.
-
-### Roadmap Técnico y Agronómico
-1.  **Integración de CO2:** Inyección física del sensor MH-Z19 o similar en la placa PCB, anexarlo al filtro EWMA de C++, y al puente InfluxDB.
-2.  **Estrategia de Downsampling:** Los gráficos históricos se saturan si traen miles de puntos por mes. El backend de Node.js deberá incluir rutinas programadas de "Rollup" en InfluxDB, reduciendo data >30 días de granulación de 1 min a granulación de 15 mins o 1 hora (promedios), aligerando enormemente el payload del frontend en las peticiones.
-3.  **Control Computer Vision (PDI/CEI):** Las fundaciones del "Steering Agnóstico" ya existen, permitiendo evolucionar en V2 a transiciones gatilladas por imágenes de cámaras analizando la morfología de crecimiento en lugar de ser gatilladas por meros días calendario.
+*   **Zero-Latency y Estado Optimista:** La interfaz se conecta por WebSockets (SSE) a Firebase RTDB. Si un operador acciona el Extractor manualmente, la interfaz no espera a Node.js; inyecta el valor directo a `/devices/{id}/commands` encendiendo el relé en $<200\text{ms}$.
+*   **Seguridad Manual:** Los *overrides* manuales del operario incluyen un menú desplegable (5, 15, 30, 60 min). Al expirar, un temporizador interno devuelve la máquina autónomamente al estado `AUTO`.
+*   **Gestor de Perfiles 2.0:** Enciclopedia agronómica embebida, protección de perfiles oficiales contra borrado y un *Wizard* de customización de recetas que genera automáticamente las 4 etapas fisiológicas.
+*   **Gráficos Inteligentes:** Uso de *Recharts* con `ReferenceArea` adaptativos. Las funciones de `domain` en el eje Y aseguran que la "franja ideal" siempre sea visible en el gráfico, aun si la gráfica histórica actual no contiene datos dentro de esa franja.
 
 ---
-**FIN DE LA AUDITORÍA DE ARQUITECTURA V1.**
-El ecosistema completo (Edge-Cloud-Frontend) es ahora coherente, tolerante a fallos y está dotado de algoritmos industriales.
+
+## 5. 🛑 DEUDA TÉCNICA E HISTORIAL DE MITIGACIÓN
+
+El proyecto ha superado bloqueantes enormes, pero la auditoría arroja deudas remanentes críticas de los Sprints pasados:
+
+| Deuda Técnica Identificada | Severidad | Estado Actual / Acción Requerida |
+| :--- | :--- | :--- |
+| **Exposición de Credenciales (`Secrets.h`)** | 🔴 Crítica | En Sprints medios se identificó que el `Secrets.h` (claves Firebase) no estaba en `.gitignore`. Se parcheó recientemente, **pero obliga a rotar la contraseña del Firebase Auth**. |
+| **Vulnerabilidad OTA** | 🔴 Alta | El `ArduinoOTA` corre sin `setPassword()`. Cualquiera en la LAN puede flashear la máquina. Además, falta el callback `onStart` para matar Firebase, lo que causaba WDT Reset al actualizar (Flash Partition al 92%). |
+| **Calibración Analógica (ADC)** | 🟡 Media | El NTC de sustrato calcula la temperatura de Steinhart-Hart correctamente, pero el ADC nativo del ESP32 desvía ~2°C. Requiere aplicar `esp_adc_cal_characterize()`. |
+| **Histéresis Física Faltante** | 🟡 Media | Existe el Anti-Short-Cycle por tiempo (180s), pero la histéresis termodinámica ($\pm 0.5^\circ\text{C}$) debe implementarse a nivel lógico para no inundar el RTDB con oscilaciones. |
+| **Integración Sensor de CO2** | 🟢 Baja | Planificado en Roadmap. El Firmware y UI ya tienen los campos `co2` pre-creados esperando la inyección del hardware (MH-Z19). |
+| **Saturación InfluxDB (Downsampling)** | 🟢 Baja | Firebase guarda solo 100 puntos, pero InfluxDB guarda infinito. Requiere un *Rollup Task* en InfluxDB que colapse (promedie) datos $>30$ días de 1 minuto a 1 hora. |
+
+---
+
+*Fin del Documento Maestro Definitivo (V1).*
+*Elaborado mediante inferencia Big Data de 74 reportes y sprints iterativos de desarrollo (Julio-Agosto 2026).*
