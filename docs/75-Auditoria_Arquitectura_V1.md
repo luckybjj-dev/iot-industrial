@@ -76,17 +76,34 @@ El sistema se alimenta de investigaciones biológicas exhaustivas (cero parámet
 
 ---
 
-## 6. Deuda Técnica y Roadmap (Acciones Inmediatas Post-V1)
+## 6. Visión de Futuro y Escalabilidad Estratégica (Post-V1)
 
-Para proteger la inversión y asegurar la escalabilidad hacia la V2, el método *Lean* exige identificar y priorizar los cuellos de botella residuales:
+Habiendo alcanzado el *Product-Market Fit* termodinámico con la versión V1, el desarrollo entra en una nueva curva exponencial. El horizonte del proyecto ("AgriEdge OS V2") integrará tecnologías de diagnóstico avanzado y operación autónoma total.
+
+### A. Inteligencia Artificial y Diagnóstico Multimodal
+El principio YAGNI mantuvo la IA al margen durante el MVP. En V2, el ecosistema será dotado de un cerebro predictivo y visual:
+*   **Visión Computacional en el Edge (ESP32-CAM / OpenCV):** Integración de hardware de cámaras para realizar capturas de crecimiento (Time-Lapse). Modelos entrenados detectarán **contaminación biológica (Trichoderma)** en hongos o **plagas foliares** en plantas antes de que sean visibles a simple vista, aislando el módulo infectado.
+*   **Análisis Híbrido (Telemetría + Imagen):** La IA cruzará el historial termodinámico (VPD, CO2) con la morfología del crecimiento visual para reajustar los setpoints del `CropProfile` en tiempo real (Autonomía de Nivel 4).
+
+### B. Notificaciones Proactivas y Mensajería a Operadores
+La interfaz reactiva (Pull) evolucionará a un sistema de notificaciones proactivo (Push).
+*   **Integración WhatsApp Business API / Telegram Bot:** El sistema Node.js (*Steering Engine*) dejará de ser un ente pasivo. Al detectar la jerarquía `EMERGENCIA_SUSTRATO_CALIENTE`, el motor despachará **mensajes de alerta instantáneos** a los teléfonos móviles de los operadores.
+*   **Reportes Diarios Autónomos:** El sistema empaquetará resúmenes del VPD diario y la salud del ecosistema, enviándolos por WhatsApp a las 08:00 AM, transformando la relación de "monitoreo constante" a "gestión por excepción".
+
+### C. Machine Learning y Modelos Predictivos
+*   **TensorFlow Lite for Microcontrollers (TinyML):** Migrar algoritmos predictivos directamente a la memoria del ESP32. En lugar de reaccionar cuando la temperatura baja a $15^\circ\text{C}$, el modelo TinyML cruzará la hora del día y la temperatura exterior para *predecir* la caída térmica, encendiendo la calefacción 20 minutos antes de que ocurra (Control Predictivo Basado en Modelos - MPC).
+
+---
+
+## 7. Deuda Técnica Actual (Acciones Inmediatas)
 
 | Nivel de Riesgo | Componente | Descripción de la Deuda Técnica | Resolución Estratégica Planificada |
 | :--- | :--- | :--- | :--- |
-| **CRÍTICO** | **Seguridad (Credenciales)** | El archivo `Secrets.h` fue commiteado accidentalmente en el pasado con las llaves de producción. | Ejecutar rotación inmediata de credenciales en Google Cloud/Firebase y forzar exclusión estricta en el `.gitignore`. |
-| **ALTO** | **Seguridad (OTA)** | Las actualizaciones remotas de Firmware no poseen protección criptográfica ni contraseña (`ArduinoOTA.setPassword`). | Implementar contraseña OTA y rutina de apagado de *Sockets* (`Firebase.end()`) antes del *Flash* para evitar corrupción de RAM. |
-| **MEDIO** | **Integridad Analógica** | El ADC del ESP32 no es completamente lineal, causando un desvío de $\sim 2^\circ\text{C}$ en las sondas NTC. | Incorporar curvas polinómicas (Ecuación de Steinhart-Hart) e inyectar calibración por hardware (`esp_adc_cal`). |
-| **FEATURE** | **Integración de CO2** | El CO2 actual se maneja de forma cronometrada por carencia de hardware físico. | Integrar sensor infrarrojo NDIR (MH-Z19) vía UART, vinculando su telemetría directamente a los umbrales del `CropProfile`. |
-| **ARQUITECTURA** | **Costos de Almacenamiento** | InfluxDB acumulará millones de filas a largo plazo, arriesgando la capa gratuita o rendimiento. | Escribir un *Cloud Function* / Worker que aplique **Downsampling**: Resumir (promediar) la telemetría histórica con antigüedad $> 30\text{ días}$ a gránulos de 1 o 2 horas. |
+| **CRÍTICO** | **Seguridad (Credenciales)** | El archivo `Secrets.h` fue commiteado accidentalmente con las llaves de producción. | Ejecutar rotación inmediata de credenciales en Google Cloud/Firebase y forzar exclusión en `.gitignore`. |
+| **ALTO** | **Seguridad (OTA)** | Actualizaciones remotas de Firmware sin protección criptográfica ni contraseña. | Implementar contraseña OTA y rutina de apagado de *Sockets* (`Firebase.end()`). |
+| **MEDIO** | **Integridad Analógica** | El ADC del ESP32 no es completamente lineal, causando un desvío de $\sim 2^\circ\text{C}$ en las sondas NTC. | Incorporar Ecuación de Steinhart-Hart e inyectar calibración por hardware (`esp_adc_cal`). |
+| **FEATURE** | **Integración de CO2** | El CO2 actual se maneja de forma cronometrada por carencia de hardware. | Integrar sensor infrarrojo NDIR (MH-Z19) vía UART y enlazar al `CropProfile`. |
+| **ARQUITECTURA** | **Límites de Almacenamiento** | InfluxDB acumulará millones de filas, arriesgando la capa gratuita o rendimiento. | Escribir un Worker de **Downsampling**: Promediar la telemetría histórica $> 30\text{ días}$ a gránulos de 1 hora. |
 
 ---
-*Este documento certifica la consolidación de la V1 del AgriEdge OS, logrando la hibridación perfecta entre Ingeniería de Hardware, Arquitectura de Software Serverless y Ciencias Agronómicas empíricas.*
+*Este documento certifica la consolidación de la V1 del AgriEdge OS y traza la ruta estratégica (Roadmap) hacia la autonomía total con Inteligencia Artificial y mensajería en tiempo real.*
