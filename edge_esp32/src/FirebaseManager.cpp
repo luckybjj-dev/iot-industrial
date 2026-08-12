@@ -225,6 +225,12 @@ void FirebaseManager::publicarHistorial() {
     }
 }
 
+/**
+ * @brief Configuración y apertura del canal bidireccional de Firebase (Stream).
+ * @details Utiliza Server-Sent Events (SSE) para mantener una conexión persistente
+ * de muy baja latencia. Permite reaccionar a comandos del dashboard (ej. encender/apagar manual)
+ * sin necesidad de "polling", cumpliendo con el paradigma de reactividad estricta para IoT.
+ */
 bool FirebaseManager::configurarStreams() {
     // Escuchar comandos manuales y configuraciones en RTDB
     String streamPath = "/devices/" + _deviceId + "/commands";
@@ -265,6 +271,14 @@ void FirebaseManager::streamTimeoutCallback(bool timeout) {
     }
 }
 
+/**
+ * @brief Procesador del Payload del Stream Bidireccional (RTDB Downlink).
+ * @details Interpreta los datos entrantes (primitivas o JSON complejos).
+ * Actualiza la máquina de estados local, sobreescribe los targets del PID o fuerza
+ * actuadores (Overrides manuales). Cumple con el pivote a Firebase RTDB,
+ * reemplazando al obsoleto subscriber MQTT, inyectando los comandos directamente
+ * en el HardwareController.
+ */
 void FirebaseManager::_procesarPayloadStream(const String& path, const String& data) {
     Serial.printf("[Firebase] Stream recibido - Path: %s, Data: %s\n", path.c_str(), data.c_str());
     

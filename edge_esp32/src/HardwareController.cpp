@@ -146,9 +146,17 @@ void HardwareController::leerSensores() {
     _sensores.co2Ok = false;
     _sensores.co2 = 400; 
 
-    // --- 6. Aplicar Filtro EWMA ---
+    // --- 6. Aplicación del Filtro Matemático EWMA ---
+    /**
+     * @details Integración del Filtro EWMA: 
+     * Y(n) = alpha * X(n) + (1 - alpha) * Y(n-1)
+     * Este enfoque suaviza la respuesta del lazo de control frente a fluctuaciones repentinas 
+     * (ej. abrir la puerta del cultivo o ráfagas de viento) y mejora el cálculo del Déficit 
+     * de Presión de Vapor (VPD) minimizando saltos irreales.
+     * La bandera ewmaInitialized previene el sesgo inicial (arrastre desde cero).
+     */
     if (!_sensores.ewmaInitialized) {
-        // Inicialización en la primera pasada para evitar arrastre desde cero
+        // Inicialización en la primera pasada para evitar el sesgo de asimetría.
         _sensores.ewma_temp = _sensores.tempPromedio != -999.0f ? _sensores.tempPromedio : 20.0f;
         _sensores.ewma_hum = _sensores.humPromedio != -999.0f ? _sensores.humPromedio : 50.0f;
         _sensores.ewma_sustrato = _sensores.analogicoOk ? _sensores.valorAnalogico : 20.0f;
@@ -179,11 +187,13 @@ float HardwareController::calcularVPD(float tempC, float humRH) {
 void HardwareController::_ejecutarAccion(int pin, bool& estadoActual, bool nuevoEstado, unsigned long& ultimoCambio, unsigned long now, bool ignorarFiltro) {
     if (estadoActual == nuevoEstado) return;
 
-    // ── FILTRO ANTI-SHORT-CYCLE (Solo protege re-encendido) ──────────────
-    // Lógica industrial: APAGAR siempre es inmediato (protege el cultivo).
-    // RE-ENCENDER requiere esperar MIN_RELAY_TIME_MS (protege el relé/motor).
-    // Ejemplo: fogger se apaga al instante si humedad > setpoint,
-    //          pero no puede re-encenderse por 3 minutos tras apagarse.
+    /**
+     * @brief Capa de Protección de Hardware: Filtro Anti-Short-Cycle (Debounce de Potencia).
+     * @details Lógica industrial asimétrica:
+     * - APAGAR (OFF) es inmediato para cortar excesos (emergencias, sobretemperaturas).
+     * - RE-ENCENDER (ON) requiere expirar un temporizador interno (MIN_RELAY_TIME_MS).
+     * Esto permite la nivelación de presiones en compresores y evita el arqueo en relés mecánicos.
+     */
     if (!ignorarFiltro && _modoActual == ModoOperacion::AUTO && nuevoEstado == true) {
         if (now - ultimoCambio < MIN_RELAY_TIME_MS && ultimoCambio != 0) {
             // Aún en tiempo de Debounce — bloqueando RE-ENCENDIDO
@@ -242,12 +252,20 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
         if (tempActual == -999.0f) {
             proxEstado = EstadoOperacional::SAFE_MODE;
         } else {
-            // Actualizar PID de calefacción
+            /**
+             * @brief Integración Continua del Lazo PID y Time-Proportioning.
+             * @details 
+             * 1. Se alimenta al algoritmo PID con la temperatura filtrada (EWMA) como PV (Process Variable).
+             * 2. El Setpoint se ajusta al mínimo del rango ideal.
+             * 3. Compute() calcula la respuesta integral/derivativa para mitigar el error constante.
+             * 4. La ventana de tiempo se gestiona iterativamente para lograr un duty-cycle proporcional
+             *    que activa el relé SSR de manera suave y precisa.
+             */
             _pidInput = tempActual;
-            _pidSetpoint = _config.crop.temp_ideal_min; // Objetivo para calentar hasta el inicio de la zona ideal
+            _pidSetpoint = _config.crop.temp_ideal_min;
             _heaterPID.Compute();
 
-            // Lógica de Time-Proportioning (PWM Lento)
+            // Gestión iterativa de la ventana de tiempo del relé (PWM a nivel software)
             if (now - _windowStartTime > PID_WINDOW_SIZE) {
                 _windowStartTime += PID_WINDOW_SIZE;
             }

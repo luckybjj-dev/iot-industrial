@@ -1,13 +1,14 @@
 #pragma once
-// ============================================================
-// HardwareController.h
-// Capa Agnóstica: Sensores Universales y Relés Genéricos.
-//
-// Esta clase actúa como el núcleo de interacción con el hardware,
-// abstrayendo la lógica termodinámica y de control de los
-// periféricos físicos (sensores y actuadores) del resto del
-// sistema.
-// ============================================================
+/**
+ * @file HardwareController.h
+ * @brief Capa Agnóstica de Abstracción de Hardware y Motor Termodinámico.
+ * 
+ * @details Esta clase actúa como el núcleo orquestador de interacción con el hardware,
+ * abstrayendo la lógica termodinámica, el modelado matemático (filtros EWMA, PID) y la protección 
+ * de hardware (Anti-Short Cycle) del resto del sistema IoT (red y persistencia).
+ * La arquitectura separa limpiamente el "Qué" (sensores/actuadores) del "Cómo" y "Cuándo"
+ * (estrategia de control y failsafes), garantizando una alta cohesión y bajo acoplamiento.
+ */
 #include <Arduino.h>
 #include "DHTesp.h"
 #include "FileManager.h"
@@ -35,8 +36,15 @@ constexpr float NTC_R_NOMINAL = 10000.0f;
 constexpr float NTC_T_NOMINAL = 25.0f;
 constexpr float NTC_R_SERIE   = 10000.0f;
 
-// Constante Filtro EWMA (Exponentially Weighted Moving Average)
-// 0.1 = 10% lectura nueva, 90% inercia acumulada. Filtra ruidos bruscos.
+/**
+ * @brief Constante del Filtro Matemático EWMA (Exponentially Weighted Moving Average).
+ * 
+ * @details Decisión de Diseño Matemático: El filtro EWMA actúa como un filtro pasa-bajos
+ * digital (IIR). En lugar de promediar las últimas N muestras (lo cual consumiría memoria O(N)),
+ * pondera exponencialmente el histórico consumiendo O(1) en RAM.
+ * Proporciona una excelente resistencia frente a valores atípicos (outliers) y ruido electromagnético.
+ * Un ALPHA de 0.1 significa: 10% de peso a la lectura actual y 90% de peso a la inercia acumulada.
+ */
 constexpr float ALPHA_EWMA    = 0.1f;
 
 // -----------------------------------------------------------
@@ -66,8 +74,13 @@ struct SensorData {
     bool  analogicoOk  = false; // Estado de salud del sensor analógico
     bool  co2Ok        = false; // Estado de salud del sensor de CO2
 
-    // --- Filtros Industriales (EWMA) ---
-    bool  ewmaInitialized = false; // Bandera para inicializar el filtro sin arrastre de ceros
+    // --- Resultados del Filtrado Matemático (EWMA) ---
+    /** 
+     * @brief Bandera para inicializar el filtro matemático EWMA.
+     * @details Previene el sesgo inicial (arrastre desde cero). En el arranque, 
+     * las variables filtradas adoptan inmediatamente el primer valor crudo válido.
+     */
+    bool  ewmaInitialized = false;
     float ewma_temp       = 0.0f;
     float ewma_hum        = 0.0f;
     float ewma_sustrato   = 0.0f;
@@ -115,12 +128,16 @@ public:
     // Lee físicamente los sensores y calcula el VPD
     void leerSensores();
 
-    /*
-     * procesarLogicaDeControl: Motor termodinámico
-     * Esta es la máquina de estados principal que decide qué actuadores
-     * encender o apagar basándose en las lecturas de los sensores,
-     * las metas establecidas (targets) en la configuración, las bandas de
-     * histéresis y mecanismos de seguridad (failsafes).
+    /**
+     * @brief Motor termodinámico y Máquina de Estados Principal.
+     * 
+     * @details Actúa como el "Cerebro" del sistema de control. Procesa las lecturas filtradas (EWMA),
+     * aplica el algoritmo de control PID para cargas térmicas proporcionales y evalúa un árbol
+     * de decisiones jerárquico. Prioriza los estados de emergencia (Failsafes como calor crítico 
+     * o gases tóxicos) por encima de las demandas normales, garantizando la supervivencia del cultivo.
+     * 
+     * @param now Timestamp actual (millis).
+     * @param horaDia Hora del día (0-23) para el control del ciclo circadiano (fotoperiodo).
      */
     void procesarLogicaDeControl(unsigned long now, int horaDia);
 
@@ -151,11 +168,20 @@ private:
     ActuadorData _actuadores;
     ConfiguracionCultivo _config; // El cerebro dinámico (umbrales de control)
 
-    // Variables para el control PID del calefactor (Time-Proportioning)
+    /**
+     * @name Lazo de Control PID y Modulación de Ancho de Pulso Lento (Time-Proportioning)
+     * @details Decisión de Diseño: A diferencia de un control Bang-Bang (On/Off) que genera histéresis
+     * y oscilaciones térmicas, se emplea un controlador PID (Proporcional, Integral, Derivativo) para el 
+     * cálculo continuo de la demanda calórica. La salida analógica se traduce en un PWM de baja frecuencia 
+     * (ciclo de 5 segundos) mediante la técnica de "Time-Proportioning". Esto evita el desgaste prematuro
+     * y estabiliza la temperatura con precisión industrial. Diseñado para Relés de Estado Sólido (SSR).
+     */
+    ///@{
     double _pidInput, _pidOutput, _pidSetpoint;
     PID _heaterPID;
     unsigned long _windowStartTime;
-    const unsigned long PID_WINDOW_SIZE = 5000; // 5 segundos, optimizado para Relé de Estado Sólido (SSR)
+    const unsigned long PID_WINDOW_SIZE = 5000; // 5 segundos, optimizado para SSR
+    ///@}
 
     ModoOperacion _modoActual = ModoOperacion::AUTO;
     EstadoOperacional _estadoActual = EstadoOperacional::NORMAL;

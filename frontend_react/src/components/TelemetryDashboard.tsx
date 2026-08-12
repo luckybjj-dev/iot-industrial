@@ -12,6 +12,10 @@ interface Props {
   realtimeTelemetry?: any;
 }
 
+/**
+ * Componente encargado de renderizar el gráfico histórico y en vivo.
+ * Recibe `config` (setpoints del cultivo) vía props desde App.tsx para sobreponer los rangos ideales.
+ */
 export const TelemetryDashboard: React.FC<Props> = ({ deviceId, config, realtimeTelemetry }) => {
   const [data, setData] = useState<HistorialData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -330,6 +334,15 @@ export const TelemetryDashboard: React.FC<Props> = ({ deviceId, config, realtime
             />
             
             {/* Y Axis Left: Temperaturas (Naranja) */}
+            {/**
+              * Auto-escalado dinámico del Eje Y mediante la función `domain`:
+              * En lugar de fijar valores rígidos, Recharts calcula el min/max basándose en la 
+              * telemetría actual (`dataMin`, `dataMax`). Luego, interceptamos ese cálculo 
+              * y lo expandimos usando los límites ideales (`temp_ideal_min`, `temp_ideal_max`, `temp_sustrato_ideal`)
+              * provenientes de `config`. Esto garantiza que la "zona verde" (ReferenceArea) siempre
+              * se vea en pantalla, independientemente de si la temperatura actual está muy lejos de ella.
+              * Añadimos un padding (ej. -2 y +2) para mayor margen visual.
+              */}
             <YAxis 
               yAxisId="left" 
               stroke="#fb923c" 

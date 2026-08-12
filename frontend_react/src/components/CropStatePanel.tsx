@@ -9,6 +9,17 @@ interface CropStatePanelProps {
     config?: ConfiguracionCultivo;
 }
 
+/**
+ * Panel dinámico de Crop Steering (Manejo del ciclo de cultivo).
+ * Arquitectura UI:
+ * Este componente no solo muestra el progreso del plan actual, sino que actúa como 
+ * un inyector instantáneo de configuraciones. Cuando el usuario navega de fase, 
+ * el panel genera el nuevo perfil (a través de `generateDeviceProfile`) y hace
+ * push directamente a la RTDB (`sendConfigRules`), sobrescribiendo instantáneamente
+ * `currentPhaseConfig` y `nextPhaseConfig`.
+ * De esta forma, evita el round-trip de un backend procesador: los componentes como
+ * `App.tsx` y el ESP32 reciben la nueva configuración en milisegundos gracias al stream.
+ */
 const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config }) => {
     const [loading, setLoading] = useState(false);
     const [planState, setPlanState] = useState<any>(null);

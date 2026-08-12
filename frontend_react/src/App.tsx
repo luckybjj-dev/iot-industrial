@@ -8,6 +8,15 @@ import { CropProfileSelectorModal } from './components/CropProfileSelectorModal'
 import CropStatePanel from './components/CropStatePanel';
 import { Thermometer, Droplets, Leaf, Activity, Wind, Power, Settings2, ShieldAlert, Sprout, X, Snowflake } from 'lucide-react';
 
+/**
+ * Componente principal de la aplicación SCADA.
+ * Arquitectura UI:
+ * - Mantiene el estado global optimista (UI instantánea) de los dispositivos.
+ * - Centraliza la suscripción a Firebase RTDB para recibir los datos telemétricos en tiempo real.
+ * - Desciende (prop drilling) los datos y la configuración del perfil (`crop`) hacia los componentes hijos,
+ *   como `TelemetryDashboard` y `CropStatePanel`, aislando a estos de las llamadas directas a Firebase 
+ *   para mantenerlos puros y reactivos a los props.
+ */
 function App() {
   const [camaras, setCamaras] = useState<EstadoCamara[]>([]);
   const [configs, setConfigs] = useState<{ [deviceId: string]: ConfiguracionCultivo }>({});

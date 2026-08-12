@@ -1,3 +1,21 @@
+/**
+ * @fileoverview steeringEngine.ts
+ * @description Motor de Control y Máquina de Estados (Steering Engine) para el Cerebro Central.
+ * Este módulo es responsable de calcular y transicionar dinámicamente los "setpoints" 
+ * (temperatura, humedad, CO2, luz) enviados al ESP32 a través de Firebase RTDB.
+ * 
+ * Decisiones Algorítmicas Clave:
+ * 1. **Interpolación Lineal (Lerp):** Evita el shock térmico o estrés hídrico en el cultivo
+ *    (ej. hongos) al suavizar los cambios de setpoints a lo largo de varias horas (ej. 24h).
+ *    En lugar de saltar abruptamente de un estado a otro, ajusta los valores de forma progresiva.
+ * 2. **Desacoplamiento vía Cron-jobs:** El motor se evalúa periódicamente (cada 5 min). Esto 
+ *    libera al servidor de bucles bloqueantes y permite que el ESP32 siga operando de manera 
+ *    autónoma si el servidor pierde conexión temporalmente.
+ * 3. **Fallback y Seguridad:** Si no hay plan activo o el plan está en pausa, la interpolación 
+ *    se ignora. Esto delega la responsabilidad al hardware (ESP32) para que mantenga 
+ *    su último estado seguro conocido (a menudo el perfil de seguridad o 'vegetative' programado).
+ */
+
 import * as cron from 'node-cron';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue, set } from 'firebase/database';
@@ -18,6 +36,11 @@ export const db = getDatabase(app);
 // ESTRUCTURAS DE DATOS 
 // ---------------------------------------------------------
 
+/**
+ * @interface CropConfig
+ * @description Define los setpoints y rangos críticos para el control ambiental de un perfil específico.
+ * Estos valores representan el objetivo al que el hardware intentará llegar mediante sus actuadores.
+ */
 export interface CropConfig {
     kingdom: string;
     temp_ideal_min: number;
@@ -35,6 +58,11 @@ export interface CropConfig {
     light_hours_on: number;
 }
 
+/**
+ * @interface PlanState
+ * @description Representa el estado actual de la planificación agronómica de un dispositivo.
+ * Controla en qué fase se encuentra, su duración, y maneja los datos para progresar hacia la siguiente fase.
+ */
 export interface PlanState {
     activeProfileName: string;
     activePhaseName: string;
@@ -50,6 +78,22 @@ export interface PlanState {
 // ---------------------------------------------------------
 // UTILIDAD DE INTERPOLACIÓN (TRANSCIONES LINEALES)
 // ---------------------------------------------------------
+
+/**
+ * Interpola linealmente entre la configuración actual y la siguiente basándose
+ * en el porcentaje de progreso de la transición.
+ * 
+ * @param {CropConfig} current - La configuración (setpoints) de la fase actual.
+ * @param {CropConfig} next - La configuración (setpoints) de la fase objetivo a transicionar.
+ * @param {number} progressPercent - Porcentaje de avance de la transición (0 a 1). 
+ *        0 significa que estamos completamente en `current`, 1 que llegamos a `next`.
+ * @returns {CropConfig} Una nueva configuración con valores intermedios.
+ * 
+ * @example
+ * // Si current.temp = 20 y next.temp = 24, al 50% (0.5), el resultado será 22.
+ * // Esta decisión algorítmica suaviza las transiciones prolongadas (ej. 24h),
+ * // reduciendo el estrés fisiológico en el cultivo de forma matemáticamente predecible.
+ */
 function interpolateConfig(current: CropConfig, next: CropConfig, progressPercent: number): CropConfig {
     const p = Math.max(0, Math.min(1, progressPercent)); // Clampear entre 0 y 1
     
@@ -80,6 +124,10 @@ function interpolateConfig(current: CropConfig, next: CropConfig, progressPercen
 // Este engine ahora se suscribe a toda la rama `devices`
 let devicesData: Record<string, any> = {};
 
+/**
+ * Inicia la suscripción reactiva a Firebase RTDB para mantener un caché local 
+ * del estado de todos los dispositivos, permitiendo al motor evaluar en base a datos frescos.
+ */
 function startListeningToFirebase() {
     const devicesRef = ref(db, 'devices');
     onValue(devicesRef, (snapshot) => {
@@ -96,6 +144,22 @@ function startListeningToFirebase() {
 // ---------------------------------------------------------
 // MOTOR DE EVALUACIÓN MÁQUINA DE ESTADOS
 // ---------------------------------------------------------
+
+/**
+ * @function evaluateSteering
+ * @description Evalúa el estado de todos los dispositivos registrados en Firebase para determinar 
+ * si necesitan actualizaciones en sus parámetros de control ambiental.
+ * 
+ * Lógica Algorítmica:
+ * 1. Recorre todos los dispositivos y lee su `plan_state`.
+ * 2. Si el plan está en pausa o inactivo, aborta la actualización para ese dispositivo.
+ *    Esto sirve como "fallback" pasivo: el ESP32 mantendrá sus operaciones basado en los
+ *    últimos valores inyectados (o los hardcodeados como modo 'vegetative'/seguridad en la placa).
+ * 3. Si el dispositivo entró en la "ventana de transición", calcula el porcentaje de 
+ *    tiempo transcurrido y genera setpoints dinámicos usando interpolación.
+ * 4. Inyecta los nuevos setpoints en la ruta `commands/crop` vía Firebase RTDB para
+ *    que el ESP32 los absorba casi en tiempo real.
+ */
 export async function evaluateSteering() {
     const deviceIds = Object.keys(devicesData);
     if (deviceIds.length === 0) return;
@@ -152,6 +216,18 @@ export async function evaluateSteering() {
 // ---------------------------------------------------------
 // INICIALIZACIÓN
 // ---------------------------------------------------------
+
+/**
+ * @function initSteeringEngine
+ * @description Inicializa el motor de steering, conectándolo a Firebase y programando
+ * las evaluaciones periódicas usando node-cron.
+ * 
+ * Decisión Algorítmica:
+ * Se utiliza un cron-job (cada 5 minutos) en lugar de un bucle contínuo o eventos anidados. 
+ * Esto alinea la frecuencia de cómputo del servidor con la inercia térmica/biológica real de 
+ * un cultivo, evitando cálculos innecesarios y picos de consumo de CPU/Red, además de
+ * brindar alta resiliencia frente a caídas temporales (cron retomará por sí solo).
+ */
 export function initSteeringEngine() {
     startListeningToFirebase();
     // Evaluar cada 5 minutos

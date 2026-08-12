@@ -1,18 +1,16 @@
 #pragma once
-// ============================================================
-// FirebaseManager.h
-// Capa de integración asíncrona con Firebase RTDB (Mobizt v4+)
-//
-// EDUCACIONAL:
-// Esta clase maneja toda la comunicación con Firebase Realtime Database (RTDB)
-// utilizando la librería de Mobizt (Firebase ESP32 Client).
-// Se encarga de:
-// 1. Configurar los credenciales y la URL de la base de datos.
-// 2. Manejar la autenticación (con usuario/contraseña o token).
-// 3. Mantener la conexión activa y reconectar si es necesario.
-// 4. Enviar datos de telemetría (sensores y actuadores) en formato JSON.
-// 5. Opcionalmente, escuchar cambios en la base de datos (Streams) para recibir comandos.
-// ============================================================
+/**
+ * @file FirebaseManager.h
+ * @brief Capa de integración asíncrona y bidireccional con Firebase RTDB.
+ *
+ * @details Arquitectura Bidireccional basada en el pivote a Firebase RTDB (Abandonando MQTT):
+ * 1. Uplink (Telemetría): Publica el estado de sensores (filtrados por EWMA) 
+ *    y actuadores hacia la nube en formato JSON mediante operaciones asíncronas optimizadas.
+ * 2. Downlink (Comandos): Mantiene un "Stream" persistente (Server-Sent Events) abierto 
+ *    escuchando mutaciones en la ruta `/devices/{deviceId}/commands`.
+ * Esto garantiza que todo el flujo de telemetría y comandos de control ocurre de forma nativa 
+ * y directa a través de RTDB.
+ */
 #include <Arduino.h>
 #include <FirebaseESP32.h>
 #include "Secrets.h"
