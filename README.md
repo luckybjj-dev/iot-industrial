@@ -59,8 +59,7 @@ proyecto-iot-code-workspace/
 ├── informes/                # Informes vigentes + archivo histórico
 │   └── _archivo_historico/  # 61 documentos archivados (museo)
 ├── ESP32_ARCH.md            # Arquitectura detallada del firmware
-├── ROADMAP.md               # Hoja de ruta (Fases 1-5)
-└── CONTEXTO_ORQUESTADOR.md  # Estado actual para agentes IA
+└── ROADMAP.md               # Hoja de ruta (Fases 1-5)
 ```
 
 ## ✨ Características Principales
