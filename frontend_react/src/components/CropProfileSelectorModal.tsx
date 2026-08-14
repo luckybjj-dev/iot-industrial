@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Sprout, Play, Search, BookOpen, Edit3, Save, Plus, Trash2 } from 'lucide-react';
+import { X, Sprout, Play, Search, BookOpen, Edit3, Save, Plus, Trash2, AlertTriangle, CheckCircle2, Zap } from 'lucide-react';
 import type { DeviceCropProfile } from '../types/cultivo';
-import { CROP_PROFILES, generateDeviceProfile, getCustomProfiles } from '../data/CropProfiles';
+import { CROP_PROFILES, generateDeviceProfile, getCustomProfiles, validateThermodynamics } from '../data/CropProfiles';
 import type { CropProfile, PhaseTargets } from '../data/CropProfiles';
 
 
@@ -321,6 +321,13 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
 
   const handleSaveEditsOnly = () => {
     if (!phase || !profile) return;
+
+    const targetsToCheck = editedTargets || phase.targets;
+    const thermoCheck = validateThermodynamics(targetsToCheck, profile.kingdom);
+    if (!thermoCheck.isValid) {
+      alert(`Error de Validación SCADA:\n\n${thermoCheck.message}`);
+      return;
+    }
     
     const finalPhase = { 
         ...phase, 
@@ -353,6 +360,13 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
   const handleSaveInjection = async () => {
     if (!phase || !profile) return;
     
+    const targetsToCheck = editedTargets || phase.targets;
+    const thermoCheck = validateThermodynamics(targetsToCheck, profile.kingdom);
+    if (!thermoCheck.isValid) {
+      alert(`Error de Validación SCADA:\n\n${thermoCheck.message}`);
+      return;
+    }
+
     setIsSaving(true);
     try {
       // Usar targets editados si existen, sino los originales
@@ -448,20 +462,11 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
                   </div>
                 )}
               </div>
-              {isEditing ? (
-                <div className="space-y-2 mb-3 w-full">
-                  <input type="text" value={editProfileName} onChange={e => setEditProfileName(e.target.value)} className="w-full bg-black/50 border border-white/20 p-2 rounded text-white text-sm" placeholder="Nombre del perfil..." />
-                  <textarea value={editProfileDesc} onChange={e => setEditProfileDesc(e.target.value)} className="w-full bg-black/50 border border-white/20 p-2 rounded text-neutral-300 text-sm h-20" placeholder="Descripción..."></textarea>
-                </div>
-              ) : (
-                <p className="text-sm text-neutral-300 leading-relaxed mb-3">{profile.description || 'Sin descripción disponible.'}</p>
-              )}
-              {phase?.stageTips && (
-                <div className="bg-emerald-950/50 border border-emerald-500/20 p-3 rounded-lg shadow-inner">
-                  <h5 className="text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1">💡 Tips para {phase.name}</h5>
-                  <p className="text-xs text-neutral-300">{phase.stageTips}</p>
-                </div>
-              )}
+              <p className="text-sm text-neutral-300 mb-2">{isEditing ? editProfileDesc : profile.description}</p>
+              <div className="text-xs text-neutral-400 flex gap-4">
+                <span>Especie: <strong className="text-white">{isEditing ? editProfileName : profile.commonName}</strong> ({profile.scientificName})</span>
+                <span>Fases: <strong className="text-white">{profile.phases.length} etapas</strong></span>
+              </div>
             </div>
           </div>
         </div>
@@ -472,6 +477,23 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
   const renderTargets = () => {
     if (!phase) return null;
     const t = isEditing && editedTargets ? editedTargets : phase.targets;
+    const thermoValidation = validateThermodynamics(t, profile.kingdom);
+
+    const handleAutoCalculateSubstrate = () => {
+      if (!t) return;
+      const ambMin = t.temperature.day.min;
+      const ambMax = t.temperature.day.max;
+      setEditedTargets({
+        ...t,
+        temperature: {
+          ...t.temperature,
+          substrate: {
+            min: ambMin + 1,
+            max: ambMax + 3
+          }
+        }
+      });
+    };
 
     const renderField = (label: string, valueStr: string, editElement: React.ReactNode) => (
       <div className="bg-white/5 border border-white/10 p-4 rounded-xl relative group">
@@ -488,6 +510,44 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
             {!isEditing ? 'Haz clic en "Editar Perfil Completo" arriba para modificar.' : 'Edita los valores SCADA a continuación.'}
           </div>
         </div>
+
+        {/* Banner de Validación Termodinámica */}
+        {profile.kingdom === 'FUNGI' && (
+          <div className={`p-3.5 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs transition-all ${
+            !thermoValidation.isValid
+              ? 'bg-red-500/10 border-red-500/30 text-red-300'
+              : thermoValidation.isWarning
+              ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-300'
+              : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+          }`}>
+            <div className="flex items-center gap-2.5 font-medium">
+              {!thermoValidation.isValid ? (
+                <AlertTriangle className="text-red-400 flex-shrink-0" size={18} />
+              ) : thermoValidation.isWarning ? (
+                <AlertTriangle className="text-yellow-400 flex-shrink-0" size={18} />
+              ) : (
+                <CheckCircle2 className="text-emerald-400 flex-shrink-0" size={18} />
+              )}
+              <span>
+                {!thermoValidation.isValid
+                  ? thermoValidation.message
+                  : thermoValidation.isWarning
+                  ? thermoValidation.message
+                  : 'Coherencia Termodinámica SCADA: Óptima (Sustrato compatible con termogénesis del micelio +2°C a +4°C).'}
+              </span>
+            </div>
+
+            {isEditing && (!thermoValidation.isValid || thermoValidation.isWarning || !t.temperature.substrate) && (
+              <button
+                type="button"
+                onClick={handleAutoCalculateSubstrate}
+                className="flex items-center gap-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 px-3 py-1.5 rounded-lg font-bold transition-colors w-fit flex-shrink-0 cursor-pointer shadow-sm"
+              >
+                <Zap size={14} /> Auto-Calcular Sustrato (+2°C metabólico)
+              </button>
+            )}
+          </div>
+        )}
         
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {/* Temperatura */}
@@ -502,9 +562,9 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
           {/* Temp Sustrato */}
           {renderField('Temp. Sustrato (°C)', t.temperature.substrate ? `${t.temperature.substrate.min}° - ${t.temperature.substrate.max}°` : 'Auto (Derivada)', 
             <div className="flex gap-2 items-center">
-              <input type="number" value={t.temperature.substrate?.min || ''} placeholder="Mín" onChange={e => setEditedTargets({...t, temperature: {...t.temperature, substrate: {...(t.temperature.substrate || {max: t.temperature.day.max}), min: Number(e.target.value)}}})} className="w-16 bg-black text-white p-1 rounded border border-white/20 text-center text-sm" />
+              <input type="number" value={t.temperature.substrate?.min || ''} placeholder="Mín" onChange={e => setEditedTargets({...t, temperature: {...t.temperature, substrate: {...(t.temperature.substrate || {max: t.temperature.day.max + 3}), min: Number(e.target.value)}}})} className="w-16 bg-black text-white p-1 rounded border border-white/20 text-center text-sm" />
               <span>-</span>
-              <input type="number" value={t.temperature.substrate?.max || ''} placeholder="Máx" onChange={e => setEditedTargets({...t, temperature: {...t.temperature, substrate: {...(t.temperature.substrate || {min: t.temperature.day.min}), max: Number(e.target.value)}}})} className="w-16 bg-black text-white p-1 rounded border border-white/20 text-center text-sm" />
+              <input type="number" value={t.temperature.substrate?.max || ''} placeholder="Máx" onChange={e => setEditedTargets({...t, temperature: {...t.temperature, substrate: {...(t.temperature.substrate || {min: t.temperature.day.min + 1}), max: Number(e.target.value)}}})} className="w-16 bg-black text-white p-1 rounded border border-white/20 text-center text-sm" />
             </div>
           )}
 

@@ -28,7 +28,7 @@ ConfiguracionCultivo FileManager::cargarConfiguracion() {
         return _configActual;
     }
 
-    DynamicJsonDocument doc(2048);
+    StaticJsonDocument<2048> doc;
     DeserializationError error = deserializeJson(doc, file);
     file.close();
 
@@ -114,7 +114,7 @@ void FileManager::_crearConfiguracionPorDefecto() {
 }
 
 bool FileManager::guardarConfiguracion(const ConfiguracionCultivo& config) {
-    DynamicJsonDocument doc(2048);
+    StaticJsonDocument<2048> doc;
     
     doc["greenhouse_id"] = config.greenhouse_id;
     doc["crop_profile"]  = config.crop_profile;
@@ -162,7 +162,7 @@ bool FileManager::guardarConfiguracion(const ConfiguracionCultivo& config) {
 }
 
 bool FileManager::guardarConfiguracionJson(const String& jsonString) {
-    DynamicJsonDocument doc(2048);
+    StaticJsonDocument<2048> doc;
     DeserializationError error = deserializeJson(doc, jsonString);
     
     if (error) {

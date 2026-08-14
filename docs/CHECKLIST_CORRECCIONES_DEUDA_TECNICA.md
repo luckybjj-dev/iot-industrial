@@ -1,0 +1,96 @@
+# 📋 CHECKLIST DE CORRECCIONES Y DEUDA TÉCNICA — AgriEdge OS
+
+> **Documento de Control y Seguimiento Post-Auditoría V3**  
+> **Fecha de Creación:** 14 de Agosto de 2026  
+> **Estado:** En proceso de verificación empírica  
+
+---
+
+## 🔴 Sprint 1: Deuda Crítica (Seguridad y Failsafes)
+
+- [x] **#1. Bug de Safe Mode (EWMA congelaba temperatura)**
+  - *Problema:* Al fallar ambos sensores DHT (`tempPromedio == -999.0f`), el filtro EWMA congelaba la temperatura en el último valor válido, evitando la entrada a `SAFE_MODE` y manteniendo el calefactor activo a ciegas.
+  - *Corrección:* `HardwareController.cpp` propaga `-999.0f`, resetea `ewmaInitialized = false` y fuerza todos los actuadores térmicos/hídricos a `OFF`.
+  - *Estado de Validación:* ✅ **Verificado empíricamente** (`test_safe_mode_verification.py` - Test 1 & 3 pasados al 100%)
+
+- [x] **#2. Watchdog de Hardware inactivo**
+  - *Problema:* El parámetro `watchdog_timeout_ms` existía en `config.json` pero `esp_task_wdt` no estaba inicializado en `main.cpp`.
+  - *Corrección:* Integrado `esp_task_wdt.h`, inicializado en `setup()` con fallback mínimo de 15s, y alimentado en cada tick de `loop()`.
+  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO (ELF/BIN generado)**
+
+- [ ] **#3. Rotación y purga de credenciales en Git**
+  - *Problema:* `Secrets.h` estuvo presente en commits pasados del historial de Git.
+  - *Acción requerida:* Regenerar API Key en Firebase Console, cambiar password de usuario y purgar historial de Git mediante `git filter-repo` o `bfg`.
+  - *Estado de Validación:* ⏳ **Pendiente**
+
+---
+
+## 🟡 Sprint 2: Core MVP y Control Robusto
+
+- [x] **#8. Fix OTA (Fallo al 100% por contención de Heap/TLS)**
+  - *Problema:* `ArduinoOTA.onStart()` no detenía los streams ni liberaba buffers de Firebase, colapsando la memoria durante la verificación de firmware.
+  - *Corrección:* Implementado `FirebaseManager::end()` que invoca `_fbdoStream.clear()` y `_fbdo.clear()`, ejecutado en `onStart()`.
+  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO**
+
+- [x] **#16. Eliminación de librería huérfana `Ticker`**
+  - *Problema:* `sstaub/Ticker @ ^4.4.0` ocupaba espacio en flash sin usarse en ningún `.cpp`.
+  - *Corrección:* Eliminada de `platformio.ini`.
+  - *Estado de Validación:* ✅ **Verificado en compilación (Librería removida del árbol de dependencias)**
+
+- [x] **#4. Desacoplamiento de PID a modulación Time-Proportioning de alta frecuencia**
+  - *Problema:* La ventana de Time-Proportioning (5s) coincidía con el ciclo de evaluación de `main.cpp` (5s), impidiendo modular el SSR intraciclo.
+  - *Corrección:* Implementado `actualizarModulacionSSR(millis())` en `HardwareController` invocado en cada tick rápido de `loop()` en `main.cpp`.
+  - *Estado de Validación:* ✅ **Verificado empíricamente** (`test_safe_mode_verification.py` - Test 7) + PlatformIO compilado.
+
+- [x] **#5. Árbitro de Actuadores (Exclusión Mutua Extractor ↔ Fogger)**
+  - *Problema:* Demanda de enfriamiento y humedad baja disparaban extractor y fogger simultáneamente, evacuando y desperdiciando la niebla.
+  - *Corrección:* Inclusión de interlock en `HardwareController.cpp`: si `req_extractor == true`, se fuerza `req_fogger = false`.
+  - *Estado de Validación:* ✅ **Verificado empíricamente** (`test_safe_mode_verification.py` - Test 5).
+
+- [x] **#6. Histéresis paramétrica (Banda Muerta)**
+  - *Problema:* Los umbrales de conmutación no tenían banda muerta, provocando posibles oscilaciones de relé (chatter).
+  - *Corrección:* Constantes `HIST_TEMP = 0.5°C` y `HIST_HUM = 2.0%` evaluadas contra el `EstadoOperacional` activo.
+  - *Estado de Validación:* ✅ **Verificado empíricamente** (`test_safe_mode_verification.py` - Test 6).
+
+- [x] **#7. Anti-Short-Cycle en módulo Peltier**
+  - *Problema:* `PIN_COOLER` pasaba `ignorarFiltro = true`, sometiendo la celda Peltier a conmutaciones bruscas.
+  - *Corrección:* Integrado debounce de 180s en `_ejecutarAccion` para `PIN_COOLER`.
+  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO**.
+
+- [x] **#9. Backoff exponencial en reconexión de Firebase**
+  - *Problema:* `FirebaseManager` reintentaba sin espaciado temporal ante caídas de servicio, saturando el stack WiFi.
+  - *Corrección:* Algoritmo de backoff progresivo (2s, 4s, 8s... hasta 60s máximo) en `FirebaseManager::loop()`.
+  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO**.
+
+- [x] **#10. Migración de `DynamicJsonDocument` a `StaticJsonDocument`**
+  - *Problema:* Asignación dinámica en heap provocaba fragmentación de memoria tras semanas de operación continua.
+  - *Corrección:* Migración a `StaticJsonDocument<1024>` en `FirebaseManager` y `StaticJsonDocument<2048>` en `FileManager`. Cero asignaciones en heap durante runtime.
+  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO**.
+
+---
+
+## 🟢 Sprint 3: Escalabilidad y Refinamiento
+
+- [x] **#19. Validación Termodinámica Cruzada (Sustrato vs. Ambiente en UI/SCADA)**
+  - *Problema:* El gestor de perfiles permitía ingresar $T_{\text{sustrato}} \le T_{\text{ambiente}}$, violando la termogénesis del micelio ($+2^\circ\text{C}$ a $+4^\circ\text{C}$) y generando alarmas falsas.
+  - *Corrección:* Implementado motor `validateThermodynamics()` en `CropProfiles.ts`, guards en modal `CropProfileSelectorModal.tsx`, badge dinámico de diagnóstico y auto-cálculo asistido (+2°C metabólico).
+  - *Estado de Validación:* ✅ **Verificado en TypeScript (`npx tsc`) e Informe 76**.
+
+- [ ] **#11. Calibración ADC + Multisampling en Sonda NTC**
+- [ ] **#12. Integración de sensor CO2 NDIR real (SCD30 / MH-Z19)**
+- [ ] **#13. Control climático gobernado por VPD como variable maestra**
+- [ ] **#14. Escritura atómica transaccional en LittleFS**
+- [x] **#15. Renderizado TFT con Dirty Checking / Anti-Flickering**
+  - *Problema:* `fillScreen(BLACK)` a cada tick causaba parpadeo molesto en la pantalla SPI.
+  - *Corrección:* Plantilla estática dibujada una sola vez en `begin()`, sobreescritura de glifos con fondo negro (`setTextColor(fg, ST77XX_BLACK)`) e integración de métrica VPD en pantalla.
+  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO**.
+
+- [x] **#17. Extracción de Magic Numbers a constantes semánticas**
+  - *Problema:* Límites de tiempo, histéresis y colores dispersos como literales.
+  - *Corrección:* Centralizadas constantes `HIST_TEMP`, `HIST_HUM`, `ALPHA_EWMA`, `MIN_RELAY_TIME_MS` en headers.
+  - *Estado de Validación:* ✅ **Verificado en código y compilación**.
+
+- [x] **#18. Password OTA configurable desde `Secrets.h` / NVS**
+  - *Problema:* `"agriedge2026"` hardcodeado en `main.cpp`.
+  - *Corrección:* Desacoplado a `OTA_PASSWORD` en `Secrets.h` (con fallback de compilación y documentado en plantilla).
+  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO**.

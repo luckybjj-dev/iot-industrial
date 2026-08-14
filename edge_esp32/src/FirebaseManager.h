@@ -25,6 +25,9 @@ public:
     // Inicializa la conexión y autenticación
     void begin();
     
+    // Detiene conexiones y streams activos (cierre limpio para OTA o reinicios)
+    void end();
+    
     // Debe ser llamado en loop() frecuentemente para procesar tareas asíncronas de Firebase
     void loop();
     
@@ -62,6 +65,11 @@ private:
     bool _streamConfigurado = false;
     bool _forzarTelemetria = false;
     unsigned long _ultimoIntento = 0;
+    
+    // Backoff exponencial para reconexión
+    unsigned long _ultimoIntentoReconexion = 0;
+    unsigned long _intervaloReconexionMs = 2000;
+    static constexpr unsigned long MAX_INTERVALO_RECONEXION_MS = 60000;
     
     // No async callbacks needed for simple FirebaseESP32
     

@@ -34,11 +34,23 @@ void FirebaseManager::begin() {
 }
 
 // ============================================================
+// end()
+// ============================================================
+void FirebaseManager::end() {
+    Serial.println(F("[Firebase] Deteniendo streams y liberando buffers TLS..."));
+    _fbdoStream.clear();
+    _fbdo.clear();
+    _conectado = false;
+    _streamConfigurado = false;
+}
+
+// ============================================================
 // loop()
 // ============================================================
 void FirebaseManager::loop() {
     if (Firebase.ready()) {
         _conectado = true;
+        _intervaloReconexionMs = 2000; // Restablecer intervalo al recuperar conexión
         if (!_streamConfigurado) {
             if (configurarStreams()) {
                 _streamConfigurado = true;
@@ -53,6 +65,15 @@ void FirebaseManager::loop() {
     } else {
         _conectado = false;
         _streamConfigurado = false; // Forzar reconfiguración al reconectar
+
+        unsigned long now = millis();
+        if (now - _ultimoIntentoReconexion > _intervaloReconexionMs) {
+            _ultimoIntentoReconexion = now;
+            _intervaloReconexionMs = (_intervaloReconexionMs * 2 < MAX_INTERVALO_RECONEXION_MS) 
+                                     ? (_intervaloReconexionMs * 2) 
+                                     : MAX_INTERVALO_RECONEXION_MS;
+            Serial.printf("[Firebase] Desconectado. Reintentando... Siguiente backoff en %lu ms\n", _intervaloReconexionMs);
+        }
     }
 }
 
@@ -282,7 +303,7 @@ void FirebaseManager::streamTimeoutCallback(bool timeout) {
 void FirebaseManager::_procesarPayloadStream(const String& path, const String& data) {
     Serial.printf("[Firebase] Stream recibido - Path: %s, Data: %s\n", path.c_str(), data.c_str());
     
-    DynamicJsonDocument doc(1024);
+    StaticJsonDocument<1024> doc;
     DeserializationError error = deserializeJson(doc, data);
     
     if (!error && doc.is<JsonObject>()) {

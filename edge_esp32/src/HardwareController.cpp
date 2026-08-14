@@ -157,23 +157,41 @@ void HardwareController::leerSensores() {
      */
     if (!_sensores.ewmaInitialized) {
         // Inicialización en la primera pasada para evitar el sesgo de asimetría.
-        _sensores.ewma_temp = _sensores.tempPromedio != -999.0f ? _sensores.tempPromedio : 20.0f;
-        _sensores.ewma_hum = _sensores.humPromedio != -999.0f ? _sensores.humPromedio : 50.0f;
-        _sensores.ewma_sustrato = _sensores.analogicoOk ? _sensores.valorAnalogico : 20.0f;
-        _sensores.ewma_vpd = _sensores.vpd;
-        _sensores.ewma_co2 = _sensores.co2;
-        _sensores.ewmaInitialized = true;
+        if (_sensores.tempPromedio != -999.0f && _sensores.humPromedio != -999.0f) {
+            _sensores.ewma_temp = _sensores.tempPromedio;
+            _sensores.ewma_hum = _sensores.humPromedio;
+            _sensores.ewma_sustrato = _sensores.analogicoOk ? _sensores.valorAnalogico : 20.0f;
+            _sensores.ewma_vpd = _sensores.vpd;
+            _sensores.ewma_co2 = _sensores.co2;
+            _sensores.ewmaInitialized = true;
+        } else {
+            _sensores.ewma_temp = -999.0f;
+            _sensores.ewma_hum = -999.0f;
+            _sensores.ewma_sustrato = _sensores.analogicoOk ? _sensores.valorAnalogico : 20.0f;
+            _sensores.ewma_vpd = 0.0f;
+            _sensores.ewma_co2 = _sensores.co2;
+        }
     } else {
-        if (_sensores.tempPromedio != -999.0f) 
+        if (_sensores.tempPromedio != -999.0f) {
             _sensores.ewma_temp = (ALPHA_EWMA * _sensores.tempPromedio) + ((1.0f - ALPHA_EWMA) * _sensores.ewma_temp);
+        } else {
+            // Falla de sensores: forzar -999.0f y desmarcar inicialización para que al reconectar tome el valor instantáneo sin inercia falsa
+            _sensores.ewma_temp = -999.0f;
+            _sensores.ewmaInitialized = false;
+        }
         
-        if (_sensores.humPromedio != -999.0f) 
+        if (_sensores.humPromedio != -999.0f) {
             _sensores.ewma_hum = (ALPHA_EWMA * _sensores.humPromedio) + ((1.0f - ALPHA_EWMA) * _sensores.ewma_hum);
+        } else {
+            _sensores.ewma_hum = -999.0f;
+        }
             
         if (_sensores.analogicoOk) 
             _sensores.ewma_sustrato = (ALPHA_EWMA * _sensores.valorAnalogico) + ((1.0f - ALPHA_EWMA) * _sensores.ewma_sustrato);
             
-        _sensores.ewma_vpd = (ALPHA_EWMA * _sensores.vpd) + ((1.0f - ALPHA_EWMA) * _sensores.ewma_vpd);
+        _sensores.ewma_vpd = (_sensores.tempPromedio != -999.0f && _sensores.humPromedio != -999.0f) 
+                             ? ((ALPHA_EWMA * _sensores.vpd) + ((1.0f - ALPHA_EWMA) * _sensores.ewma_vpd))
+                             : 0.0f;
         _sensores.ewma_co2 = (ALPHA_EWMA * (float)_sensores.co2) + ((1.0f - ALPHA_EWMA) * _sensores.ewma_co2);
     }
 }
@@ -243,14 +261,21 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
         bool req_light = false;
         EstadoOperacional proxEstado = EstadoOperacional::NORMAL;
 
-        // Lectura segura de sensores (Ambiental ahora usa EWMA)
-        float tempActual = _sensores.ewma_temp;
+        // Lectura segura de sensores (Ambiental ahora usa EWMA con fallback estricto)
+        float tempActual = (_sensores.dhtOk || _sensores.dht2Ok) ? _sensores.ewma_temp : -999.0f;
         float humActual = (_sensores.dhtOk || _sensores.dht2Ok) ? _sensores.ewma_hum : -999.0f;
         int co2Actual = _sensores.co2Ok ? (int)_sensores.ewma_co2 : 400;
 
-        // Falla catastrófica de sensores: Apagar por seguridad (Safe Mode)
+        // Falla catastrófica de sensores: Apagar actuadores climáticos por seguridad (Safe Mode)
         if (tempActual == -999.0f) {
             proxEstado = EstadoOperacional::SAFE_MODE;
+            req_heater = false;
+            req_cooler = false;
+            req_fogger = false;
+            req_extractor = false;
+            if (horaDia >= 0 && horaDia < _config.crop.light_hours_on) {
+                req_light = true;
+            }
         } else {
             /**
              * @brief Integración Continua del Lazo PID y Time-Proportioning.
@@ -270,51 +295,73 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
                 _windowStartTime += PID_WINDOW_SIZE;
             }
 
-            // Jerarquía de Supervivencia:
-            // 1. Calor Extremo (Ambiente o Sustrato) o Failsafe Absoluto
+            // 1. Jerarquía de Supervivencia: Calor Extremo (Ambiente o Sustrato)
             float tempSustrato = _sensores.analogicoOk ? _sensores.ewma_sustrato : -999.0f;
 
-            if (tempActual >= _config.failsafes.max_internal_temp_limit_c || tempActual >= _config.crop.temp_crit_max || (tempSustrato != -999.0f && tempSustrato >= _config.crop.temp_sustrato_crit_max)) {
+            if (tempActual >= _config.failsafes.max_internal_temp_limit_c || 
+                tempActual >= _config.crop.temp_crit_max || 
+                (tempSustrato != -999.0f && tempSustrato >= _config.crop.temp_sustrato_crit_max)) {
                 req_extractor = true;
                 req_cooler = true;
                 req_heater = false; // Seguridad extra
                 proxEstado = EstadoOperacional::EMERGENCIA;
-                
-                // Enfriar el sustrato activando aire o simplemente parando calor.
             } 
             // 2. Toxicidad de Gases (CO2)
             else if (co2Actual >= _config.crop.co2_crit_max) {
                 req_extractor = true;
-                if (proxEstado == EstadoOperacional::NORMAL) proxEstado = EstadoOperacional::NORMAL; // O EMERGENCIA
+                if (proxEstado == EstadoOperacional::NORMAL) proxEstado = EstadoOperacional::NORMAL;
             }
-            // 3. Demanda de Frío Ambiental
-            else if (tempActual >= _config.crop.temp_ideal_max) {
-                req_cooler = true;
-                req_extractor = true; // Refrescar 
-                req_heater = false;
-                proxEstado = EstadoOperacional::ENFRIANDO;
-            }
-            // 4. Demanda de Calor (Controlado por PID)
-            else if (tempActual <= _config.crop.temp_ideal_min || _pidOutput > 0) {
-                // Si la temperatura es menor al ideal, o si el PID todavía nos pide estar encendidos en esta ventana
-                if (_pidOutput > (now - _windowStartTime)) {
-                    req_heater = true;
-                    proxEstado = EstadoOperacional::CALENTANDO;
-                } else {
+            // 3. Demanda de Frío Ambiental (con Banda Muerta / Histéresis)
+            else {
+                bool demandaFrio = (_estadoActual == EstadoOperacional::ENFRIANDO)
+                    ? (tempActual >= (_config.crop.temp_ideal_max - HIST_TEMP))
+                    : (tempActual >= _config.crop.temp_ideal_max);
+
+                if (demandaFrio) {
+                    req_cooler = true;
+                    req_extractor = true;
                     req_heater = false;
+                    proxEstado = EstadoOperacional::ENFRIANDO;
+                }
+                // 4. Demanda de Calor (Controlado por PID con Histéresis)
+                else {
+                    bool demandaCalor = (_estadoActual == EstadoOperacional::CALENTANDO)
+                        ? (tempActual <= (_config.crop.temp_ideal_min + HIST_TEMP) || _pidOutput > 0)
+                        : (tempActual <= _config.crop.temp_ideal_min || _pidOutput > 0);
+
+                    if (demandaCalor) {
+                        req_heater = true;
+                        proxEstado = EstadoOperacional::CALENTANDO;
+                    }
                 }
             }
 
-            // 5. Demanda de Humedad (solo si no hay calor extremo, ya que la extracción ganaría)
-            if (humActual != -999.0f && humActual <= _config.crop.hum_ideal_min && proxEstado != EstadoOperacional::EMERGENCIA) {
-                req_fogger = true;
-                if (proxEstado == EstadoOperacional::NORMAL) proxEstado = EstadoOperacional::HUMIDIFICANDO;
-            }
-            else if (humActual != -999.0f && humActual >= _config.crop.hum_ideal_max) {
-                req_extractor = true; // Sacar humedad
+            // 5. Demanda de Humedad y Deshumidificación (con Banda Muerta / Histéresis)
+            if (humActual != -999.0f && proxEstado != EstadoOperacional::EMERGENCIA) {
+                bool demandaNiebla = (_estadoActual == EstadoOperacional::HUMIDIFICANDO)
+                    ? (humActual <= (_config.crop.hum_ideal_min + HIST_HUM))
+                    : (humActual <= _config.crop.hum_ideal_min);
+
+                bool excesoHumedad = _actuadores.extractor_ON
+                    ? (humActual >= (_config.crop.hum_ideal_max - HIST_HUM))
+                    : (humActual >= _config.crop.hum_ideal_max);
+
+                if (demandaNiebla) {
+                    req_fogger = true;
+                    if (proxEstado == EstadoOperacional::NORMAL) proxEstado = EstadoOperacional::HUMIDIFICANDO;
+                } else if (excesoHumedad) {
+                    req_extractor = true;
+                }
             }
 
-            // Fotoperiodo
+            // 6. ÁRBITRO DE ACTUADORES: Exclusión Mutua Extractor ↔ Fogger
+            // Si el extractor está encendido (por enfriamiento, emergencia o exceso de humedad),
+            // se inhibe el Fogger para evitar evacuar y desperdiciar la niebla en el flujo de aire.
+            if (req_extractor) {
+                req_fogger = false;
+            }
+
+            // 7. Fotoperiodo
             if (horaDia >= 0 && horaDia < _config.crop.light_hours_on) {
                 req_light = true;
             }
@@ -328,11 +375,36 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
         _ejecutarAccion(PIN_EXTRACTOR, _actuadores.extractor_ON, req_extractor, _last_extractor_switch, now, false);
         _ejecutarAccion(PIN_FOGGER, _actuadores.fogger_ON, req_fogger, _last_fogger_switch, now, false);
         
-        // Calefactor y Peltier exentos de filtro de tiempo gracias al SSR
-        _ejecutarAccion(PIN_HEATER, _actuadores.heater_ON, req_heater, _last_heater_switch, now, true);
-        _ejecutarAccion(PIN_COOLER, _actuadores.cooler_ON, req_cooler, _last_cooler_switch, now, true);
+        // Peltier protegido con Anti-Short-Cycle (false) para evitar estrés térmico en la celda cerámica
+        _ejecutarAccion(PIN_COOLER, _actuadores.cooler_ON, req_cooler, _last_cooler_switch, now, false);
         
         // Luz exenta de filtro de tiempo
         _ejecutarAccion(PIN_LIGHT, _actuadores.light_ON, req_light, _last_light_switch, now, true);
+
+        // Modulación inicial de calefactor para el tick actual
+        actualizarModulacionSSR(now);
+    }
+}
+
+void HardwareController::actualizarModulacionSSR(unsigned long now) {
+    if (_modoActual == ModoOperacion::MANUAL) return;
+
+    if (_estadoActual == EstadoOperacional::SAFE_MODE || _estadoActual == EstadoOperacional::EMERGENCIA) {
+        if (_actuadores.heater_ON) {
+            _ejecutarAccion(PIN_HEATER, _actuadores.heater_ON, false, _last_heater_switch, now, true);
+        }
+        return;
+    }
+
+    if (_estadoActual == EstadoOperacional::CALENTANDO) {
+        if (now - _windowStartTime > PID_WINDOW_SIZE) {
+            _windowStartTime += PID_WINDOW_SIZE;
+        }
+        bool dutyHeater = (_pidOutput > (now - _windowStartTime));
+        _ejecutarAccion(PIN_HEATER, _actuadores.heater_ON, dutyHeater, _last_heater_switch, now, true);
+    } else {
+        if (_actuadores.heater_ON) {
+            _ejecutarAccion(PIN_HEATER, _actuadores.heater_ON, false, _last_heater_switch, now, true);
+        }
     }
 }

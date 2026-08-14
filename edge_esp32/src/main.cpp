@@ -29,11 +29,17 @@
 // ====================================================================
 #include <Arduino.h>
 #include <WiFi.h>
+#include <esp_task_wdt.h>
+#include "Secrets.h"
 #include "HardwareController.h"
 #include "NetworkManager.h"
 #include "FirebaseManager.h"
 #include "DisplayManager.h"
 #include <ArduinoOTA.h>
+
+#ifndef OTA_PASSWORD
+#define OTA_PASSWORD "agriedge2026"
+#endif
 
 // --------------------------------------------------------------------
 // NOTA: Las credenciales WiFi se gestionan EXCLUSIVAMENTE mediante el
@@ -112,6 +118,14 @@ void setup() {
     // RETIRADO DEL SETUP: firebase.begin() ahora se iniciará de forma segura en el loop() solo cuando haya Internet.
 
     display.begin();  // Inicializar y encender la pantalla TFT
+
+    // 7. Hardware Watchdog Timer (WDT)
+    // Previene cuelgues permanentes si un handshake TLS o bucle interno se bloquea.
+    uint32_t wdtSec = hw.getConfiguracion().failsafes.watchdog_timeout_ms / 1000;
+    if (wdtSec < 5) wdtSec = 15; // Mínimo de seguridad 15 segundos
+    Serial.printf("[SISTEMA] Inicializando Hardware Watchdog (%u s)...\n", wdtSec);
+    esp_task_wdt_init(wdtSec, true);
+    esp_task_wdt_add(NULL); // Suscribir la tarea principal (loop) al Watchdog
 }
 
 // ====================================================================
@@ -131,6 +145,12 @@ void setup() {
  *    permitiendo que los procesos en segundo plano (FreeRTOS) respiren.
  */
 void loop() {
+    // 0. Alimentar Hardware Watchdog en cada iteración del bucle principal
+    esp_task_wdt_reset();
+
+    // 0.1 Modulación rápida de alta frecuencia para el calefactor SSR (Time-Proportioning)
+    hw.actualizarModulacionSSR(millis());
+
     // 1. Evaluación de Red (NetworkManager maneja WiFi internamente en Core 0)
     bool redOk = net.estaConectado();
     static bool _firebaseIniciado = false;
@@ -148,11 +168,12 @@ void loop() {
         if (!_otaIniciado) {
             ArduinoOTA.setHostname(deviceId.c_str());
             // SEGURIDAD: Password requerido para flashear firmware via WiFi
-            ArduinoOTA.setPassword("agriedge2026");
+            ArduinoOTA.setPassword(OTA_PASSWORD);
             // CALLBACKS: Desconectar Firebase durante el flash para evitar
             // competencia de CPU/heap que causa el fallo al 100% de OTA
             ArduinoOTA.onStart([]() {
-                Serial.println(F("[OTA] Inicio de flash..."));
+                Serial.println(F("[OTA] Inicio de flash... Deteniendo Firebase para liberar Heap/Sockets."));
+                firebase.end();
             });
             ArduinoOTA.onEnd([]() {
                 Serial.println(F("[OTA] Flash completado. Reiniciando..."));

@@ -36,6 +36,10 @@ constexpr float NTC_R_NOMINAL = 10000.0f;
 constexpr float NTC_T_NOMINAL = 25.0f;
 constexpr float NTC_R_SERIE   = 10000.0f;
 
+// Constantes de Histéresis Industrial (Banda Muerta)
+constexpr float HIST_TEMP     = 0.5f; // Margen de histéresis térmica (0.5 °C)
+constexpr float HIST_HUM      = 2.0f; // Margen de histéresis hídrica (2.0 % RH)
+
 /**
  * @brief Constante del Filtro Matemático EWMA (Exponentially Weighted Moving Average).
  * 
@@ -140,6 +144,13 @@ public:
      * @param horaDia Hora del día (0-23) para el control del ciclo circadiano (fotoperiodo).
      */
     void procesarLogicaDeControl(unsigned long now, int horaDia);
+
+    /**
+     * @brief Modulación Time-Proportioning de alta resolución para el Calefactor (SSR).
+     * @details Se ejecuta en cada ciclo rápido de loop() para conmutar el relé SSR
+     * con precisión de milisegundos, desacoplando el PID de los ciclos lentos de 5s.
+     */
+    void actualizarModulacionSSR(unsigned long now);
 
     // Setters manuales (Sobrescritura por MQTT o UI Local)
     void setHeater(bool estado);

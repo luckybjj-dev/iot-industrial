@@ -1717,6 +1717,201 @@ export const CROP_PROFILES: Record<string, CropProfile> = {
                 day: { min: 22, max: 26 },
                 night: { min: 18, max: 21 },
               },
+            transition_hours: 24,
+            targets: {
+              temperature: {
+                day: { min: 15, max: 20 },
+                night: { min: 12, max: 15 },
+              },
+              humidity: { min: 65, max: 75 },
+              vpd: { min: 0.8, max: 1 },
+              co2: { min: 1000, max: 1200 },
+              fae: { ach: { min: 4, max: 6 } },
+              lighting: {
+                photoperiod: '12/12'
+              }
+            }
+          },
+          {
+            id: 'ripening',
+            name: 'Maduración / Cosecha',
+            duration_days: 7,
+            transition_hours: 24,
+            targets: {
+              temperature: {
+                day: { min: 15, max: 18 },
+                night: { min: 12, max: 15 },
+              },
+              humidity: { min: 65, max: 75 },
+              vpd: { min: 0.8, max: 1 },
+              co2: { min: 1000, max: 1200 },
+              fae: { ach: { min: 4, max: 6 } },
+              lighting: {
+                photoperiod: '12/12'
+              }
+            }
+          },
+        ]
+  },
+  plantae_solanum_melongena: {
+    id: 'plantae_solanum_melongena',
+    kingdom: 'PLANTAE',
+    scientificName: 'Solanum melongena',
+    commonName: 'Berenjena',
+    description: 'Similar al tomate, pero requiere aún más calor.',
+    phases: [
+          {
+            id: 'germination',
+            name: 'Germinación',
+            duration_days: 10,
+            transition_hours: 24,
+            targets: {
+              temperature: {
+                day: { min: 26, max: 29 },
+                night: { min: 22, max: 24 },
+              },
+              humidity: { min: 85, max: 90 },
+              vpd: { min: 0.4, max: 0.8 },
+              co2: { min: 400, max: 400 },
+              fae: { ach: { min: 4, max: 6 } },
+              lighting: {
+                photoperiod: '18/6'
+              }
+            }
+          },
+          {
+            id: 'vegetative',
+            name: 'Vegetativo',
+            duration_days: 35,
+            transition_hours: 24,
+            targets: {
+              temperature: {
+                day: { min: 24, max: 28 },
+                night: { min: 20, max: 22 },
+              },
+              humidity: { min: 65, max: 75 },
+              vpd: { min: 0.8, max: 1.2 },
+              co2: { min: 800, max: 1000 },
+              fae: { ach: { min: 4, max: 6 } },
+              lighting: {
+                photoperiod: '18/6'
+              }
+            }
+          },
+          {
+            id: 'flowering',
+            name: 'Floración',
+            duration_days: 21,
+            transition_hours: 24,
+            targets: {
+              temperature: {
+                day: { min: 25, max: 30 },
+                night: { min: 20, max: 22 },
+              },
+              humidity: { min: 60, max: 70 },
+              vpd: { min: 1, max: 1.5 },
+              co2: { min: 800, max: 1000 },
+              fae: { ach: { min: 4, max: 6 } },
+              lighting: {
+                photoperiod: '14/10'
+              }
+            }
+          },
+          {
+            id: 'ripening',
+            name: 'Fructificación',
+            duration_days: 45,
+            transition_hours: 24,
+            targets: {
+              temperature: {
+                day: { min: 25, max: 30 },
+                night: { min: 18, max: 24 },
+              },
+              humidity: { min: 55, max: 65 },
+              vpd: { min: 1, max: 1.5 },
+              co2: { min: 800, max: 1000 },
+              fae: { ach: { min: 4, max: 6 } },
+              lighting: {
+                photoperiod: '14/10'
+              }
+            }
+          },
+        ]
+  },
+  plantae_mentha_spicata: {
+    id: 'plantae_mentha_spicata',
+    kingdom: 'PLANTAE',
+    scientificName: 'Mentha spicata',
+    commonName: 'Menta',
+    description: 'Planta aromática perenne, rápido crecimiento.',
+    phases: [
+          {
+            id: 'germination',
+            name: 'Propagación / Enraizamiento',
+            duration_days: 10,
+            transition_hours: 24,
+            targets: {
+              temperature: {
+                day: { min: 20, max: 23 },
+                night: { min: 18, max: 20 },
+              },
+              humidity: { min: 85, max: 95 },
+              vpd: { min: 0.4, max: 0.8 },
+              co2: { min: 400, max: 400 },
+              fae: { ach: { min: 4, max: 6 } },
+              lighting: {
+                photoperiod: '16/8'
+              }
+            }
+          },
+          {
+            id: 'vegetative',
+            name: 'Vegetativo Temprano',
+            duration_days: 14,
+            transition_hours: 24,
+            targets: {
+              temperature: {
+                day: { min: 22, max: 26 },
+                night: { min: 18, max: 21 },
+              },
+              humidity: { min: 70, max: 80 },
+              vpd: { min: 0.6, max: 0.9 },
+              co2: { min: 600, max: 800 },
+              fae: { ach: { min: 4, max: 6 } },
+              lighting: {
+                photoperiod: '16/8'
+              }
+            }
+          },
+          {
+            id: 'flowering',
+            name: 'Desarrollo Foliar Intensivo',
+            duration_days: 21,
+            transition_hours: 24,
+            targets: {
+              temperature: {
+                day: { min: 22, max: 26 },
+                night: { min: 18, max: 21 },
+              },
+              humidity: { min: 65, max: 75 },
+              vpd: { min: 0.8, max: 1.2 },
+              co2: { min: 1000, max: 1200 },
+              fae: { ach: { min: 4, max: 6 } },
+              lighting: {
+                photoperiod: '16/8'
+              }
+            }
+          },
+          {
+            id: 'ripening',
+            name: 'Cosecha Continua / Mantenimiento',
+            duration_days: 45,
+            transition_hours: 24,
+            targets: {
+              temperature: {
+                day: { min: 22, max: 26 },
+                night: { min: 18, max: 21 },
+              },
               humidity: { min: 65, max: 75 },
               vpd: { min: 0.8, max: 1.2 },
               co2: { min: 1000, max: 1200 },
@@ -1729,6 +1924,70 @@ export const CROP_PROFILES: Record<string, CropProfile> = {
         ]
   },
 };
+
+export interface ThermodynamicValidation {
+  isValid: boolean;
+  isWarning: boolean;
+  message?: string;
+  suggestedSubstrate?: { min: number; max: number };
+}
+
+/**
+ * Valida la coherencia física y biológica entre la temperatura ambiente y la temperatura de sustrato
+ * considerando la termogénesis del micelio (+2°C a +4°C).
+ */
+export function validateThermodynamics(targets: PhaseTargets, kingdom: 'FUNGI' | 'PLANTAE' = 'FUNGI'): ThermodynamicValidation {
+  const ambMin = targets.temperature.day.min;
+  const ambMax = targets.temperature.day.max;
+  
+  if (kingdom !== 'FUNGI') {
+    return { isValid: true, isWarning: false };
+  }
+
+  // Si tiene sustrato definido, validamos coherencia física
+  if (targets.temperature.substrate) {
+    const subMin = targets.temperature.substrate.min;
+    const subMax = targets.temperature.substrate.max;
+
+    if (subMax < subMin) {
+      return {
+        isValid: false,
+        isWarning: false,
+        message: 'Error: La temperatura máxima del sustrato no puede ser menor a la mínima.'
+      };
+    }
+
+    // Inconsistencia termodinámica crítica: Sustrato inferior al ambiente
+    if (subMax <= ambMin) {
+      return {
+        isValid: false,
+        isWarning: false,
+        message: `Violación Termodinámica: El sustrato (${subMax}°C) no puede ser menor al aire ambiente (${ambMin}°C) debido a la termogénesis del micelio (+2°C a +4°C).`,
+        suggestedSubstrate: { min: ambMin + 1, max: ambMax + 3 }
+      };
+    }
+
+    if (subMin < ambMin) {
+      return {
+        isValid: true,
+        isWarning: true,
+        message: `Advertencia Térmica: El sustrato mín (${subMin}°C) está por debajo del ambiente mín (${ambMin}°C). El calor metabólico elevará el sustrato de forma natural.`,
+        suggestedSubstrate: { min: ambMin + 1, max: ambMax + 3 }
+      };
+    }
+
+    // Alerta de sobrecalentamiento crítico
+    if (subMax > 30) {
+      return {
+        isValid: true,
+        isWarning: true,
+        message: `Peligro de Pasteurización/Muerte: Temperatura de sustrato (${subMax}°C) cercana al límite letal para micelio (>30°C).`
+      };
+    }
+  }
+
+  return { isValid: true, isWarning: false };
+}
 
 /**
  * Traduce un perfil y fase a las Reglas de Hardware que entiende el ESP32
@@ -1753,13 +2012,17 @@ export const generateDeviceProfile = (phase: CropPhase): DeviceCropProfile => {
   const co2IdealMax = phase.targets.co2?.max || 800;
   const co2CritMax = co2IdealMax + (co2IdealMax * 0.5); // 50% extra como limite critico
 
+  // Si no hay sustrato explícito, estimamos sustrato = promedio ambiental + 2°C (termogénesis)
+  const estimatedSubstrateIdeal = Math.round(((tempIdealMin + tempIdealMax) / 2) + 2);
+  const estimatedSubstrateCritMax = tempCritMax + 2;
+
   return {
       temp_ideal_min: tempIdealMin,
       temp_ideal_max: tempIdealMax,
       temp_crit_min: tempCritMin,
       temp_crit_max: tempCritMax,
-      temp_sustrato_ideal: phase.targets.temperature.substrate ? Math.round((phase.targets.temperature.substrate.min + phase.targets.temperature.substrate.max) / 2) : tempIdealMin,
-      temp_sustrato_crit_max: phase.targets.temperature.substrate ? phase.targets.temperature.substrate.max + 2 : tempCritMax,
+      temp_sustrato_ideal: phase.targets.temperature.substrate ? Math.round((phase.targets.temperature.substrate.min + phase.targets.temperature.substrate.max) / 2) : estimatedSubstrateIdeal,
+      temp_sustrato_crit_max: phase.targets.temperature.substrate ? phase.targets.temperature.substrate.max + 2 : estimatedSubstrateCritMax,
       hum_ideal_min: humIdealMin,
       hum_ideal_max: humIdealMax,
       hum_crit_min: humCritMin,

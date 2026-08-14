@@ -5,22 +5,9 @@
 ---
 
 ## 🔴 Prioridad Inmediata: Corrección de Deuda Técnica Crítica
-
-> Estas tareas son **bloqueantes** y deben completarse antes de cualquier feature nueva.
-
-### 1. Corregir Bug de Safe Mode [CRÍTICO]
-- **Problema:** Cuando ambos DHTs fallan, el filtro EWMA congela `ewma_temp` en su último valor válido. El sistema nunca entra en Safe Mode y el calefactor opera a ciegas.
-- **Impacto:** Riesgo de incendio.
-- **Archivo:** `HardwareController.cpp:167,247`
-
-### 2. Activar Watchdog de Hardware [CRÍTICO]
-- **Problema:** El campo `watchdog_timeout_ms` existe en `config.json` pero `esp_task_wdt` no está inicializado.
-- **Impacto:** Bloqueo SSL deja al ESP32 colgado indefinidamente.
-- **Archivo:** `main.cpp`
-
-### 3. Rotar Credenciales [CRÍTICO]
-- **Problema:** `Secrets.h` fue commiteado al historial Git.
-- **Impacto:** API Key y password de Firebase potencialmente expuestas.
+- [x] **1. Corregir Bug de Safe Mode [CRÍTICO]** ✅ COMPLETADO ([Informe 77](./informes/77-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
+- [x] **2. Activar Watchdog de Hardware [CRÍTICO]** ✅ COMPLETADO ([Informe 77](./informes/77-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
+- [ ] **3. Rotar Credenciales en Git [CRÍTICO]** ⏳ Plantilla lista ([`Secrets.h.template`](./edge_esp32/src/Secrets.h.template))
 
 ---
 
@@ -29,30 +16,24 @@
 ### ~~1. Redundancia Ambiental Dual (2× DHT22)~~ ✅ COMPLETADO
 ### ~~2. Control PID para Modulación~~ ✅ COMPLETADO
 ### ~~3. Filtro EWMA Industrial~~ ✅ COMPLETADO
-### ~~4. Árbitro de Conflictos Determinista~~ ✅ COMPLETADO
-### ~~5. Anti-Short-Cycle (180s)~~ ✅ COMPLETADO
+### ~~4. Árbitro de Conflictos Determinista~~ ✅ COMPLETADO ([Informe 77](./informes/77-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
+### ~~5. Anti-Short-Cycle (180s) en Peltier~~ ✅ COMPLETADO ([Informe 77](./informes/77-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
 ### ~~6. Modos AUTO/MANUAL con interlocks~~ ✅ COMPLETADO
 ### ~~7. Firebase Auth + Security Rules~~ ✅ COMPLETADO
+### ~~8. Validación Termodinámica Cruzada Sustrato/Ambiente~~ ✅ COMPLETADO ([Informe 76](./informes/76-Validacion-Termodinamica-Sustrato-Ambiente.md))
+### ~~9. Desacoplamiento de Time-Proportioning SSR (PID PWM rápido)~~ ✅ COMPLETADO ([Informe 77](./informes/77-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
+### ~~10. Histéresis Paramétrica (Banda Muerta)~~ ✅ COMPLETADO ([Informe 77](./informes/77-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
+### ~~11. Fix OTA Teardown (liberación de Heap/Sockets)~~ ✅ COMPLETADO ([Informe 77](./informes/77-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
+### ~~12. Renderizado HMI TFT Anti-Flickering + Métrica VPD~~ ✅ COMPLETADO ([Informe 77](./informes/77-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
+### ~~13. Backoff Exponencial y Eliminación de Heap Fragmentado (StaticJson)~~ ✅ COMPLETADO ([Informe 77](./informes/77-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
 
-### 8. Desacoplar PID a tarea FreeRTOS independiente
-- **Objetivo:** Evaluar el SSR del calefactor cada 50-100 ms (no cada 5000 ms) para lograr modulación PWM real.
-- **Impacto:** El PID dejará de degradarse a On/Off binario.
-
-### 9. Implementar Histéresis Paramétrica
-- **Objetivo:** Agregar `hysteresis_temp` y `hysteresis_hum` al CropProfile con banda muerta configurable.
-- **Impacto:** Elimina relay chatter sin depender exclusivamente del EWMA.
-
-### 10. Crop Steering Algorítmico Dinámico
+### 14. Crop Steering Algorítmico Dinámico
 - **Objetivo:** Automatizar curvas graduales diarias (ej. bajar 1°C/día para simular otoño en Shiitake).
 - **Estado:** Motor V2 implementado en React (`steeringEngine.ts`). Falta validación end-to-end con ESP32.
 
-### 11. Alarmas y Notificaciones Push
+### 15. Alarmas y Notificaciones Push
 - **Objetivo:** Firebase Cloud Functions → Telegram / WhatsApp / FCM.
 - **Impacto:** Alertas instantáneas si la cámara entra en `SAFE_MODE` o excede rangos críticos.
-
-### 12. Fix OTA
-- **Objetivo:** Detener Firebase y WebServer en `onStart()` para liberar heap durante el flash.
-- **Impacto:** OTA actualmente falla al 100% por contención de recursos.
 
 ---
 

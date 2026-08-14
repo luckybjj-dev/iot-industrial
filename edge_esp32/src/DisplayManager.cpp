@@ -10,179 +10,169 @@ DisplayManager::DisplayManager(const HardwareController& hw,
       _hw(hw), _net(net), _firebase(firebase) {}
 
 void DisplayManager::begin() {
-    /*
-     * [EDUCACIONAL] INICIALIZACIÓN TFT
-     * INITR_BLACKTAB: Indica el modelo específico del controlador ST7735.
-     * Diferentes pantallas usan diferentes "tabs" (GREEN, RED, BLACK) 
-     * según cómo estén cableados internamente los píxeles.
-     */
     _tft.initR(INITR_BLACKTAB);
-    
-    // setRotation(1) configura la pantalla en modo horizontal (Landscape).
     _tft.setRotation(1);
-    
-    // Limpia la memoria de video asignando todos los píxeles a negro.
     _tft.fillScreen(ST77XX_BLACK);
-    
-    // Tamaño 1 es de 5x7 píxeles por carácter. Un buen balance para pantallas pequeñas.
     _tft.setTextSize(1);
-    Serial.println(F("[DISPLAY] TFT inicializado."));
+
+    // Dibujar plantilla estática una sola vez para eliminar flickering
+    _tft.setCursor(5, 5);
+    _tft.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
+    _tft.print(F("PERFIL: AGNOSTICO"));
+    _tft.drawLine(0, 15, 160, 15, ST77XX_WHITE);
+    _tft.drawLine(0, 85, 160, 85, ST77XX_WHITE);
+
+    Serial.println(F("[DISPLAY] TFT inicializado con plantilla Anti-Flickering."));
 }
 
 void DisplayManager::render() {
-    /*
-     * [EDUCACIONAL] CICLO DE RENDERIZADO
-     * Aquí ocurre la magia visual. Cada vez que se llama a render():
-     * 1. Se limpia todo el lienzo (fillScreen). Esto es sencillo pero 
-     *    genera 'flickering' o parpadeo porque el ojo humano puede percibir 
-     *    el refresco completo si la frecuencia es muy alta.
-     * 
-     * (Tip Pro: Para evitar flickering, no limpies la pantalla completa.
-     * Usa _tft.setTextColor(color_texto, color_fondo) para que al imprimir
-     * un texto nuevo, el fondo negro borre automáticamente el texto viejo).
-     */
-    _tft.fillScreen(ST77XX_BLACK);
-
-    // --- Cabecera ---
-    // [EDUCACIONAL] LAYOUT: La cabecera se ubica en las coordenadas (x=5, y=5).
-    _tft.setCursor(5, 5);
-    _tft.setTextColor(ST77XX_YELLOW);
-    const ConfiguracionCultivo& config = _hw.getConfiguracion();
-    _tft.print(F("PERFIL: "));
-    _tft.println(F("AGNOSTICO"));
-    
-    // [EDUCACIONAL] Línea separadora horizontal para distinguir secciones UI.
-    _tft.drawLine(0, 15, 160, 15, ST77XX_WHITE);
-
+    // No usamos fillScreen() en cada ciclo para evitar parpadeos perceptibles.
+    // Los textos se sobreescriben directamente con setTextColor(fg, bg).
     _drawSensores(_hw.getSensores());
     _drawActuadores(_hw.getActuadores());
-
-    // [EDUCACIONAL] Segunda línea separadora para el bloque inferior de red.
-    _tft.drawLine(0, 85, 160, 85, ST77XX_WHITE);
     _drawEstadoRed();
 }
 
 void DisplayManager::_drawSensores(const SensorData& s) {
-    const ConfiguracionCultivo& config = _hw.getConfiguracion();
-
-    /*
-     * [EDUCACIONAL] COLORACIÓN SEMÁNTICA
-     * La UI ayuda al usuario cambiando los colores según el estado.
-     * Por ejemplo, si hay error o peligro es ROJO, si todo está bien es VERDE o CIAN.
-     */
-
-    // Temperatura Ambiental (Promedio de redundancia DHT1 + DHT2)
+    // Temperatura Ambiental (Promedio filtrado EWMA)
     _tft.setCursor(5, 20);
-    _tft.setTextColor(ST77XX_WHITE);
+    _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
     _tft.print(F("T.Prom: "));
     if (s.tempPromedio != -999.0f) {
-        _tft.setTextColor(ST77XX_YELLOW);
-        _tft.print(s.tempPromedio, 1);
-        _tft.println(F(" C"));
+        _tft.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
+        _tft.print(s.ewmaInitialized ? s.ewma_temp : s.tempPromedio, 1);
+        _tft.println(F(" C    "));
     } else {
-        _tft.setTextColor(ST77XX_RED);
-        _tft.println(F("Error"));
+        _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+        _tft.println(F("FAIL!  "));
     }
 
-    // Humedad Ambiental (Promedio)
+    // Humedad Ambiental (Promedio filtrado EWMA)
     _tft.setCursor(5, 30);
-    _tft.setTextColor(ST77XX_WHITE);
+    _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
     _tft.print(F("H.Prom: "));
     if (s.humPromedio != -999.0f) {
-        _tft.setTextColor(ST77XX_CYAN);
-        _tft.print(s.humPromedio, 1);
-        _tft.println(F(" %"));
+        _tft.setTextColor(ST77XX_CYAN, ST77XX_BLACK);
+        _tft.print(s.ewmaInitialized ? s.ewma_hum : s.humPromedio, 1);
+        _tft.println(F(" %    "));
     } else {
-        _tft.setTextColor(ST77XX_RED);
-        _tft.println(F("Error"));
+        _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+        _tft.println(F("FAIL!  "));
     }
 
-    // Sensor Analógico (Sustrato / Suelo)
+    // Déficit de Presión de Vapor (VPD)
     _tft.setCursor(5, 40);
-    _tft.setTextColor(ST77XX_WHITE);
-    _tft.print(F("NTC:   "));
-    if (s.analogicoOk) {
-        _tft.setTextColor(ST77XX_GREEN);
-        _tft.print(s.valorAnalogico, 1);
-        _tft.println(F(" U"));
+    _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
+    _tft.print(F("VPD:    "));
+    if (s.tempPromedio != -999.0f && s.humPromedio != -999.0f) {
+        _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+        _tft.print(s.ewmaInitialized ? s.ewma_vpd : s.vpd, 2);
+        _tft.println(F(" kPa  "));
     } else {
-        _tft.setTextColor(ST77XX_RED);
-        _tft.println(F("Error"));
+        _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+        _tft.println(F("--     "));
+    }
+
+    // Sensor Analógico (Sustrato NTC)
+    _tft.setCursor(5, 50);
+    _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
+    _tft.print(F("Sustr:  "));
+    if (s.analogicoOk) {
+        _tft.setTextColor(ST77XX_MAGENTA, ST77XX_BLACK);
+        _tft.print(s.ewmaInitialized ? s.ewma_sustrato : s.valorAnalogico, 1);
+        _tft.println(F(" C    "));
+    } else {
+        _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+        _tft.println(F("N/A    "));
     }
 }
 
 void DisplayManager::_drawActuadores(const ActuadorData& a) {
-    /*
-     * [EDUCACIONAL] DISEÑO EN COLUMNAS
-     * Para aprovechar el ancho de la pantalla (160 píxeles), 
-     * los actuadores se distribuyen en dos columnas.
-     * Columna izquierda en X=5, columna derecha en X=75.
-     */
-
-    // Relé A (Térmico) + Relé B (Hídrico)
-    _tft.setCursor(5, 55);
-    _tft.setTextColor(ST77XX_WHITE);
+    // Relé A (Térmico SSR) + Relé B (Hídrico Fogger)
+    _tft.setCursor(5, 63);
+    _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
     _tft.print(F("CAL: "));
-    _tft.setTextColor(a.heater_ON ? ST77XX_GREEN : ST77XX_RED);
+    _tft.setTextColor(a.heater_ON ? ST77XX_GREEN : ST77XX_RED, ST77XX_BLACK);
     _tft.print(a.heater_ON ? F("ON ") : F("OFF"));
 
-    _tft.setCursor(75, 55);
-    _tft.setTextColor(ST77XX_WHITE);
+    _tft.setCursor(75, 63);
+    _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
     _tft.print(F("NBL: "));
-    _tft.setTextColor(a.fogger_ON ? ST77XX_GREEN : ST77XX_RED);
+    _tft.setTextColor(a.fogger_ON ? ST77XX_GREEN : ST77XX_RED, ST77XX_BLACK);
     _tft.println(a.fogger_ON ? F("ON ") : F("OFF"));
 
-    // Relé C (Gases) + Relé D (Luz)
-    _tft.setCursor(5, 65);
-    _tft.setTextColor(ST77XX_WHITE);
+    // Relé C (Extractor) + Relé D (Luz)
+    _tft.setCursor(5, 73);
+    _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
     _tft.print(F("EXT: "));
-    _tft.setTextColor(a.extractor_ON ? ST77XX_GREEN : ST77XX_RED);
+    _tft.setTextColor(a.extractor_ON ? ST77XX_GREEN : ST77XX_RED, ST77XX_BLACK);
     _tft.print(a.extractor_ON ? F("ON ") : F("OFF"));
 
-    _tft.setCursor(75, 65);
-    _tft.setTextColor(ST77XX_WHITE);
+    _tft.setCursor(75, 73);
+    _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
     _tft.print(F("LUZ: "));
-    _tft.setTextColor(a.light_ON ? ST77XX_GREEN : ST77XX_RED);
-    _tft.print(a.light_ON ? F("ON ") : F("OFF"));
-
-    // Relé E (Frío - Peltier)
-    _tft.setCursor(5, 75);
-    _tft.setTextColor(ST77XX_WHITE);
-    _tft.print(F("FRI: "));
-    _tft.setTextColor(a.cooler_ON ? ST77XX_GREEN : ST77XX_RED);
-    _tft.println(a.cooler_ON ? F("ON ") : F("OFF"));
+    _tft.setTextColor(a.light_ON ? ST77XX_GREEN : ST77XX_RED, ST77XX_BLACK);
+    _tft.println(a.light_ON ? F("ON ") : F("OFF"));
 }
 
 void DisplayManager::_drawEstadoRed() {
-    /*
-     * [EDUCACIONAL] FEEDBACK DEL SISTEMA (FOOTER)
-     * Es vital en dispositivos IoT mostrar si hay conexión
-     * a la red y a los servicios Cloud (Firebase).
-     * Esto facilita el diagnóstico por parte del usuario sin
-     * necesidad de conectar un puerto serial.
-     */
-
-    // Línea 1: Estado WiFi / Broker
+    // Línea 1: Estado WiFi
     _tft.setCursor(5, 90);
     bool redOk = _net.estaConectado() && _firebase.isConnected();
     if (redOk) {
-        _tft.setTextColor(ST77XX_GREEN);
-        _tft.println(F("RED: ONLINE"));
+        _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+        _tft.println(F("RED: ONLINE        "));
     } else if (_net.estaEnModoAP()) {
-        _tft.setTextColor(ST77XX_MAGENTA);
-        _tft.println(F("RED: RESCATE AP"));
+        _tft.setTextColor(ST77XX_MAGENTA, ST77XX_BLACK);
+        _tft.println(F("RED: RESCATE AP    "));
     } else {
-        _tft.setTextColor(ST77XX_RED);
-        _tft.println(F("RED: OFFLINE"));
+        _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+        _tft.println(F("RED: OFFLINE       "));
     }
 
     // Línea 2: Estado del Servidor RTDB
     _tft.setCursor(5, 100);
     if (redOk) {
-        _tft.setTextColor(ST77XX_GREEN);
-        _tft.println(F("FIREBASE: OK"));
+        _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+        _tft.println(F("FIREBASE: CONECTADO"));
     } else {
-        _tft.setTextColor(ST77XX_RED);
-        _tft.println(F("FIREBASE: ESPERANDO RED"));
+        _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+        _tft.println(F("FIREBASE: REINTENTO"));
+    }
+
+    // Línea 3: Estado Operacional del Sistema
+    _tft.setCursor(5, 112);
+    EstadoOperacional estado = _hw.getEstadoOperacional();
+    _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
+    _tft.print(F("ESTADO: "));
+    switch (estado) {
+        case EstadoOperacional::SAFE_MODE:
+            _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+            _tft.println(F("SAFE MODE  "));
+            break;
+        case EstadoOperacional::EMERGENCIA:
+            _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+            _tft.println(F("EMERGENCIA "));
+            break;
+        case EstadoOperacional::CALENTANDO:
+            _tft.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
+            _tft.println(F("CALOR (PID)"));
+            break;
+        case EstadoOperacional::ENFRIANDO:
+            _tft.setTextColor(ST77XX_BLUE, ST77XX_BLACK);
+            _tft.println(F("ENFRIANDO  "));
+            break;
+        case EstadoOperacional::HUMIDIFICANDO:
+            _tft.setTextColor(ST77XX_CYAN, ST77XX_BLACK);
+            _tft.println(F("HUMIDIFICA "));
+            break;
+        case EstadoOperacional::MANUAL:
+            _tft.setTextColor(ST77XX_MAGENTA, ST77XX_BLACK);
+            _tft.println(F("MANUAL OVR "));
+            break;
+        default:
+            _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+            _tft.println(F("NORMAL     "));
+            break;
     }
 }
