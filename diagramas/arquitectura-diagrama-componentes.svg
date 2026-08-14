@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1704.2669999999998 1527" width="1704.2669999999998" height="1527" style="--bg:#1F1F1F;--fg:#CCCCCC;--line:#CCCCCC;--accent:#0078D4;--muted:#CCCCCCCC;--surface:#181818;--border:#CCCCCC;background:var(--bg)">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap');
+  text { font-family: 'Inter', system-ui, sans-serif; }
+  svg {
+    /* Derived from --bg and --fg (overridable via --line, --accent, etc.) */
+    --_text:          var(--fg);
+    --_text-sec:      var(--muted, color-mix(in srgb, var(--fg) 60%, var(--bg)));
+    --_text-muted:    var(--muted, color-mix(in srgb, var(--fg) 40%, var(--bg)));
+    --_text-faint:    color-mix(in srgb, var(--fg) 25%, var(--bg));
+    --_line:          var(--line, color-mix(in srgb, var(--fg) 50%, var(--bg)));
+    --_arrow:         var(--accent, color-mix(in srgb, var(--fg) 85%, var(--bg)));
+    --_node-fill:     var(--surface, color-mix(in srgb, var(--fg) 3%, var(--bg)));
+    --_node-stroke:   var(--border, color-mix(in srgb, var(--fg) 20%, var(--bg)));
+    --_group-fill:    var(--bg);
+    --_group-hdr:     color-mix(in srgb, var(--fg) 5%, var(--bg));
+    --_inner-stroke:  color-mix(in srgb, var(--fg) 12%, var(--bg));
+    --_key-badge:     color-mix(in srgb, var(--fg) 10%, var(--bg));
+  }
+</style>
+<defs>
+  <marker id="arrowhead" markerWidth="8" markerHeight="5" refX="7" refY="2.5" orient="auto">
+    <polygon points="0 0, 8 2.5, 0 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+  <marker id="arrowhead-start" markerWidth="8" markerHeight="5" refX="1" refY="2.5" orient="auto-start-reverse">
+    <polygon points="8 0, 0 2.5, 8 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+</defs>
+<g class="subgraph" data-id="Core_1__Arduino_loop" data-label="Core 1 - Arduino loop">
+  <rect x="451.89329722222203" y="401.90000000000003" width="553.3098833333333" height="555.8000000000001" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="451.89329722222203" y="401.90000000000003" width="553.3098833333333" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="463.89329722222203" y="415.90000000000003" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Core 1 - Arduino loop</text>
+</g>
+<g class="subgraph" data-id="Core_1__FreeRTOS_Task" data-label="Core 1 - FreeRTOS Task">
+  <rect x="631.7821888888889" y="58" width="426.534" height="215.60000000000002" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="631.7821888888889" y="58" width="426.534" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="643.7821888888889" y="72" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Core 1 - FreeRTOS Task</text>
+</g>
+<g class="subgraph" data-id="Cloud" data-label="Cloud">
+  <rect x="342.61881527777774" y="1086" width="223.63199999999995" height="250.1" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="342.61881527777774" y="1086" width="223.63199999999995" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="354.61881527777774" y="1100" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Cloud</text>
+</g>
+<g class="subgraph" data-id="Hardware_Fsico" data-label="Hardware Físico">
+  <rect x="40" y="1390.1" width="1624.2669999999998" height="96.9" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="40" y="1390.1" width="1624.2669999999998" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="52" y="1404.1" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Hardware Físico</text>
+</g>
+<polyline class="edge" data-from="MAIN" data-to="NET" data-style="dotted" data-arrow-start="false" data-arrow-end="true" points="577.3333638888887,499.70000000000005 577.3333638888887,511.70000000000005 467.89329722222203,511.70000000000005 467.89329722222203,975.7 441.89329722222203,975.7 441.89329722222203,40 752.4901888888887,40 752.4901888888887,102" fill="none" stroke="var(--_line)" stroke-width="1" stroke-dasharray="4 4" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="HW" data-to="DHT1" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="866.3200555555554,941.7 866.3200555555554,1187.9 854.3564999999999,1187.9 854.3564999999999,1434.1" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="HW" data-to="DHT2" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="866.3200555555554,941.7 866.3200555555554,1187.9 1359.8654999999999,1187.9 1359.8654999999999,1434.1" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="HW" data-to="NTC" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="866.3200555555554,941.7 866.3200555555554,1187.9 1185.4345,1187.9 1185.4345,1434.1" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="HW" data-to="HEAT" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="866.3200555555554,941.7 866.3200555555554,1187.9 495.86149999999986,1187.9 495.86149999999986,1434.1" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="HW" data-to="COOL" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="866.3200555555554,941.7 866.3200555555554,1187.9 1019.5249999999999,1187.9 1019.5249999999999,1434.1" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="HW" data-to="FOG" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="866.3200555555554,941.7 866.3200555555554,1187.9 684.0009999999999,1187.9 684.0009999999999,1434.1" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="HW" data-to="EXT" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="866.3200555555554,941.7 866.3200555555554,1187.9 301.7939999999999,1187.9 301.7939999999999,1434.1" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="HW" data-to="LUZ" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="866.3200555555554,941.7 866.3200555555554,1187.9 1555.0445,1187.9 1555.0445,1434.1" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="DISP" data-to="TFT" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="549.515297222222,601.5 549.515297222222,987.7 331.6188152777777,987.7 331.6188152777777,1348.1 126.62199999999996,1348.1 126.62199999999996,1434.1" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="FB" data-to="RTDB" data-style="solid" data-arrow-start="true" data-arrow-end="true" data-label="SSE Stream + setJSON" points="729.6148472222221,601.5 729.6148472222221,613.5 659.4316305555553,613.5 659.4316305555553,999.7 454.4348152777777,999.7 454.4348152777777,1130" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" marker-start="url(#arrowhead-start)" />
+<polyline class="edge" data-from="WEB" data-to="HW" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="api status y control" points="954.2806888888888,257.6 954.2806888888888,383.90000000000003 988.2031805555555,383.90000000000003 988.2031805555555,851.9000000000001 930.9232555555554,851.9000000000001 930.9232555555554,887.9000000000001" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="NET" data-to="MAIN" data-style="dotted" data-arrow-start="false" data-arrow-end="true" data-label="volatile conexionEstable" points="700.1361888888888,155.8 700.1361888888888,167.8 650.4331888888888,167.8 650.4331888888888,315.6 616.5106972222221,315.6 616.5106972222221,445.90000000000003" fill="none" stroke="var(--_line)" stroke-width="1" stroke-dasharray="4 4" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="MAIN" data-to="HW" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="616.510697222222,499.70000000000005 616.510697222222,523.7 630.1372972222221,523.7 630.1372972222221,863.9000000000001 801.7168555555554,863.9000000000001 801.7168555555554,887.9000000000001" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="MAIN" data-to="FM" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="636.0993638888888,499.70000000000005 636.0993638888888,511.70000000000005 646.4316305555553,511.70000000000005 646.4316305555553,681.8000000000001 726.3205138888887,681.8000000000001 726.3205138888887,717.8000000000001" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="MAIN" data-to="FB" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="655.6880305555553,499.70000000000005 655.6880305555553,511.70000000000005 781.4130972222221,511.70000000000005 781.4130972222221,547.7" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="MAIN" data-to="DISP" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="596.9220305555554,499.70000000000005 596.9220305555554,523.7 549.515297222222,523.7 549.515297222222,547.7" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="FM" data-to="HW" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="Inyecta CropProfile" points="751.9606805555554,771.6000000000001 751.9606805555554,851.9000000000001 844.7856555555554,851.9000000000001 844.7856555555554,887.9000000000001" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="FB" data-to="HW" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="Recibe comandos cloud" points="833.211347222222,601.5 833.211347222222,613.5 917.8811805555554,613.5 917.8811805555554,851.9000000000001 887.8544555555554,851.9000000000001 887.8544555555554,887.9000000000001" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="FB" data-to="FM" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="Persiste config" points="781.4130972222221,601.5 781.4130972222221,613.5 777.600847222222,613.5 777.600847222222,717.8000000000001" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="NET" data-to="DNS" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="752.4901888888888,155.8 752.4901888888888,167.8 749.8391888888889,167.8 749.8391888888889,203.8" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="NET" data-to="WEB" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="804.8441888888889,155.8 804.8441888888889,167.8 954.2806888888888,167.8 954.2806888888888,203.8" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="RTDB" data-to="REACT" data-style="solid" data-arrow-start="true" data-arrow-end="true" data-label="Listeners" points="454.4348152777777,1166.9 454.4348152777777,1283.2" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" marker-start="url(#arrowhead-start)" />
+<g class="edge-label" data-from="FB" data-to="RTDB" data-label="SSE Stream + setJSON">
+  <rect x="390.9348152777777" y="1006.7" width="126.35200000000002" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="454.1108152777777" y="1021.85" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">SSE Stream + setJSON</text>
+</g>
+<g class="edge-label" data-from="WEB" data-to="HW" data-label="api status y control">
+  <rect x="901.7806888888888" y="322.6" width="104.96800000000003" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="954.2646888888888" y="337.75" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">api status y control</text>
+</g>
+<g class="edge-label" data-from="NET" data-to="MAIN" data-label="volatile conexionEstable">
+  <rect x="550.0106972222222" y="322.6" width="132.29199999999997" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="616.1566972222222" y="337.75" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">volatile conexionEstable</text>
+</g>
+<g class="edge-label" data-from="FM" data-to="HW" data-label="Inyecta CropProfile">
+  <rect x="697.4606805555554" y="814.6" width="108.53200000000004" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="751.7266805555555" y="829.75" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">Inyecta CropProfile</text>
+</g>
+<g class="edge-label" data-from="FB" data-to="HW" data-label="Recibe comandos cloud">
+  <rect x="852.8811805555554" y="729.5500000000001" width="129.322" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="917.5421805555554" y="744.7" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">Recibe comandos cloud</text>
+</g>
+<g class="edge-label" data-from="FB" data-to="FM" data-label="Persiste config">
+  <rect x="733.1008472222221" y="644.5000000000001" width="88.33600000000003" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="777.2688472222221" y="659.6500000000001" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">Persiste config</text>
+</g>
+<g class="edge-label" data-from="RTDB" data-to="REACT" data-label="Listeners">
+  <rect x="422.4348152777777" y="1209.8999999999999" width="63.982" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="454.4258152777777" y="1225.05" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">Listeners</text>
+</g>
+<g class="node" data-id="MAIN" data-label="main.cpp
+Orquestador" data-shape="rectangle">
+  <rect x="557.744697222222" y="445.90000000000003" width="117.53200000000001" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="616.510697222222" y="472.8" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="616.510697222222" dy="-3.9000000000000012">main.cpp</tspan><tspan x="616.510697222222" dy="16.900000000000002">Orquestador</tspan></text>
+</g>
+<g class="node" data-id="HW" data-label="HardwareController
+Sensores + Actuadores + PID" data-shape="rectangle">
+  <rect x="758.6480555555554" y="887.9000000000001" width="215.344" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="866.3200555555554" y="914.8000000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="866.3200555555554" dy="-3.9000000000000012">HardwareController</tspan><tspan x="866.3200555555554" dy="16.900000000000002">Sensores + Actuadores + PID</tspan></text>
+</g>
+<g class="node" data-id="FM" data-label="FileManager
+LittleFS config.json" data-shape="rectangle">
+  <rect x="675.0401805555554" y="717.8000000000001" width="153.841" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="751.9606805555554" y="744.7" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="751.9606805555554" dy="-3.9000000000000012">FileManager</tspan><tspan x="751.9606805555554" dy="16.900000000000002">LittleFS config.json</tspan></text>
+</g>
+<g class="node" data-id="FB" data-label="FirebaseManager
+RTDB Streams + Telemetría" data-shape="rectangle">
+  <rect x="677.8165972222221" y="547.7" width="207.19299999999996" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="781.4130972222221" y="574.6" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="781.4130972222221" dy="-3.9000000000000012">FirebaseManager</tspan><tspan x="781.4130972222221" dy="16.900000000000002">RTDB Streams + Telemetría</tspan></text>
+</g>
+<g class="node" data-id="DISP" data-label="DisplayManager
+TFT ST7735 SPI" data-shape="rectangle">
+  <rect x="478.89329722222203" y="547.7" width="141.244" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="549.515297222222" y="574.6" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="549.515297222222" dy="-3.9000000000000012">DisplayManager</tspan><tspan x="549.515297222222" dy="16.900000000000002">TFT ST7735 SPI</tspan></text>
+</g>
+<g class="node" data-id="NET" data-label="NetworkManager
+WiFi + Portal Cautivo + mDNS" data-shape="rectangle">
+  <rect x="647.7821888888889" y="102" width="209.41599999999997" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="752.4901888888888" y="128.9" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="752.4901888888888" dy="-3.9000000000000012">NetworkManager</tspan><tspan x="752.4901888888888" dy="16.900000000000002">WiFi + Portal Cautivo + mDNS</tspan></text>
+</g>
+<g class="node" data-id="DNS" data-label="DNSServer
+Captive Portal Redirect" data-shape="rectangle">
+  <rect x="661.4331888888888" y="203.8" width="176.81199999999998" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="749.8391888888888" y="230.70000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="749.8391888888888" dy="-3.9000000000000012">DNSServer</tspan><tspan x="749.8391888888888" dy="16.900000000000002">Captive Portal Redirect</tspan></text>
+</g>
+<g class="node" data-id="WEB" data-label="ESPAsyncWebServer
+REST API Local" data-shape="rectangle">
+  <rect x="866.2451888888888" y="203.8" width="176.07099999999997" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="954.2806888888888" y="230.70000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="954.2806888888888" dy="-3.9000000000000012">ESPAsyncWebServer</tspan><tspan x="954.2806888888888" dy="16.900000000000002">REST API Local</tspan></text>
+</g>
+<g class="node" data-id="RTDB" data-label="Firebase RTDB" data-shape="rectangle">
+  <rect x="387.1473152777777" y="1130" width="134.575" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="454.4348152777777" y="1148.45" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Firebase RTDB</text>
+</g>
+<g class="node" data-id="REACT" data-label="React SCADA Dashboard" data-shape="rectangle">
+  <rect x="358.61881527777774" y="1283.2" width="191.63199999999995" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="454.4348152777777" y="1301.65" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">React SCADA Dashboard</text>
+</g>
+<g class="node" data-id="DHT1" data-label="DHT22 1 - GPIO 27" data-shape="rectangle">
+  <rect x="782.6229999999998" y="1434.1" width="143.46699999999998" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="854.3564999999999" y="1452.55" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">DHT22 1 - GPIO 27</text>
+</g>
+<g class="node" data-id="DHT2" data-label="DHT22 2 - GPIO 26" data-shape="rectangle">
+  <rect x="1285.9089999999999" y="1434.1" width="147.91299999999998" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="1359.8654999999999" y="1452.55" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">DHT22 2 - GPIO 26</text>
+</g>
+<g class="node" data-id="NTC" data-label="NTC 10K - GPIO 34" data-shape="rectangle">
+  <rect x="1112.96" y="1434.1" width="144.94899999999998" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="1185.4345" y="1452.55" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">NTC 10K - GPIO 34</text>
+</g>
+<g class="node" data-id="HEAT" data-label="Calefactor SSR - GPIO 4" data-shape="rectangle">
+  <rect x="406.3439999999999" y="1434.1" width="179.03499999999997" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="495.86149999999986" y="1452.55" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Calefactor SSR - GPIO 4</text>
+</g>
+<g class="node" data-id="COOL" data-label="Peltier - GPIO 17" data-shape="rectangle">
+  <rect x="954.0899999999999" y="1434.1" width="130.87" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="1019.5249999999999" y="1452.55" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Peltier - GPIO 17</text>
+</g>
+<g class="node" data-id="FOG" data-label="Fogger - GPIO 25" data-shape="rectangle">
+  <rect x="613.3789999999999" y="1434.1" width="141.24399999999997" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="684.0009999999999" y="1452.55" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Fogger - GPIO 25</text>
+</g>
+<g class="node" data-id="EXT" data-label="Extractor - GPIO 32" data-shape="rectangle">
+  <rect x="225.24399999999994" y="1434.1" width="153.1" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="301.7939999999999" y="1452.55" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Extractor - GPIO 32</text>
+</g>
+<g class="node" data-id="LUZ" data-label="Luz Active LOW - GPIO 16" data-shape="rectangle">
+  <rect x="1461.822" y="1434.1" width="186.44499999999994" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="1555.0445" y="1452.55" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Luz Active LOW - GPIO 16</text>
+</g>
+<g class="node" data-id="TFT" data-label="Pantalla TFT SPI" data-shape="rectangle">
+  <rect x="56" y="1434.1" width="141.24399999999997" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="126.62199999999999" y="1452.55" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Pantalla TFT SPI</text>
+</g>
+</svg>

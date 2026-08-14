@@ -21,7 +21,7 @@
 - [x] **#3. Rotación y purga de credenciales en Git**
   - *Problema:* `Secrets.h` estuvo presente en commits pasados del historial de Git.
   - *Corrección:* Purga total del árbol histórico mediante `git filter-branch`, eliminación de reflogs (`git gc --aggressive`), blindaje de `.gitignore` y sincronización remota forzada en GitHub.
-  - *Estado de Validación:* ✅ **Verificado empíricamente (`git log --all --full-history` = 0 commits) e Informe 79**.
+  - *Estado de Validación:* ✅ **Verificado empíricamente (`git log --all --full-history` = 0 commits) e Informe 18**.
 
 ---
 
@@ -74,27 +74,27 @@
 - [x] **#19. Validación Termodinámica Cruzada (Sustrato vs. Ambiente en UI/SCADA)**
   - *Problema:* El gestor de perfiles permitía ingresar $T_{\text{sustrato}} \le T_{\text{ambiente}}$, violando la termogénesis del micelio ($+2^\circ\text{C}$ a $+4^\circ\text{C}$) y generando alarmas falsas.
   - *Corrección:* Implementado motor `validateThermodynamics()` en `CropProfiles.ts`, guards en modal `CropProfileSelectorModal.tsx`, badge dinámico de diagnóstico y auto-cálculo asistido (+2°C metabólico).
-  - *Estado de Validación:* ✅ **Verificado en TypeScript (`npx tsc`) e Informe 76**.
+  - *Estado de Validación:* ✅ **Verificado en TypeScript (`npx tsc`) e Informe 15**.
 
 - [x] **#11. Calibración ADC + Multisampling en Sonda NTC**
   - *Problema:* No-linealidad y ruido electromagnético en ADC1 generaban desvíos de hasta ±3.0°C en la lectura analógica de sustrato.
   - *Corrección:* Caracterización de curva eFuse/TwoPoint con `esp_adc_cal_characterize()` y multisampling de 32 muestras consecutivas (`NTC_SAMPLES = 32`) con `esp_adc_cal_raw_to_voltage()`.
-  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO e Informe 78**.
+  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO e Informe 17**.
 
 - [x] **#12. Integración de sensor CO2 NDIR real (SCD30 / MH-Z19)**
   - *Problema:* CO2 fijado en placeholder estático de 400 ppm.
   - *Corrección:* Driver I2C para Sensirion SCD30/40 en GPIO 21/22 con lectura continua no bloqueante, chequeo de data-ready y fallback seguro.
-  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO e Informe 78**.
+  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO e Informe 17**.
 
 - [x] **#13. Control climático gobernado por VPD como variable maestra**
   - *Problema:* El microclima hídrico solo evaluaba RH%, ignorando la tasa de transpiración y desecación del micelio.
   - *Corrección:* Control coordinado por VPD: humidificación activada si $VPD > 1.20\,\text{kPa}$ o RH baja, y extracción activada si $VPD < 0.25\,\text{kPa}$ por saturación.
-  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO e Informe 78**.
+  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO e Informe 17**.
 
 - [x] **#14. Escritura atómica transaccional en LittleFS**
   - *Problema:* Cortes de energía durante la escritura de `config.json` truncaban el archivo a 0 bytes.
   - *Corrección:* Escritura a `/config.json.tmp`, renombramiento atómico con respaldo `/config.json.old` y autoreparación en arranque.
-  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO e Informe 78**.
+  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO e Informe 17**.
 - [x] **#15. Renderizado TFT con Dirty Checking / Anti-Flickering**
   - *Problema:* `fillScreen(BLACK)` a cada tick causaba parpadeo molesto en la pantalla SPI.
   - *Corrección:* Plantilla estática dibujada una sola vez en `begin()`, sobreescritura de glifos con fondo negro (`setTextColor(fg, ST77XX_BLACK)`) e integración de métrica VPD en pantalla.
