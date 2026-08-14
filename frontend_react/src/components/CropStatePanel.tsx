@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import type { ConfiguracionCultivo } from '../types/cultivo';
 import { getAllProfiles, generateDeviceProfile } from '../data/CropProfiles';
 import { sendConfigRules, subscribeToPlanState } from '../services/firebaseService';
-import { SkipBack, SkipForward, Square, Clock, Pause, Play } from 'lucide-react';
+import { SkipBack, SkipForward, Square, Clock, Pause, Play, AlertTriangle } from 'lucide-react';
+import { StatsAccordion } from './StatsAccordion';
 
 interface CropStatePanelProps {
     deviceId: string;
     config?: ConfiguracionCultivo;
+    isOffline?: boolean;
 }
 
 /**
@@ -20,7 +22,7 @@ interface CropStatePanelProps {
  * De esta forma, evita el round-trip de un backend procesador: los componentes como
  * `App.tsx` y el ESP32 reciben la nueva configuración en milisegundos gracias al stream.
  */
-const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config }) => {
+const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config, isOffline }) => {
     const [loading, setLoading] = useState(false);
     const [planState, setPlanState] = useState<any>(null);
     const [timeRemaining, setTimeRemaining] = useState<string>('');
@@ -246,28 +248,37 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config }) => 
         );
     };
 
-    return (
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-5 mb-6 shadow-2xl relative overflow-hidden">
-            {/* Soft background glow */}
-            <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
-
-            <div className="flex justify-between items-center mb-5">
-                <div className="flex items-center gap-3">
-                    <h3 className="text-sm font-black text-neutral-200 uppercase tracking-widest flex items-center gap-2">
-                        Estado del Cultivo
-                    </h3>
-                    <span className={`px-2 py-0.5 rounded text-[9px] font-black tracking-widest uppercase border ${isActive ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-neutral-500/20 text-neutral-400 border-neutral-500/30'}`}>
-                        {isActive ? 'ACTIVO' : 'INACTIVO'}
-                    </span>
-                </div>
-                {isActive && (
-                    <span className="text-emerald-400/80 font-bold text-[10px] uppercase tracking-widest bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                        {activeProfileName}
+    const titleContent = (
+        <div className="flex justify-between items-center w-full pr-4">
+            <div className="flex items-center gap-3">
+                <h3 className="text-sm font-black text-neutral-200 uppercase tracking-widest flex items-center gap-2">
+                    Estado del Cultivo
+                </h3>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-black tracking-widest uppercase border ${isActive ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-neutral-500/20 text-neutral-400 border-neutral-500/30'}`}>
+                    {isActive ? 'ACTIVO' : 'INACTIVO'}
+                </span>
+                {isOffline && (
+                    <span className="px-2 py-0.5 rounded text-[9px] font-black tracking-widest uppercase border bg-red-500/20 text-red-500 border-red-500/30 animate-pulse flex items-center gap-1">
+                        <AlertTriangle size={10} />
+                        Desconectado
                     </span>
                 )}
             </div>
+            {isActive && (
+                <span className="text-emerald-400/80 font-bold text-[10px] uppercase tracking-widest bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 mr-2">
+                    {activeProfileName}
+                </span>
+            )}
+        </div>
+    );
 
-            <div>
+    return (
+        <StatsAccordion title={titleContent} defaultOpen={true}>
+            <div className="relative overflow-hidden -mt-4">
+                {/* Soft background glow */}
+                <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+                <div>
                 {!isActive ? (
                     <div className="text-center py-6 bg-white/5 rounded-xl border border-white/5">
                         <p className="text-neutral-400 text-xs mb-1">Sin plan dinámico activo.</p>
@@ -354,7 +365,8 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config }) => 
                     </div>
                 )}
             </div>
-        </div>
+            </div>
+        </StatsAccordion>
     );
 };
 

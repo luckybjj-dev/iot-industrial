@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 // Componente legacy — tipo 'any' para compatibilidad sin refactorizar
 type ReglaTermodinamica = any;
 import { X, Plus, Trash2, Save } from 'lucide-react';
@@ -14,8 +14,18 @@ interface Props {
 export const RuleEditorModal: React.FC<Props> = ({ deviceId, isOpen, onClose, currentRules, onSave }) => {
   const [rules, setRules] = useState<ReglaTermodinamica[]>(currentRules || []);
   const [isSaving, setIsSaving] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    if (isOpen && !dialog.open) {
+      dialog.showModal();
+    } else if (!isOpen && dialog.open) {
+      dialog.close();
+    }
+  }, [isOpen]);
 
   const handleAddRule = () => {
     if (rules.length >= 20) {
@@ -53,8 +63,12 @@ export const RuleEditorModal: React.FC<Props> = ({ deviceId, isOpen, onClose, cu
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh]">
+    <dialog
+      ref={dialogRef}
+      onCancel={onClose}
+      className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-4xl shadow-2xl m-auto p-0 overflow-hidden"
+    >
+      <div className="flex flex-col max-h-[90vh]">
         <div className="flex justify-between items-center p-6 border-b border-white/10">
           <div>
             <h2 className="text-2xl font-bold text-white">Motor de Reglas (Rule Engine)</h2>
@@ -168,6 +182,6 @@ export const RuleEditorModal: React.FC<Props> = ({ deviceId, isOpen, onClose, cu
           </div>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 };

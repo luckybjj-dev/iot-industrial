@@ -6,6 +6,85 @@
     /* Rich dark background */
     background: radial-gradient(circle at 50% -20%, #1a1a2e 0%, #0f0f1a 100%);
   }
+
+  /* Modern Web Guidance: Native dialog animations */
+  dialog {
+    transition: opacity 0.3s ease-out, transform 0.3s ease-out, display 0.3s ease-out allow-discrete, overlay 0.3s ease-out allow-discrete;
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  dialog[open] {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  @starting-style {
+    dialog[open] {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+  }
+
+  dialog::backdrop {
+    background-color: rgb(0 0 0 / 0%);
+    backdrop-filter: blur(0px);
+    transition: display 0.3s allow-discrete, overlay 0.3s allow-discrete, background-color 0.3s, backdrop-filter 0.3s;
+  }
+
+  dialog[open]::backdrop {
+    background-color: rgb(0 0 0 / 80%);
+    backdrop-filter: blur(4px);
+  }
+
+  @starting-style {
+    dialog[open]::backdrop {
+      background-color: rgb(0 0 0 / 0%);
+      backdrop-filter: blur(0px);
+    }
+  }
+
+  /* Modern Web Guidance: Accordion (Details) */
+  :root {
+    interpolate-size: allow-keywords;
+  }
+
+  /* Modern details-content approach */
+  .modern-details::details-content {
+    opacity: 0;
+    block-size: 0;
+    overflow-y: clip;
+    transition: content-visibility 0.3s allow-discrete, opacity 0.3s, block-size 0.3s;
+  }
+
+  .modern-details[open]::details-content {
+    opacity: 1;
+    block-size: auto;
+  }
+
+  @starting-style {
+    .modern-details[open]::details-content {
+      opacity: 0;
+      block-size: 0;
+    }
+  }
+
+  /* Grid wrapper fallback approach */
+  .accordion-grid-wrapper {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.3s ease-out, opacity 0.3s ease-out;
+    opacity: 0;
+  }
+  
+  details[open] .accordion-grid-wrapper {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  
+  .accordion-grid-inner {
+    overflow: hidden;
+  }
 }
 
 @utility glass-panel {

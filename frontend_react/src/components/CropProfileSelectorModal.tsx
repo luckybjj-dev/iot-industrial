@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Sprout, Play, Search, BookOpen, Edit3, Save, Plus, Trash2 } from 'lucide-react';
 import type { DeviceCropProfile } from '../types/cultivo';
 import { CROP_PROFILES, generateDeviceProfile, getCustomProfiles } from '../data/CropProfiles';
@@ -42,11 +42,34 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
   const [newProfileDesc, setNewProfileDesc] = useState('');
   const [newProfileKingdom, setNewProfileKingdom] = useState<'FUNGI' | 'PLANTAE'>('FUNGI');
 
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const createModalRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    if (isOpen && !dialog.open) {
+      dialog.showModal();
+    } else if (!isOpen && dialog.open) {
+      dialog.close();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    const dialog = createModalRef.current;
+    if (!dialog) return;
+
+    if (showCreateModal && !dialog.open) {
+      dialog.showModal();
+    } else if (!showCreateModal && dialog.open) {
+      dialog.close();
+    }
+  }, [showCreateModal]);
+
   useEffect(() => {
     setCustomProfiles(getCustomProfiles());
   }, []);
-
-  if (!isOpen) return null;
 
   const ALL_PROFILES = { ...CROP_PROFILES, ...customProfiles };
   const profile = ALL_PROFILES[selectedProfileId];
@@ -578,8 +601,12 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-[95vw] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+    <dialog
+      ref={dialogRef}
+      onCancel={onClose}
+      className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-[95vw] shadow-2xl m-auto p-0 overflow-hidden"
+    >
+      <div className="flex flex-col max-h-[90vh] overflow-hidden">
         
         {/* HEADER */}
         <div className="flex justify-between items-center p-6 border-b border-white/10 bg-black/40 flex-shrink-0">
@@ -723,12 +750,15 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
       </div>
       
       {/* OVERLAY DE CREACIÓN DE NUEVA ESPECIE */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
-          <div className="bg-[#1a1a1a] border border-emerald-500/30 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h2 className="text-2xl font-bold text-emerald-400 mb-6 flex items-center gap-3">
-              <Plus size={24} /> Crear Nuevo Perfil
-            </h2>
+      <dialog
+        ref={createModalRef}
+        onCancel={() => setShowCreateModal(false)}
+        className="bg-[#1a1a1a] border border-emerald-500/30 rounded-2xl m-auto p-0 w-full max-w-md shadow-2xl overflow-hidden"
+      >
+        <div className="p-6">
+          <h2 className="text-2xl font-bold text-emerald-400 mb-6 flex items-center gap-3">
+            <Plus size={24} /> Crear Nuevo Perfil
+          </h2>
             
             <div className="space-y-4">
               <div>
@@ -766,8 +796,7 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
               <button onClick={confirmCreateCustomProfile} className="px-6 py-2 bg-emerald-500 text-white rounded-lg font-bold hover:bg-emerald-600 transition-colors shadow-lg">Confirmar</button>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+      </dialog>
+    </dialog>
   );
 };

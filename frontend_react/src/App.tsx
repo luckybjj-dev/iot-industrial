@@ -6,7 +6,9 @@ import { TelemetryDashboard } from './components/TelemetryDashboard';
 import { SemaforoEstabilidad } from './components/SemaforoEstabilidad';
 import { CropProfileSelectorModal } from './components/CropProfileSelectorModal';
 import CropStatePanel from './components/CropStatePanel';
-import { Thermometer, Droplets, Leaf, Activity, Wind, Power, Settings2, ShieldAlert, Sprout, X, Snowflake } from 'lucide-react';
+import { Thermometer, Droplets, Leaf, Activity, Wind, Power, Settings2, ShieldAlert, Sprout, X, Snowflake, LogOut } from 'lucide-react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { Login } from './components/Login';
 
 /**
  * Componente principal de la aplicación SCADA.
@@ -17,7 +19,8 @@ import { Thermometer, Droplets, Leaf, Activity, Wind, Power, Settings2, ShieldAl
  *   como `TelemetryDashboard` y `CropStatePanel`, aislando a estos de las llamadas directas a Firebase 
  *   para mantenerlos puros y reactivos a los props.
  */
-function App() {
+function Dashboard() {
+  const { logout, user } = useAuth();
   const [camaras, setCamaras] = useState<EstadoCamara[]>([]);
   const [configs, setConfigs] = useState<{ [deviceId: string]: ConfiguracionCultivo }>({});
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +35,9 @@ function App() {
   
   // Modales
   const [editingRulesFor, setEditingRulesFor] = useState<string | null>(null);
+  
+  // Estado de desconexión por dispositivo (levantado desde TelemetryDashboard)
+  const [deviceOfflineStatus, setDeviceOfflineStatus] = useState<Record<string, { isOffline: boolean, lastSeen: number | null }>>({});
 
   useEffect(() => {
     const ticker = setInterval(() => setNow(Date.now()), 1000);
@@ -202,9 +208,20 @@ function App() {
               Supervisory Control & Data Acquisition
             </p>
           </div>
-          <div className="mt-4 md:mt-0 flex items-center gap-3">
-             <div className="h-3 w-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.7)]"></div>
-             <span className="text-sm font-bold text-neutral-400 tracking-widest uppercase">System Online</span>
+          <div className="mt-4 md:mt-0 flex items-center gap-4">
+             <div className="flex items-center gap-2">
+               <div className="h-3 w-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.7)]"></div>
+               <span className="text-sm font-bold text-neutral-400 tracking-widest uppercase hidden sm:inline-block">System Online</span>
+             </div>
+             <div className="h-8 w-px bg-white/10"></div>
+             <button 
+                onClick={logout}
+                className="flex items-center gap-2 text-neutral-400 hover:text-white transition-colors text-xs font-bold tracking-widest uppercase bg-white/5 px-3 py-2 rounded-lg border border-white/10 hover:border-white/20"
+                title={`Sesión iniciada como ${user?.email}`}
+              >
+               <LogOut size={16} />
+               Salir
+             </button>
           </div>
         </header>
 
@@ -238,6 +255,7 @@ function App() {
               const modo = optimisticModes[camara.deviceId] || camara.modo_operacion || 'AUTO';
               const config = configs[camara.deviceId];
               const crop = config?.crop;
+              const offlineStatus = deviceOfflineStatus[camara.deviceId] || { isOffline: false, lastSeen: null };
 
               const getTarget = (variable: 'TEMP' | 'HUMEDAD' | 'VPD' | 'CO2') => {
                 if (!crop) return undefined;
@@ -321,17 +339,20 @@ function App() {
                       <div className="space-y-8 relative z-10">
                         
                         {/* Panel Dinámico de Crop Steering */}
-                        <CropStatePanel deviceId={camara.deviceId} config={config} />
+                        <CropStatePanel deviceId={camara.deviceId} config={config} isOffline={offlineStatus.isOffline} />
 
                         {/* Semáforo Inteligente */}
                         <SemaforoEstabilidad 
                           telemetria={camara.telemetria} 
                           crop={crop ?? null} 
-                          modo_operacion={modo} 
+                          modo_operacion={modo}
+                          isOffline={offlineStatus.isOffline}
+                          lastSeen={offlineStatus.lastSeen}
                         />
   
-                        {/* HERO CARDS - Métricas */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                        {/* HERO CARDS - Métricas (Ocultas si el equipo está offline para no mostrar datos falsos/viejos) */}
+                        {!offlineStatus.isOffline && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                           <MetricCard
                             title="Temp. Ambiente Prom."
                             value={camara.telemetria.temp_promedio?.toFixed(1) || '--'}
@@ -414,7 +435,8 @@ function App() {
                             })()}
                             target={getTarget('CO2')}
                           />
-                      </div>
+                          </div>
+                        )}
                       
                       {/* ACTUADORES & GRAFICO */}
                       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
@@ -504,11 +526,17 @@ function App() {
                         </div>
 
                         {/* GRÁFICO HISTÓRICO UNIFICADO (TELEMETRÍA) */}
-                        <div className="xl:col-span-3">
+                        <div className="xl:col-span-3 h-[700px]">
                           <TelemetryDashboard 
                             deviceId={camara.deviceId} 
                             config={crop} 
                             realtimeTelemetry={camara.telemetria}
+                            onOfflineStatusChange={(isOffline, lastSeen) => {
+                              setDeviceOfflineStatus(prev => ({
+                                ...prev,
+                                [camara.deviceId]: { isOffline, lastSeen }
+                              }));
+                            }}
                           />
                         </div>
                       </div>
@@ -541,7 +569,33 @@ function App() {
   );
 }
 
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center border border-white/5">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mb-6"></div>
+        <p className="text-neutral-500 font-mono text-sm tracking-widest uppercase">Autenticando...</p>
+      </div>
+    );
+  }
+  
+  if (!user) {
+    return <Login />;
+  }
+  
+  return <>{children}</>;
+};
+
+function App() {
+  return (
+    <AuthProvider>
+      <ProtectedRoute>
+        <Dashboard />
+      </ProtectedRoute>
+    </AuthProvider>
+  );
+}
+
 export default App;
-
-
-

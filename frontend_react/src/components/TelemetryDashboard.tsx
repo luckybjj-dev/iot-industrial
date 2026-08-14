@@ -1,22 +1,24 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, Area, ReferenceArea
 } from 'recharts';
-import { Activity, Thermometer, Droplets, Wind, Database } from 'lucide-react';
+import { Activity, Thermometer, Droplets, Wind, Database, AlertTriangle } from 'lucide-react';
 import { fetchDeviceHistory } from '../services/firebaseService';
-import type { HistorialData, DeviceCropProfile } from '../types/cultivo';
+import type { HistorialData, DeviceCropProfile, TelemetriaFungi } from '../types/cultivo';
+import { StatsAccordion } from './StatsAccordion';
 
 interface Props {
   deviceId: string;
   config?: DeviceCropProfile;
-  realtimeTelemetry?: any;
+  realtimeTelemetry?: TelemetriaFungi;
+  onOfflineStatusChange?: (isOffline: boolean, lastSeen: number | null) => void;
 }
 
 /**
  * Componente encargado de renderizar el gráfico histórico y en vivo.
  * Recibe `config` (setpoints del cultivo) vía props desde App.tsx para sobreponer los rangos ideales.
  */
-export const TelemetryDashboard: React.FC<Props> = ({ deviceId, config, realtimeTelemetry }) => {
+export const TelemetryDashboard: React.FC<Props> = ({ deviceId, config, realtimeTelemetry, onOfflineStatusChange }) => {
   const [data, setData] = useState<HistorialData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [timeWindow, setTimeWindow] = useState<number>(1); // days
@@ -51,7 +53,7 @@ export const TelemetryDashboard: React.FC<Props> = ({ deviceId, config, realtime
   }, [deviceId]);
 
   // Filtrar data por ventana de tiempo y preprocesarla
-  const { chartData, gaps } = useMemo(() => {
+  const { chartData, gaps, isCurrentlyOffline, lastSeen } = useMemo(() => {
     const cutoff = Date.now() - (timeWindow * 24 * 3600000);
     const filtered = data
       .filter(d => d.timestamp >= cutoff)
@@ -70,14 +72,15 @@ export const TelemetryDashboard: React.FC<Props> = ({ deviceId, config, realtime
       });
 
     // Añadir el punto actual (en vivo) al gráfico si existe y es reciente
-    if (realtimeTelemetry && realtimeTelemetry.timestamp) {
-      if (filtered.length === 0 || realtimeTelemetry.timestamp > filtered[filtered.length - 1].timestamp) {
+    const rtAny = realtimeTelemetry as any;
+    if (rtAny && rtAny.timestamp) {
+      if (filtered.length === 0 || rtAny.timestamp > filtered[filtered.length - 1].timestamp) {
         filtered.push({
-          timestamp: realtimeTelemetry.timestamp,
-          temp_ambiente: realtimeTelemetry.temp_promedio ?? realtimeTelemetry.temp_ambiente,
-          temp_sustrato: realtimeTelemetry.sensor_analogico,
-          hum_ambiente: realtimeTelemetry.humedad_promedio ?? realtimeTelemetry.humedad_aire,
-          vpd_calculado: realtimeTelemetry.vpd
+          timestamp: rtAny.timestamp,
+          temp_ambiente: (rtAny.temp_promedio ?? rtAny.temp_ambiente) || 0,
+          temp_sustrato: rtAny.sensor_analogico || 0,
+          hum_ambiente: (rtAny.humedad_promedio ?? rtAny.humedad_aire) || 0,
+          vpd_calculado: rtAny.vpd || 0
         });
       }
     }
@@ -148,8 +151,25 @@ export const TelemetryDashboard: React.FC<Props> = ({ deviceId, config, realtime
       }
     }
 
-    return { chartData: finalData, gaps: detectedGaps };
+    return { 
+      chartData: finalData, 
+      gaps: detectedGaps,
+      isCurrentlyOffline,
+      lastSeen: filtered.length > 0 ? filtered[filtered.length - 1].timestamp : null
+    };
   }, [data, timeWindow, realtimeTelemetry]);
+
+  const onOfflineStatusChangeRef = useRef(onOfflineStatusChange);
+  useEffect(() => {
+    onOfflineStatusChangeRef.current = onOfflineStatusChange;
+  }, [onOfflineStatusChange]);
+
+  // Emitir estado offline hacia el padre
+  useEffect(() => {
+    if (onOfflineStatusChangeRef.current) {
+      onOfflineStatusChangeRef.current(isCurrentlyOffline, lastSeen);
+    }
+  }, [isCurrentlyOffline, lastSeen]);
 
   // Calcular promedios para la ventana actual
   const averages = useMemo(() => {
@@ -253,54 +273,63 @@ export const TelemetryDashboard: React.FC<Props> = ({ deviceId, config, realtime
         </div>
       </div>
 
-      {/* QUICK STATS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
-          <Thermometer className="text-orange-400" size={32} />
-          <div>
-            <div className="text-neutral-400 text-sm">Temp. Amb. Prom.</div>
-            <div className="text-2xl font-bold text-white">{averages.tempAmb}°C</div>
-          </div>
-        </div>
-        <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
-          <Thermometer className="text-emerald-400" size={32} />
-          <div>
-            <div className="text-neutral-400 text-sm">Temp. Sus. Prom.</div>
-            <div className="text-2xl font-bold text-white">{averages.tempSus}°C</div>
-          </div>
-        </div>
-        <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
-          <Droplets className="text-blue-400" size={32} />
-          <div>
-            <div className="text-neutral-400 text-sm">Hum. Promedio</div>
-            <div className="text-2xl font-bold text-white">{averages.hum}%</div>
-          </div>
-        </div>
-        <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
-          <Wind className="text-purple-400" size={32} />
-          <div>
-            <div className="text-neutral-400 text-sm">VPD Promedio</div>
-            <div className="text-2xl font-bold text-white">{averages.vpd} kPa</div>
-          </div>
-        </div>
-      </div>
 
-      {/* CONTROLS */}
-      <div className="flex justify-end gap-2 mb-4">
-        {[1/24, 1, 7, 15, 30].map(days => (
-          <button 
-            key={days}
-            onClick={() => setTimeWindow(days)}
-            className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${
-              timeWindow === days 
-                ? 'bg-blue-500 text-white' 
-                : 'bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white'
-            }`}
-          >
-            {days === 1/24 ? '1 Hora' : days === 1 ? '24 Horas' : `${days} Días`}
-          </button>
-        ))}
-      </div>
+
+      {/* QUICK STATS */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
+            <Thermometer className="text-orange-400" size={32} />
+            <div>
+              <div className="text-neutral-400 text-sm">Temp. Amb. Prom.</div>
+              <div className="text-2xl font-bold text-white">{averages.tempAmb}°C</div>
+            </div>
+          </div>
+          <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
+            <Thermometer className="text-emerald-400" size={32} />
+            <div>
+              <div className="text-neutral-400 text-sm">Temp. Sus. Prom.</div>
+              <div className="text-2xl font-bold text-white">{averages.tempSus}°C</div>
+            </div>
+          </div>
+          <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
+            <Droplets className="text-blue-400" size={32} />
+            <div>
+              <div className="text-neutral-400 text-sm">Hum. Promedio</div>
+              <div className="text-2xl font-bold text-white">{averages.hum}%</div>
+            </div>
+          </div>
+          <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
+            <Wind className="text-purple-400" size={32} />
+            <div>
+              <div className="text-neutral-400 text-sm">VPD Promedio</div>
+              <div className="text-2xl font-bold text-white">{averages.vpd} kPa</div>
+            </div>
+          </div>
+        </div>
+
+      {/* CHART & CONTROLS CONTAINER */}
+      <div className="bg-black/30 border border-white/5 rounded-xl p-4 flex-1 flex flex-col min-h-0">
+        {/* CONTROLS */}
+        <div className="flex justify-between items-center gap-2 mb-4">
+          <div className="text-sm font-bold text-neutral-400 uppercase tracking-widest">
+            Gráfico Histórico
+          </div>
+          <div className="flex justify-end gap-2">
+          {[1/24, 1, 7, 15, 30].map(days => (
+            <button 
+              key={days}
+              onClick={() => setTimeWindow(days)}
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${
+                timeWindow === days 
+                  ? 'bg-blue-500 text-white' 
+                  : 'bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              {days === 1/24 ? '1 Hora' : days === 1 ? '24 Horas' : `${days} Días`}
+            </button>
+          ))}
+        </div>
+        </div>
 
       {/* CHART */}
       <div className="flex-1 min-h-0 w-full relative">
@@ -493,10 +522,10 @@ export const TelemetryDashboard: React.FC<Props> = ({ deviceId, config, realtime
               connectNulls={true}
               hide={hiddenLines['vpd_calculado']}
             />
-          </ComposedChart>
-        </ResponsiveContainer>
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
       </div>
-
     </div>
   );
 };

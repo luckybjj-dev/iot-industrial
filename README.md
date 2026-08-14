@@ -1,36 +1,82 @@
-# Motor Agnóstico IoT y Gestor SCADA 🍄🌿 v1.0.0 (MVP)
+# AgriEdge OS — Motor Agnóstico IoT y SCADA Agronómico 🍄🌿
 
-Sistema industrial automatizado (CEA - Controlled Environment Agriculture) que separa completamente la toma de decisiones termodinámicas de la ejecución en hardware. 
+> **Versión:** 1.0.0 (MVP Post-Auditoría) | **Última Auditoría:** 14/08/2026 | **Puntuación:** 7.0/10
 
-Consta de dos bloques principales:
-1. **Frontend en React (Crop Engine / SCADA):** Gestiona la lógica agronómica, alberga una librería universal de perfiles (Fungi y Plantae) y traduce objetivos biológicos en reglas termodinámicas matemáticas.
-2. **Edge Node (ESP32):** Un actuador "agnóstico" y robusto que ejecuta las reglas descargadas desde Firebase, sin importar si está cultivando Champiñones, Tomates o Cannabis.
+Sistema industrial automatizado (CEA — *Controlled Environment Agriculture*) que separa completamente la toma de decisiones agronómicas de la ejecución termodinámica en hardware.
 
-## 🚀 Estado del Proyecto: MVP en Producción (v1.0.0)
-El sistema ha alcanzado el hito de Producto Mínimo Viable. Puedes leer el reporte de este logro en el documento [INFORME_HITO_1.md](INFORME_HITO_1.md) y nuestra proyección a futuro en el [ROADMAP.md](ROADMAP.md).
+## 🏗️ Arquitectura
 
-- **SCADA Web Robusto:** Se integraron gráficos estadísticos (Recharts) soportando historiales de hasta 30 días y se construyó bajo la ontología del estándar ISA-95 (Granja > Nave > Zona > Nodo).
-- **Control Hardware Avanzado:** La placa ESP32 (Wemos D1 R32) controla con seguridad industrial ciclos de Calefacción, Extracción, Niebla y Luz. Además, se integró hardware de Enfriamiento (Peltier) y redundancia ambiental promediada entre sensores DHT22 y NTC2.
-- **Fail-safes Industriales:** El firmware reacciona proactivamente ante desconexiones de WiFi, errores silenciosos de desbordamiento de memoria JSON, o saturación de sensores en el campo.
+El sistema opera como un **PLC agnóstico de 3 capas**:
 
-## 🏗️ Arquitectura de Firmware (C++)
+1. **Capa Agronómica (React SCADA):** Gestiona perfiles biológicos (20 especies: 10 Fungi + 10 Plantae), traduce objetivos biológicos en setpoints matemáticos y los inyecta vía Firebase RTDB.
+2. **Capa de Control (ESP32 C++):** Árbitro de Conflictos determinista, filtro EWMA (α=0.1), Anti-Short-Cycle (180s), y PID Time-Proportioning para el calefactor.
+3. **Capa de Protección (Failsafes):** Interlocks físicos en C++ que prevalecen sobre cualquier comando cloud. Emergencia por sustrato (NTC) con poder de veto absoluto.
 
-El ESP32 funciona como un autómata (PLC) resiliente. Revisa el documento [ESP32_ARCH.md](ESP32_ARCH.md) para un detalle profundo del código comentado.
-
-*   **`main.cpp`**: Orquestador minimalista. Loop no bloqueante.
-*   **`HardwareController`**: Abstracción física (Sensores y Relés). Inyecta fallbacks automáticos si los sensores colapsan.
-*   **`NetworkManager`**: Gestión WiFi en Core 1, Portal Cautivo Asíncrono de emergencia.
-*   **`FirebaseManager`**: Cliente RTDB. Descarga las reglas generadas por React y emite la telemetría en tiempo real.
-*   **`DisplayManager`**: UI de diagnóstico local en pantalla TFT SPI (evitando parpadeos).
-*   **`FileManager`**: Persistencia de red y configuraciones en memoria flash vía LittleFS.
+**El ESP32 no contiene código agrícola.** No tiene las palabras "tomate", "hongo" ni "cannabis". Todo el conocimiento biológico reside en React.
 
 ## 💻 Stack Tecnológico
-- **Cloud & Middleware:** Firebase Realtime Database
-- **SCADA & Agronomía:** React + TypeScript + Vite + TailwindCSS
-- **Hardware Edge:** ESP32 (PlatformIO, C++, FreeRTOS)
+
+| Capa | Tecnología |
+| :--- | :--- |
+| **Cloud** | Firebase RTDB (Free Tier, $0) + Firebase Auth |
+| **Frontend** | React 19 + TypeScript + Vite + Recharts |
+| **Edge** | ESP32 Wemos D1 R32 (PlatformIO, C++, FreeRTOS) |
+| **Almacenamiento Local** | LittleFS (`config.json`) |
+| **Comunicación** | Firebase SSE Streams (bidireccional) |
+
+> ⚠️ **Este proyecto NO utiliza MQTT.** La comunicación ESP32 ↔ Cloud es directa vía Firebase RTDB.
+
+## 🔌 Hardware (GPIO Mapping)
+
+| Componente | GPIO | Tipo |
+| :--- | :---: | :--- |
+| DHT22 #1 (Ambiente) | 27 | Digital In |
+| DHT22 #2 (Ambiente) | 26 | Digital In |
+| NTC 10K (Sustrato) | 34 | ADC In |
+| Calefactor SSR | 4 | Digital Out (HIGH) |
+| Enfriador Peltier | 17 | Digital Out (HIGH) |
+| Humidificador Fogger | 25 | Digital Out (HIGH) |
+| Extractor de Aire | 32 | Digital Out (HIGH) |
+| Iluminación | 16 | Digital Out (**LOW**) |
+| Pantalla TFT SPI | 5/14/13 | CS/DC/RST |
+
+## 📁 Estructura del Proyecto
+
+```
+proyecto-iot-code-workspace/
+├── edge_esp32/              # Firmware C++ (PlatformIO)
+│   └── src/
+│       ├── main.cpp                # Orquestador (87 líneas)
+│       ├── HardwareController.*    # Sensores + Actuadores + PID + Árbitro
+│       ├── NetworkManager.*        # WiFi + Portal Cautivo + mDNS
+│       ├── FirebaseManager.*       # RTDB Auth + Streams + Telemetría
+│       ├── DisplayManager.*        # TFT ST7735 SPI
+│       └── FileManager.*          # LittleFS config.json + CropProfile
+├── frontend_react/          # Dashboard SCADA (React + Vite)
+├── docs/                    # Documentación técnica vigente
+│   ├── INFORME_MAESTRO_AGRIEDGE_OS.md
+│   └── AUDITORIA_INTEGRAL_V3_2026-08-14.md
+├── informes/                # Informes vigentes + archivo histórico
+│   └── _archivo_historico/  # 61 documentos archivados (museo)
+├── ESP32_ARCH.md            # Arquitectura detallada del firmware
+├── ROADMAP.md               # Hoja de ruta (Fases 1-5)
+└── CONTEXTO_ORQUESTADOR.md  # Estado actual para agentes IA
+```
 
 ## ✨ Características Principales
-* **Desacoplamiento Total:** El ESP32 no contiene código "agrícola" (ni la palabra "tomate" o "seta"). Todo el cerebro recae en React.
-* **Enciclopedia y Crop Steering:** La plataforma cuenta con conocimiento agronómico profundo para inducir fenologías (ej: VPD management, browning, fae).
-* **Seguros Termodinámicos (Failsafes):** Bloqueo a nivel C++ de comandos anómalos o desconexión de sensores.
-* **Resiliencia Offline:** Si Firebase o el WiFi caen, el ESP32 continúa operando el microclima con la última configuración segura inyectada.
+
+- **Desacoplamiento Total:** Cambiar de Fungi a Plantae no requiere recompilar C++
+- **20 Perfiles Biológicos:** Enciclopedia agronómica con 4 fases fenológicas por especie
+- **Crop Steering Dinámico:** Interpolación lineal de setpoints entre fases
+- **Plug & Play:** Portal Cautivo para configuración WiFi sin conocimientos técnicos
+- **Resiliencia Offline:** Si Firebase o WiFi caen, el ESP32 continúa operando con la última configuración segura
+- **SCADA ISA-95:** Jerarquía Granja → Nave → Zona → Nodo con gráficos de 30 días
+
+## 📖 Documentación
+
+| Documento | Descripción |
+| :--- | :--- |
+| [INFORME_MAESTRO](docs/INFORME_MAESTRO_AGRIEDGE_OS.md) | Documento consolidado: historia, arquitectura, stack, ADRs, agronomía |
+| [AUDITORÍA V3](docs/AUDITORIA_INTEGRAL_V3_2026-08-14.md) | Auditoría técnica integral con scorecard y deuda técnica |
+| [ESP32_ARCH.md](ESP32_ARCH.md) | Arquitectura detallada del firmware C++ |
+| [ROADMAP.md](ROADMAP.md) | Hoja de ruta Q4 2026 — 2028+ |
