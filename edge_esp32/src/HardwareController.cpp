@@ -21,11 +21,36 @@ void HardwareController::begin() {
     _dht.setup(DHTPIN, DHTesp::DHT22);
     _dht2.setup(DHT2PIN, DHTesp::DHT22);
 
+    // Calibración y Caracterización de ADC1 (Canal 6 / GPIO 34) con curva eFuse / Two Point
+    adc1_config_width(ADC_WIDTH_BIT_12);
+    adc1_config_channel_atten(ADC1_CHANNEL_6, ADC_ATTEN_DB_12);
+    esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_12, ADC_WIDTH_BIT_12, 1100, &_adcChars);
+
+    // Inicialización I2C para sensor CO2 NDIR (SCD30 en GPIO 21 SDA / GPIO 22 SCL)
+    Wire.begin(21, 22);
+    Wire.setClock(100000);
+    Wire.beginTransmission(0x61);
+    if (Wire.endTransmission() == 0) {
+        _scd30Presente = true;
+        // Iniciar medición continua en SCD30
+        Wire.beginTransmission(0x61);
+        Wire.write(0x00);
+        Wire.write(0x10);
+        Wire.write(0x00);
+        Wire.write(0x00);
+        Wire.write(0x81);
+        Wire.endTransmission();
+        Serial.println(F("✅ [Hardware] Sensor CO2 NDIR SCD30 detectado y configurado en I2C (0x61)."));
+    } else {
+        _scd30Presente = false;
+        Serial.println(F("ℹ️ [Hardware] Sensor CO2 NDIR no detectado en I2C (usando valor atmosférico de base)."));
+    }
+
     _heaterPID.SetMode(1); // 1 = AUTOMATIC in PID_v1
     _heaterPID.SetOutputLimits(0, PID_WINDOW_SIZE);
     _windowStartTime = millis();
     
-    Serial.println(F("✅ [Hardware] Inicializado correctamente."));
+    Serial.println(F("✅ [Hardware] Inicializado correctamente (ADC Calibrado + I2C Bus)."));
 }
 
 void HardwareController::setConfiguracion(const ConfiguracionCultivo& config) {
@@ -110,13 +135,24 @@ void HardwareController::leerSensores() {
         _sensores.humAmb2 = h2;
     }
 
-    // 3. Leer NTC 1 (Sustrato)
-    int valorADC = analogRead(PIN_ANALOGICO);
-    if (valorADC > 0 && valorADC < 4095) {
-        _sensores.analogicoOk = true;
-        float resistencia = NTC_R_SERIE / (4095.0f / (float)valorADC - 1.0f);
-        float tempK = 1.0f / (1.0f / (NTC_T_NOMINAL + 273.15f) + (1.0f / NTC_BETA) * log(resistencia / NTC_R_NOMINAL));
-        _sensores.valorAnalogico = tempK - 273.15f; 
+    // 3. Leer NTC 1 (Sustrato) con Multisampling (32 muestras) y Calibración eFuse/TwoPoint
+    uint32_t adcRawSum = 0;
+    for (int i = 0; i < NTC_SAMPLES; i++) {
+        adcRawSum += adc1_get_raw(ADC1_CHANNEL_6);
+        delayMicroseconds(30);
+    }
+    uint32_t adcRawAvg = adcRawSum / NTC_SAMPLES;
+
+    if (adcRawAvg > 30 && adcRawAvg < 4080) {
+        uint32_t voltageMv = esp_adc_cal_raw_to_voltage(adcRawAvg, &_adcChars);
+        if (voltageMv > 50 && voltageMv < (V_REF_MV - 50)) {
+            _sensores.analogicoOk = true;
+            float resistencia = NTC_R_SERIE / ((V_REF_MV / (float)voltageMv) - 1.0f);
+            float tempK = 1.0f / (1.0f / (NTC_T_NOMINAL + 273.15f) + (1.0f / NTC_BETA) * log(resistencia / NTC_R_NOMINAL));
+            _sensores.valorAnalogico = tempK - 273.15f; 
+        } else {
+            _sensores.analogicoOk = false;
+        }
     } else {
         _sensores.analogicoOk = false;
     }
@@ -143,8 +179,45 @@ void HardwareController::leerSensores() {
         _sensores.vpd = 0.0f;
     }
 
-    _sensores.co2Ok = false;
-    _sensores.co2 = 400; 
+    // 6. Leer Sensor CO2 NDIR (SCD30 en I2C)
+    if (_scd30Presente) {
+        Wire.beginTransmission(0x61);
+        Wire.write(0x02);
+        Wire.write(0x02); // Data ready check
+        if (Wire.endTransmission() == 0) {
+            Wire.requestFrom((uint8_t)0x61, (uint8_t)3);
+            if (Wire.available() >= 3) {
+                uint8_t msb = Wire.read();
+                uint8_t lsb = Wire.read();
+                Wire.read(); // CRC
+                uint16_t ready = ((uint16_t)msb << 8) | lsb;
+                if (ready == 1) {
+                    Wire.beginTransmission(0x61);
+                    Wire.write(0x03);
+                    Wire.write(0x00); // Read measurement
+                    if (Wire.endTransmission() == 0) {
+                        Wire.requestFrom((uint8_t)0x61, (uint8_t)18);
+                        if (Wire.available() >= 18) {
+                            uint8_t b[4];
+                            b[3] = Wire.read(); b[2] = Wire.read(); Wire.read(); // Byte 0,1 + CRC
+                            b[1] = Wire.read(); b[0] = Wire.read(); Wire.read(); // Byte 2,3 + CRC
+                            for (int i = 0; i < 12; i++) Wire.read(); // Ignorar temp y hum del SCD30 (usamos DHT22 calibrados)
+                            float co2Val = 0.0f;
+                            memcpy(&co2Val, b, 4);
+                            if (co2Val >= 350.0f && co2Val <= 10000.0f) {
+                                _sensores.co2 = co2Val;
+                                _sensores.co2Ok = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (!_sensores.co2Ok) {
+        _sensores.co2 = 400; // Baseline atmosférico estándar
+    } 
 
     // --- 6. Aplicación del Filtro Matemático EWMA ---
     /**
@@ -336,15 +409,19 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
                 }
             }
 
-            // 5. Demanda de Humedad y Deshumidificación (con Banda Muerta / Histéresis)
+            // 5. Control de Microclima Hídrico y Transpiración (Gobernado por VPD y Humedad con Histéresis)
             if (humActual != -999.0f && proxEstado != EstadoOperacional::EMERGENCIA) {
-                bool demandaNiebla = (_estadoActual == EstadoOperacional::HUMIDIFICANDO)
-                    ? (humActual <= (_config.crop.hum_ideal_min + HIST_HUM))
-                    : (humActual <= _config.crop.hum_ideal_min);
+                float vpdActual = _sensores.ewmaInitialized ? _sensores.ewma_vpd : _sensores.vpd;
 
+                // Demanda de Humidificación: Humedad baja O VPD alto (> 1.20 kPa estrés de desecación)
+                bool demandaNiebla = (_estadoActual == EstadoOperacional::HUMIDIFICANDO)
+                    ? (humActual <= (_config.crop.hum_ideal_min + HIST_HUM) || (vpdActual > 1.00f && vpdActual > 0.0f))
+                    : (humActual <= _config.crop.hum_ideal_min || (vpdActual > 1.20f && vpdActual > 0.0f));
+
+                // Demanda de Extracción por Saturación: Humedad excesiva O VPD estancado (< 0.25 kPa riesgo de condensación)
                 bool excesoHumedad = _actuadores.extractor_ON
-                    ? (humActual >= (_config.crop.hum_ideal_max - HIST_HUM))
-                    : (humActual >= _config.crop.hum_ideal_max);
+                    ? (humActual >= (_config.crop.hum_ideal_max - HIST_HUM) || (vpdActual < 0.35f && humActual >= _config.crop.hum_ideal_max))
+                    : (humActual >= _config.crop.hum_ideal_max || (vpdActual < 0.25f && humActual >= _config.crop.hum_ideal_max));
 
                 if (demandaNiebla) {
                     req_fogger = true;

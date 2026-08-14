@@ -49,13 +49,14 @@
 - Prensaestopas para cables de sensores/relés.
 - Bisel para pantalla TFT sin tornillos visibles.
 
-### 3. Sensor CO2 NDIR Real
-- Integración de SCD30, SCD40 o MH-Z19 por UART/I2C.
-- Reemplaza el placeholder hardcodeado de 400 ppm.
+### ~~3. Sensor CO2 NDIR Real~~ ✅ COMPLETADO ([Informe 78](./informes/78-Optimizacion-ADC-NDIR-VPD-Persistencia-Atomica.md))
+- Driver I2C para Sensirion SCD30/40 en GPIO 21/22 con lectura en tiempo real y fallback seguro.
 
-### 4. Calibración ADC + Multisampling NTC
-- Usar `esp_adc_cal` para corregir no-linealidad del ADC (±1.5-3°C actual).
-- Implementar multisampling (8-16 muestras) para reducir ruido.
+### ~~4. Calibración ADC + Multisampling NTC~~ ✅ COMPLETADO ([Informe 78](./informes/78-Optimizacion-ADC-NDIR-VPD-Persistencia-Atomica.md))
+- Caracterización `esp_adc_cal` eFuse/TwoPoint con multisampling de 32 muestras para la sonda de sustrato.
+
+### ~~5. Persistencia Atómica Transaccional en LittleFS~~ ✅ COMPLETADO ([Informe 78](./informes/78-Optimizacion-ADC-NDIR-VPD-Persistencia-Atomica.md))
+- Escritura a `/config.json.tmp` con rename atómico y autoreparación en boot desde `/config.json.old`.
 
 ---
 

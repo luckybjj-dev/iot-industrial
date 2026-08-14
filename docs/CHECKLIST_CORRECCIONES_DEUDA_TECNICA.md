@@ -76,10 +76,25 @@
   - *Corrección:* Implementado motor `validateThermodynamics()` en `CropProfiles.ts`, guards en modal `CropProfileSelectorModal.tsx`, badge dinámico de diagnóstico y auto-cálculo asistido (+2°C metabólico).
   - *Estado de Validación:* ✅ **Verificado en TypeScript (`npx tsc`) e Informe 76**.
 
-- [ ] **#11. Calibración ADC + Multisampling en Sonda NTC**
-- [ ] **#12. Integración de sensor CO2 NDIR real (SCD30 / MH-Z19)**
-- [ ] **#13. Control climático gobernado por VPD como variable maestra**
-- [ ] **#14. Escritura atómica transaccional en LittleFS**
+- [x] **#11. Calibración ADC + Multisampling en Sonda NTC**
+  - *Problema:* No-linealidad y ruido electromagnético en ADC1 generaban desvíos de hasta ±3.0°C en la lectura analógica de sustrato.
+  - *Corrección:* Caracterización de curva eFuse/TwoPoint con `esp_adc_cal_characterize()` y multisampling de 32 muestras consecutivas (`NTC_SAMPLES = 32`) con `esp_adc_cal_raw_to_voltage()`.
+  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO e Informe 78**.
+
+- [x] **#12. Integración de sensor CO2 NDIR real (SCD30 / MH-Z19)**
+  - *Problema:* CO2 fijado en placeholder estático de 400 ppm.
+  - *Corrección:* Driver I2C para Sensirion SCD30/40 en GPIO 21/22 con lectura continua no bloqueante, chequeo de data-ready y fallback seguro.
+  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO e Informe 78**.
+
+- [x] **#13. Control climático gobernado por VPD como variable maestra**
+  - *Problema:* El microclima hídrico solo evaluaba RH%, ignorando la tasa de transpiración y desecación del micelio.
+  - *Corrección:* Control coordinado por VPD: humidificación activada si $VPD > 1.20\,\text{kPa}$ o RH baja, y extracción activada si $VPD < 0.25\,\text{kPa}$ por saturación.
+  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO e Informe 78**.
+
+- [x] **#14. Escritura atómica transaccional en LittleFS**
+  - *Problema:* Cortes de energía durante la escritura de `config.json` truncaban el archivo a 0 bytes.
+  - *Corrección:* Escritura a `/config.json.tmp`, renombramiento atómico con respaldo `/config.json.old` y autoreparación en arranque.
+  - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO e Informe 78**.
 - [x] **#15. Renderizado TFT con Dirty Checking / Anti-Flickering**
   - *Problema:* `fillScreen(BLACK)` a cada tick causaba parpadeo molesto en la pantalla SPI.
   - *Corrección:* Plantilla estática dibujada una sola vez en `begin()`, sobreescritura de glifos con fondo negro (`setTextColor(fg, ST77XX_BLACK)`) e integración de métrica VPD en pantalla.

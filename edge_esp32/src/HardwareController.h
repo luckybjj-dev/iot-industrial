@@ -10,9 +10,13 @@
  * (estrategia de control y failsafes), garantizando una alta cohesión y bajo acoplamiento.
  */
 #include <Arduino.h>
-#include "DHTesp.h"
-#include "FileManager.h"
+#include <Wire.h>
+#include <DHTesp.h>
 #include <PID_v1.h>
+#include <driver/adc.h>
+#include <esp_adc_cal.h>
+#include "FileManager.h"
+
 // La librería PID_v1.h define macros MANUAL y AUTOMATIC que colisionan con nuestro enum ModoOperacion.
 #undef MANUAL
 #undef AUTOMATIC
@@ -21,7 +25,7 @@
 #define DHTPIN        27 // DHT1
 #define DHT2PIN       26 // DHT2 (Restaurado a su pin original, el cable era el culpable!)
 #define DHTTYPE       DHT22
-#define PIN_ANALOGICO 34 // NTC o Humedad de Suelo
+#define PIN_ANALOGICO 34 // NTC o Humedad de Suelo (ADC1_CHANNEL_6)
 
 #define PIN_HEATER    4 // Control Térmico (Calefactor - Asignado a GPIO 4)
 #define PIN_COOLER    17 // Control Térmico (Enfriador Peltier - Asignado a GPIO 17)
@@ -207,6 +211,15 @@ private:
     unsigned long _last_cooler_switch = 0; // El Peltier no usa filtro anti-short-cycle, persistencia de estado
 
     bool _alertaCalor = false;
+
+    // Calibración de ADC y Multisampling para Sonda NTC de Sustrato
+    esp_adc_cal_characteristics_t _adcChars;
+    static constexpr int NTC_SAMPLES = 32;
+    static constexpr float V_REF_MV = 3300.0f;
+
+    // Driver I2C para Sensor CO2 NDIR (SCD30 / SCD40)
+    bool _scd30Presente = false;
+    unsigned long _ultimoIntentoCO2 = 0;
 
     // Métodos internos
     void _ejecutarAccion(int pin, bool& estadoActual, bool nuevoEstado, unsigned long& ultimoCambio, unsigned long now, bool ignorarFiltro = false);

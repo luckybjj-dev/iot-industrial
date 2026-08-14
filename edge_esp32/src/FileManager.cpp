@@ -17,9 +17,21 @@ bool FileManager::begin() {
 
 
 ConfiguracionCultivo FileManager::cargarConfiguracion() {
+    const char* oldPath = "/config.json.old";
+    const char* tmpPath = "/config.json.tmp";
+
+    // Si config.json no existe, intentar restaurar desde respaldo transaccional
     if (!LittleFS.exists(_archivoConfig)) {
-        Serial.println(F("[LittleFS] No se encontró config.json. Día Cero detectado."));
-        _crearConfiguracionPorDefecto();
+        if (LittleFS.exists(oldPath)) {
+            Serial.println(F("⚠️ [LittleFS] config.json faltante. Restaurando desde config.json.old..."));
+            LittleFS.rename(oldPath, _archivoConfig);
+        } else if (LittleFS.exists(tmpPath)) {
+            Serial.println(F("⚠️ [LittleFS] config.json faltante. Restaurando desde config.json.tmp..."));
+            LittleFS.rename(tmpPath, _archivoConfig);
+        } else {
+            Serial.println(F("[LittleFS] No se encontró config.json ni respaldo. Día Cero detectado."));
+            _crearConfiguracionPorDefecto();
+        }
     }
 
     File file = LittleFS.open(_archivoConfig, "r");
@@ -35,6 +47,13 @@ ConfiguracionCultivo FileManager::cargarConfiguracion() {
     if (error) {
         Serial.print(F("❌ [LittleFS] Error parseando JSON: "));
         Serial.println(error.c_str());
+        // Intentar rescatar desde backup old si el actual está corrupto
+        if (LittleFS.exists(oldPath)) {
+            Serial.println(F("⚠️ [LittleFS] Archivo corrupto. Restaurando desde config.json.old..."));
+            LittleFS.remove(_archivoConfig);
+            LittleFS.rename(oldPath, _archivoConfig);
+            return cargarConfiguracion();
+        }
         Serial.println(F("[LittleFS] Cargando configuración de seguridad..."));
         _crearConfiguracionPorDefecto();
         return _configActual;
@@ -144,20 +163,34 @@ bool FileManager::guardarConfiguracion(const ConfiguracionCultivo& config) {
     
     crop["light_hours_on"] = config.crop.light_hours_on;
 
-    File file = LittleFS.open(_archivoConfig, "w");
+    const char* tmpPath = "/config.json.tmp";
+    const char* oldPath = "/config.json.old";
+
+    File file = LittleFS.open(tmpPath, "w");
     if (!file) {
-        Serial.println(F("❌ [LittleFS] Fallo al abrir config.json para escritura."));
+        Serial.println(F("❌ [LittleFS] Fallo al abrir archivo temporal para escritura atómica."));
         return false;
     }
 
     if (serializeJson(doc, file) == 0) {
-        Serial.println(F("❌ [LittleFS] Fallo al escribir JSON."));
+        Serial.println(F("❌ [LittleFS] Fallo al escribir JSON temporal."));
         file.close();
+        LittleFS.remove(tmpPath);
         return false;
     }
-
     file.close();
-    Serial.println(F("✅ [LittleFS] Configuración guardada en disco."));
+
+    // Reemplazo atómico seguro con backup
+    if (LittleFS.exists(oldPath)) LittleFS.remove(oldPath);
+    if (LittleFS.exists(_archivoConfig)) LittleFS.rename(_archivoConfig, oldPath);
+    if (!LittleFS.rename(tmpPath, _archivoConfig)) {
+        Serial.println(F("❌ [LittleFS] Fallo al renombrar archivo temporal a config.json."));
+        if (LittleFS.exists(oldPath)) LittleFS.rename(oldPath, _archivoConfig);
+        return false;
+    }
+    if (LittleFS.exists(oldPath)) LittleFS.remove(oldPath);
+
+    Serial.println(F("✅ [LittleFS] Configuración guardada atómicamente en disco."));
     return true;
 }
 
