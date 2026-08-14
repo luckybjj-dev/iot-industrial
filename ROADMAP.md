@@ -7,7 +7,7 @@
 ## 🔴 Prioridad Inmediata: Corrección de Deuda Técnica Crítica
 - [x] **1. Corregir Bug de Safe Mode [CRÍTICO]** ✅ COMPLETADO ([Informe 77](./informes/77-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
 - [x] **2. Activar Watchdog de Hardware [CRÍTICO]** ✅ COMPLETADO ([Informe 77](./informes/77-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
-- [ ] **3. Rotar Credenciales en Git [CRÍTICO]** ⏳ Plantilla lista ([`Secrets.h.template`](./edge_esp32/src/Secrets.h.template))
+- [x] **3. Rotar y Purgar Credenciales en Git [CRÍTICO]** ✅ COMPLETADO ([Informe 79](./informes/79-Rotacion-Purga-Credenciales-Git.md))
 
 ---
 

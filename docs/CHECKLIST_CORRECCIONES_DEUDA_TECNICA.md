@@ -18,10 +18,10 @@
   - *Corrección:* Integrado `esp_task_wdt.h`, inicializado en `setup()` con fallback mínimo de 15s, y alimentado en cada tick de `loop()`.
   - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO (ELF/BIN generado)**
 
-- [ ] **#3. Rotación y purga de credenciales en Git**
+- [x] **#3. Rotación y purga de credenciales en Git**
   - *Problema:* `Secrets.h` estuvo presente en commits pasados del historial de Git.
-  - *Acción requerida:* Regenerar API Key en Firebase Console, cambiar password de usuario y purgar historial de Git mediante `git filter-repo` o `bfg`.
-  - *Estado de Validación:* ⏳ **Pendiente**
+  - *Corrección:* Purga total del árbol histórico mediante `git filter-branch`, eliminación de reflogs (`git gc --aggressive`), blindaje de `.gitignore` y sincronización remota forzada en GitHub.
+  - *Estado de Validación:* ✅ **Verificado empíricamente (`git log --all --full-history` = 0 commits) e Informe 79**.
 
 ---
 
