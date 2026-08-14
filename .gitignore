@@ -1,12 +1,19 @@
 # Node.js
 node_modules/
+dist/
 
-# Variables de Entorno y Secretos
+# Variables de Entorno y Secretos (NUNCA commitear)
 .env
 *.env
-
-# Credenciales del firmware ESP32 (NUNCA commitear)
+.env.*
+Secrets.h
+*Secrets.h
+**/Secrets.h
 edge_esp32/src/Secrets.h
+
+# PlatformIO & Herramientas de Compilación
+.pio/
+.vscode/
 
 # Archivos compilados de C++ / Arduino
 *.bin
@@ -18,3 +25,4 @@ build/
 # Logs y SO
 *.log
 .DS_Store
+Thumbs.db
