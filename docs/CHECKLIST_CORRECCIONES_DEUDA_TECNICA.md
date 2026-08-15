@@ -109,3 +109,12 @@
   - *Problema:* `"agriedge2026"` hardcodeado en `main.cpp`.
   - *Corrección:* Desacoplado a `OTA_PASSWORD` en `Secrets.h` (con fallback de compilación y documentado en plantilla).
   - *Estado de Validación:* ✅ **Verificado en compilación PlatformIO**.
+
+---
+
+## 🟢 Sprint 4: Correcciones Post-Auditoría SCADA React
+
+- [x] **#19. Error de parse crítico en CropProfiles.ts (SCADA Frontend)**
+  - *Problema:* El parser OXC de Vite lanzaba `[PARSE_ERROR] Unexpected token {` en línea 1735 de `CropProfiles.ts`, impidiendo compilar y ejecutar el frontend. Causa raíz: objeto `targets` del phase `ripening` de Albahaca incompleto con fragmento de código basura insertado dentro; además dos crops duplicados (Berenjena y Menta × 2 en el mismo objeto).
+  - *Corrección:* (1) Completado el objeto `targets` del ripening de *Ocimum basilicum* con los 6 campos requeridos y valores agronómicos correctos. (2) Eliminadas 170 líneas de bloques duplicados. (3) Removidos imports no utilizados (`AlertTriangle`, `StatsAccordion`) en `TelemetryDashboard.tsx`.
+  - *Estado de Validación:* ✅ **Verificado empíricamente** — `tsc -b`: 0 errores; `vite build`: 0 errores, 2381 módulos transformados, bundle 935 kB. Commit `92cbf96`. ([Informe 19](../informes/19-Correccion-CropProfiles-Parse-Error-SCADA.md))
