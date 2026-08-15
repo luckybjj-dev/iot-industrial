@@ -123,19 +123,21 @@ export const sendConfigRules = async (deviceId: string, config: any) => {
 };
 
 /**
- * Enviar comando de actuador a ruta hija directa.
+ * Enviar comando de actuador en modo MANUAL con sincronización atómica.
  *
- * IMPORTANTE: Primero borramos el valor (remove) y luego lo escribimos (set).
- * Esto garantiza que Firebase SIEMPRE detecte un cambio de valor y dispare
- * el stream callback en el ESP32, incluso si el valor nuevo es igual al
- * valor retenido anteriormente (ej: commands/light_on = true persistido,
- * pero la lógica AUTO apagó la luz físicamente sin actualizar commands/).
+ * Realiza un update en la raíz /devices/{deviceId}/commands asegurando que:
+ * 1. modo_operacion sea 'MANUAL'
+ * 2. El actuador objetivo tome el nuevo estado booleano
+ * Esto previene la condición de carrera donde el ESP32 descarte el comando
+ * por encontrarse transitoriamente en modo AUTO.
  */
 export const sendCommand = async (deviceId: string, actuator: string, state: any) => {
-  const commandRef = ref(database, `devices/${deviceId}/commands/${actuator}`);
+  const rootCommandsRef = ref(database, `devices/${deviceId}/commands`);
   try {
-    await remove(commandRef);   // Fuerza cambio: null -> state (siempre dispara stream)
-    await set(commandRef, state);
+    await update(rootCommandsRef, {
+      modo_operacion: 'MANUAL',
+      [actuator]: state
+    });
   } catch (error) {
     console.error('Error enviando comando a Firebase:', error);
     throw error;

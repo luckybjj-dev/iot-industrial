@@ -18,7 +18,7 @@
 ### ~~3. Filtro EWMA Industrial~~ ✅ COMPLETADO
 ### ~~4. Árbitro de Conflictos Determinista~~ ✅ COMPLETADO ([Informe 16](./informes/16-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
 ### ~~5. Anti-Short-Cycle (180s) en Peltier~~ ✅ COMPLETADO ([Informe 16](./informes/16-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
-### ~~6. Modos AUTO/MANUAL con interlocks~~ ✅ COMPLETADO
+### ~~6. Modos AUTO/MANUAL con interlocks y Control Atómico~~ ✅ COMPLETADO ([Informe 20](./informes/20-Correccion-Control-Actuadores-Temporizador-Timeline-SCADA.md))
 ### ~~7. Firebase Auth + Security Rules~~ ✅ COMPLETADO
 ### ~~8. Validación Termodinámica Cruzada Sustrato/Ambiente~~ ✅ COMPLETADO ([Informe 15](./informes/15-Validacion-Termodinamica-Sustrato-Ambiente.md))
 ### ~~9. Desacoplamiento de Time-Proportioning SSR (PID PWM rápido)~~ ✅ COMPLETADO ([Informe 16](./informes/16-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
