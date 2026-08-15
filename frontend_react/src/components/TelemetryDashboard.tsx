@@ -2,10 +2,10 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, Area, ReferenceArea
 } from 'recharts';
-import { Activity, Thermometer, Droplets, Wind, Database, AlertTriangle } from 'lucide-react';
+import { Activity, Thermometer, Droplets, Wind, Database } from 'lucide-react';
 import { fetchDeviceHistory } from '../services/firebaseService';
 import type { HistorialData, DeviceCropProfile, TelemetriaFungi } from '../types/cultivo';
-import { StatsAccordion } from './StatsAccordion';
+
 
 interface Props {
   deviceId: string;
