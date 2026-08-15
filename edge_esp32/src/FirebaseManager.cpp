@@ -253,20 +253,11 @@ void FirebaseManager::publicarHistorial() {
  * sin necesidad de "polling", cumpliendo con el paradigma de reactividad estricta para IoT.
  */
 bool FirebaseManager::configurarStreams() {
-    // Escuchar comandos manuales y configuraciones en RTDB
+    // Escuchar comandos manuales y configuraciones en RTDB vía Server-Sent Events (SSE)
     String streamPath = "/devices/" + _deviceId + "/commands";
-    Serial.print(F("[Firebase] Sincronizando estado inicial y preparando Stream en: "));
+    Serial.print(F("[Firebase] Configurando Stream SSE en: "));
     Serial.println(streamPath);
     
-    // 1. Sincronización inicial directa en arranque (Zero Lag)
-    if (Firebase.getJSON(_fbdo, streamPath)) {
-        Serial.println(F("✅ [Firebase] Configuración inicial descargada exitosamente en arranque."));
-        _procesarPayloadStream("/", _fbdo.jsonString());
-    } else {
-        Serial.printf("ℹ️ [Firebase] Lectura inicial de comandos omitida o nodo vacío: %s\n", _fbdo.errorReason().c_str());
-    }
-
-    // 2. Suscripción persistente reactiva vía Server-Sent Events (SSE)
     if (!Firebase.beginStream(_fbdoStream, streamPath)) {
         Serial.printf("[Firebase] Error configurando stream: %s\n", _fbdoStream.errorReason().c_str());
         return false;
@@ -312,7 +303,7 @@ void FirebaseManager::streamTimeoutCallback(bool timeout) {
 void FirebaseManager::_procesarPayloadStream(const String& path, const String& data) {
     Serial.printf("[Firebase] Stream recibido - Path: %s, Data: %s\n", path.c_str(), data.c_str());
     
-    StaticJsonDocument<2048> doc;
+    DynamicJsonDocument doc(1024);
     DeserializationError error = deserializeJson(doc, data);
     
     if (!error && doc.is<JsonObject>()) {
@@ -337,11 +328,11 @@ void FirebaseManager::_procesarPayloadStream(const String& path, const String& d
         if (path == "/crop" || path == "/config") {
             String wrappedJson = "{\"crop\":" + data + "}";
             _fm.guardarConfiguracionJson(wrappedJson);
-            _hw.setConfiguracion(_fm.cargarConfiguracion());
+            _hw.setConfiguracion(_fm.getConfiguracionActual());
             Serial.println(F("✅ [Firebase] CropProfile recibido (ruta específica) y aplicado."));
         } else if (doc.containsKey("crop")) {
             _fm.guardarConfiguracionJson(data);
-            _hw.setConfiguracion(_fm.cargarConfiguracion());
+            _hw.setConfiguracion(_fm.getConfiguracionActual());
             Serial.println(F("✅ [Firebase] CropProfile recibido (raíz) y aplicado."));
         }
     } else {
