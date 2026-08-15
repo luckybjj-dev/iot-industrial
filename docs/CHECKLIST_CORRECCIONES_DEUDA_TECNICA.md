@@ -129,4 +129,10 @@
   - *Corrección:* (1) Reescalado de PID ($K_p = 1500$) y control híbrido continuo ($100\%$ potencia cuando $T \le T_{\text{ideal\_min}} - 0.5^\circ\text{C}$). (2) Evaluación de verdad de terreno en `SemaforoEstabilidad.tsx` contrastando telemetría contra `crop` activo. (3) Fetch inicial directo de comandos en `FirebaseManager::configurarStreams` con buffer JSON de 2048B.
   - *Estado de Validación:* ✅ **Verificado empíricamente** — `tsc -b`: 0 errores; `vite build`: 0 errores. ([Informe 21](../informes/21-Mejora-Control-Calefactor-Semaforo-Sync-Arranque.md))
 
+- [x] **#22. Resolución de Stack Overflow en Stream Firebase, Estabilidad del Sistema y Renderizado TFT en ESP32**
+  - *Problema:* (1) Reinicio cíclico a los ~3 segundos provocado por Stack Overflow y colisión de sockets TLS al encadenar múltiples `StaticJsonDocument` y llamadas flash en los callbacks de stream. (2) Pantalla TFT mostraba únicamente las líneas divisorias sin parámetros al reiniciarse antes del primer ciclo de renderizado de 5 segundos.
+  - *Corrección:* (1) Eliminado `getJSON` síncrono en `configurarStreams`, delegado flujo al stream SSE nativo y optimizado el uso de memoria a Heap (`DynamicJsonDocument(1024)`) con `getConfiguracionActual()` en RAM. (2) Añadida lectura de sensores y llamada inmediata a `display.render()` en `setup()` de `main.cpp`.
+  - *Estado de Validación:* ✅ **Verificado en Hardware Físico** — Firmware compilado y flasheado con éxito vía PlatformIO; pantalla TFT y telemetría funcionando de forma continua y estable. ([Informe 22](../informes/22-Resolucion-Stack-Overflow-Estabilidad-TFT-ESP32.md))
+
+
 

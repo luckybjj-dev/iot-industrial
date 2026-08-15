@@ -162,7 +162,7 @@ enum class EstadoOperacional {
 | Validación termodinámica en perfiles | 🟡 | ✅ Resuelto | Motor `validateThermodynamics()` y guards en SCADA React (Informe 76). |
 | Calibración ADC + Multisampling (NTC) | 🟡 | ⏳ Pendiente | Integración `esp_adc_cal` (Sprint 3 / Q4 2026). |
 | Integración sensor CO2 NDIR real | 🟡 | ⏳ Pendiente | SCD30/MH-Z19 por I2C/UART (Sprint 3 / Q4 2026). |
-| Renderizado TFT con Dirty Checking | 🟢 | ⏳ Pendiente | Optimización de refresco parcial ST7735. |
+| Renderizado TFT Anti-Flicker + Arranque Inmediato | 🟢 | ✅ Resuelto | `main.cpp` / `DisplayManager.cpp`: Renderizado en `setup()` y refresco por texto sin parpadeo (Informe 22). |
 | Purgar `Secrets.h` del historial Git | 🔴 | ⏳ Pendiente | Rotación de claves y reescritura de commits pasados. |
 
 > 📄 Registro detallado de seguimiento: [`docs/CHECKLIST_CORRECCIONES_DEUDA_TECNICA.md`](docs/CHECKLIST_CORRECCIONES_DEUDA_TECNICA.md) | [Auditoría Integral V3](docs/AUDITORIA_INTEGRAL_V3_2026-08-14.md)

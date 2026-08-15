@@ -24,7 +24,7 @@
 ### ~~9. Desacoplamiento de Time-Proportioning SSR (PID PWM rápido y Híbrido)~~ ✅ COMPLETADO ([Informe 16](./informes/16-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md), [Informe 21](./informes/21-Mejora-Control-Calefactor-Semaforo-Sync-Arranque.md))
 ### ~~10. Histéresis Paramétrica (Banda Muerta)~~ ✅ COMPLETADO ([Informe 16](./informes/16-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
 ### ~~11. Fix OTA Teardown (liberación de Heap/Sockets)~~ ✅ COMPLETADO ([Informe 16](./informes/16-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
-### ~~12. Renderizado HMI TFT Anti-Flickering + Métrica VPD~~ ✅ COMPLETADO ([Informe 16](./informes/16-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
+### ~~12. Renderizado HMI TFT Anti-Flickering + Métrica VPD y Renderizado en Arranque~~ ✅ COMPLETADO ([Informe 16](./informes/16-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md), [Informe 22](./informes/22-Resolucion-Stack-Overflow-Estabilidad-TFT-ESP32.md))
 ### ~~13. Backoff Exponencial y Eliminación de Heap Fragmentado (StaticJson)~~ ✅ COMPLETADO ([Informe 16](./informes/16-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
 
 ### 14. Crop Steering Algorítmico Dinámico
