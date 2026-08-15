@@ -68,5 +68,12 @@ En el archivo [CHECKLIST_CORRECCIONES_DEUDA_TECNICA.md](../../docs/CHECKLIST_COR
 
 ---
 
+### Paso 4: Sincronizar `ESP32_ARCH.md` (Si involucra Firmware / Hardware / Algoritmo)
+En el archivo [ESP32_ARCH.md](../../ESP32_ARCH.md):
+- Si el cambio afectó la lógica C++, pines, estados operacionales o módulos del microcontrolador: actualizar la sección técnica correspondiente.
+- Actualizar la tabla de la **Sección 7 (Matriz de Deuda Técnica)** marcando como `✅ Resuelto` el problema abordado.
+
+---
+
 ## 🔒 Regla de Integridad
-**Ningún cambio estructural se considera finalizado hasta que los tres documentos hayan sido actualizados y verificados.**
+**Ningún cambio estructural se considera finalizado hasta que todos los documentos aplicables hayan sido actualizados y verificados.**

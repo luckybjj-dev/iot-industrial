@@ -124,3 +124,9 @@
   - *Corrección:* (1) `sendCommand` en `firebaseService.ts` refactorizado para despacho atómico de `{ modo_operacion: 'MANUAL', [actuator]: state }` en `/devices/{deviceId}/commands`. (2) Sincronización y estado optimista instantáneo `optimisticActuators` e inicio inmediato de `manualStartTimes` en `App.tsx`. (3) Rediseño de `renderCompactTimeline` en `CropStatePanel.tsx` con padding horizontal, tooltips alineados dinámicamente (`left-0`, `right-0`) y `overflow-visible`.
   - *Estado de Validación:* ✅ **Verificado empíricamente** — `tsc -b`: 0 errores; `vite build`: 0 errores, bundle generado exitosamente en 8.01s. ([Informe 20](../informes/20-Correccion-Control-Actuadores-Temporizador-Timeline-SCADA.md))
 
+- [x] **#21. Optimización Térmica PID Híbrida, Ground-Truth en Semáforo SCADA y Sync en Arranque**
+  - *Problema:* (1) Ganancia proporcional del PID ($K_p = 2.0$) insuficiente para la ventana de $5000\,\text{ms}$, provocando duty cycles despreciables ($0.13\%$) y calefactor inactivo ante diferencias de $3.3^\circ\text{C}$. (2) `SemaforoEstabilidad.tsx` reportaba "CLIMA ESTABLE" al confiar ciegamente en `estado_operacional` del ESP32 mientras variables estaban fuera de rango. (3) El ESP32 dependía de eventos SSE posteriores para sincronizar el perfil activo en arranque.
+  - *Corrección:* (1) Reescalado de PID ($K_p = 1500$) y control híbrido continuo ($100\%$ potencia cuando $T \le T_{\text{ideal\_min}} - 0.5^\circ\text{C}$). (2) Evaluación de verdad de terreno en `SemaforoEstabilidad.tsx` contrastando telemetría contra `crop` activo. (3) Fetch inicial directo de comandos en `FirebaseManager::configurarStreams` con buffer JSON de 2048B.
+  - *Estado de Validación:* ✅ **Verificado empíricamente** — `tsc -b`: 0 errores; `vite build`: 0 errores. ([Informe 21](../informes/21-Mejora-Control-Calefactor-Semaforo-Sync-Arranque.md))
+
+

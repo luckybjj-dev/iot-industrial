@@ -21,7 +21,7 @@
 ### ~~6. Modos AUTO/MANUAL con interlocks y Control Atómico~~ ✅ COMPLETADO ([Informe 20](./informes/20-Correccion-Control-Actuadores-Temporizador-Timeline-SCADA.md))
 ### ~~7. Firebase Auth + Security Rules~~ ✅ COMPLETADO
 ### ~~8. Validación Termodinámica Cruzada Sustrato/Ambiente~~ ✅ COMPLETADO ([Informe 15](./informes/15-Validacion-Termodinamica-Sustrato-Ambiente.md))
-### ~~9. Desacoplamiento de Time-Proportioning SSR (PID PWM rápido)~~ ✅ COMPLETADO ([Informe 16](./informes/16-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
+### ~~9. Desacoplamiento de Time-Proportioning SSR (PID PWM rápido y Híbrido)~~ ✅ COMPLETADO ([Informe 16](./informes/16-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md), [Informe 21](./informes/21-Mejora-Control-Calefactor-Semaforo-Sync-Arranque.md))
 ### ~~10. Histéresis Paramétrica (Banda Muerta)~~ ✅ COMPLETADO ([Informe 16](./informes/16-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
 ### ~~11. Fix OTA Teardown (liberación de Heap/Sockets)~~ ✅ COMPLETADO ([Informe 16](./informes/16-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
 ### ~~12. Renderizado HMI TFT Anti-Flickering + Métrica VPD~~ ✅ COMPLETADO ([Informe 16](./informes/16-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))

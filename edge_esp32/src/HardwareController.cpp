@@ -1,6 +1,6 @@
 #include "HardwareController.h"
 
-HardwareController::HardwareController() : _heaterPID(&_pidInput, &_pidOutput, &_pidSetpoint, 2.0, 5.0, 1.0, DIRECT) {
+HardwareController::HardwareController() : _heaterPID(&_pidInput, &_pidOutput, &_pidSetpoint, 1500.0, 100.0, 250.0, DIRECT) {
 }
 
 void HardwareController::begin() {
@@ -428,6 +428,7 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
                     if (proxEstado == EstadoOperacional::NORMAL) proxEstado = EstadoOperacional::HUMIDIFICANDO;
                 } else if (excesoHumedad) {
                     req_extractor = true;
+                    if (proxEstado == EstadoOperacional::NORMAL) proxEstado = EstadoOperacional::ENFRIANDO;
                 }
             }
 
@@ -477,7 +478,16 @@ void HardwareController::actualizarModulacionSSR(unsigned long now) {
         if (now - _windowStartTime > PID_WINDOW_SIZE) {
             _windowStartTime += PID_WINDOW_SIZE;
         }
-        bool dutyHeater = (_pidOutput > (now - _windowStartTime));
+        
+        // Calentamiento inteligente híbrido:
+        // Si estamos a más de 0.5°C por debajo de la meta, forzamos potencia plena continua (100% duty cycle).
+        // En la zona de aproximación (dentro de los 0.5°C), modulamos finamente con el lazo PID.
+        float tempActual = (_sensores.dhtOk || _sensores.dht2Ok) ? _sensores.ewma_temp : -999.0f;
+        bool dutyHeater = true;
+        if (tempActual != -999.0f && tempActual > (_config.crop.temp_ideal_min - 0.5f)) {
+            dutyHeater = (_pidOutput > (now - _windowStartTime));
+        }
+        
         _ejecutarAccion(PIN_HEATER, _actuadores.heater_ON, dutyHeater, _last_heater_switch, now, true);
     } else {
         if (_actuadores.heater_ON) {

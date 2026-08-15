@@ -58,13 +58,13 @@ El ESP32 opera como un **PLC Determinista Agnóstico (Stateless PLC)**:
 - **Fusión Sensorial:** Si ambos DHTs válidos → promedio. Si uno falla → superviviente. Si ambos fallan → `tempPromedio = -999.0f`.
 - **Filtro EWMA:** Media Móvil Exponencial (α=0.1) sobre temperatura, humedad, sustrato, VPD y CO2. Descarta 90% del ruido transitorio.
 - **VPD:** Calculado con ecuación de Tetens: `SVP = 0.61078 × e^(17.27×T / (237.3+T))`.
-- **PID Time-Proportioning:** Controlador PID (Kp=2.0, Ki=5.0, Kd=1.0) con ventana PWM de 5000 ms para el calefactor SSR.
+- **PID Time-Proportioning:** Modulación PWM por software para calefactor SSR desacoplada en tick rápido (`actualizarModulacionSSR(millis())`) con ventana de 5000 ms.
 - **Árbitro de Conflictos:**
-  1. *P1 (Supervivencia):* `Temp > temp_crit_max` → Extractor ON, Calefactor/Fogger OFF.
+  1. *P1 (Supervivencia):* `Temp > temp_crit_max` → Extractor/Cooler ON, Calefactor/Fogger OFF.
   2. *P2 (Emergencia Sustrato):* `Sustrato > 28°C` → Extractor ON, Calefactor OFF.
   3. *P3 (Frío):* `Temp < temp_ideal_min` → Calefactor ON.
-  4. *P4 (Normal):* Fogger, Extractor, Cooler en rangos `ideal_min/max`.
-- **Anti-Short-Cycle:** 180s mínimo entre conmutaciones de Fogger y Extractor. Luz exenta (0s). Peltier exento (⚠️ deuda técnica).
+  4. *P4 (Normal):* Fogger, Extractor, Cooler en rangos `ideal_min/max` con interlock de exclusión mutua (Extractor bloquea Fogger).
+- **Anti-Short-Cycle:** 180s mínimo entre conmutaciones de Fogger, Extractor y Celda Peltier. Luz exenta (0s).
 - **Modos:** `enum class ModoOperacion { AUTO, MANUAL }`. Manual caduca a los 5 min con auto-reversión a AUTO.
 
 ### `NetworkManager` — Conectividad
@@ -76,36 +76,36 @@ El ESP32 opera como un **PLC Determinista Agnóstico (Stateless PLC)**:
 ### `FirebaseManager` — Comunicación Cloud
 - **Auth:** Email/Password vía REST (JWT tokens).
 - **Telemetría Out:** Cada 5s a `/telemetry/{deviceId}/data` (JSON con sensores, actuadores, estado, modo).
-- **Historial:** Cada 5 min push a `/history/{deviceId}` (retención 30 días).
+- **Historial:** Cada 5 min push a `/history/{deviceId}` (retención 30 días con Timestamp UNIX nativo vía NTP).
 - **Comandos In:** Stream SSE persistente en `/devices/{deviceId}/commands`. Parsea tanto JSON estructurado como primitivos booleanos directos.
 
 ### `FileManager` — Persistencia Offline
 - **LittleFS:** Sistema de archivos no volátil en flash (partición 192 KB).
 - **`config.json`:** Almacena `CropProfile` completo para operación 100% offline.
 - **Cascada de Fallback:** Archivo corrupto/inexistente → regenera perfil Fungi seguro por defecto.
-- **ArduinoJson:** Buffers de 4096 bytes (`DynamicJsonDocument`) con operador coalescente `|` para campos faltantes.
+- **ArduinoJson:** Estructuras en stack (`StaticJsonDocument`) con operador coalescente `|` para campos faltantes (cero fragmentación en heap).
 
 ### `DisplayManager` — HMI Local
 - **Hardware:** TFT ST7735 (160×128 px, Landscape) vía SPI (CS:5, DC:14, RST:13).
 - **Renderizado:** Cada 5s muestra temperatura, humedad, VPD, estado operacional y conexión WiFi/Firebase.
-- **Anti-Flicker:** `fillScreen(BLACK)` por ciclo (⚠️ deuda técnica: falta dirty checking con sprites).
+- **Anti-Flicker:** `fillScreen(BLACK)` por ciclo (⚠️ deuda técnica pendiente: dirty checking con sprites).
 
 ## 4. Flujo de Ciclo (Tick) — Cada 5000 ms
 
 ```
 1. Leer Sensores (DHT22×2, NTC)
    ↓
-2. Fusión Sensorial (promedio o fallback)
+2. Fusión Sensorial (promedio o fallback; -999.0f fuerza SAFE_MODE inmediato)
    ↓
-3. Filtro EWMA (suavizado α=0.1)
+3. Filtro EWMA (suavizado α=0.1 con bypass en Safe Mode)
    ↓
 4. Calcular VPD (Tetens)
    ↓
-5. Evaluar Árbitro de Conflictos (P1→P4)
+5. Evaluar Árbitro de Conflictos (P1→P4 con Interlock Extractor/Fogger)
    ↓
-6. Aplicar PID al Calefactor (Time-Proportioning)
+6. Aplicar PID al Calefactor (Time-Proportioning de alta frecuencia)
    ↓
-7. Verificar Anti-Short-Cycle (180s mínimo)
+7. Verificar Anti-Short-Cycle (180s mínimo en Fogger, Extractor y Peltier)
    ↓
 8. Conmutar Relés Físicos
    ↓
@@ -143,20 +143,26 @@ enum class EstadoOperacional {
     CALENTANDO,      // Calefactor activo (temp < ideal_min)
     ENFRIANDO,       // Extractor/Peltier activo (temp > ideal_max)
     HUMIDIFICANDO,   // Fogger activo (hum < ideal_min)
-    SAFE_MODE,       // Fallo total de sensores — actuadores OFF
+    SAFE_MODE,       // Fallo total de sensores — actuadores térmicos/hídricos OFF
     EMERGENCIA       // Temperatura crítica o emergencia sustrato
 };
 ```
 
-## 7. Deuda Técnica Conocida
+## 7. Matriz de Deuda Técnica y Estado Post-Auditoría V3
 
-| Problema | Severidad | Referencia |
-| :--- | :---: | :--- |
-| Safe Mode inalcanzable (EWMA congela temp) | 🔴 | `HardwareController.cpp:167,247` |
-| PID degrada a On/Off (ventana = intervalo) | 🟡 | `HardwareController.cpp:264` + `main.cpp:70` |
-| Conflicto Extractor ↔ Fogger sin exclusión | 🟡 | `HardwareController.cpp:291-311` |
-| Peltier sin anti-short-cycle | 🟡 | `HardwareController.cpp:333` |
-| ADC sin calibración (±1.5-3°C NTC) | 🟡 | `HardwareController.cpp:114-119` |
-| `DynamicJsonDocument` fragmenta heap | 🟡 | `FirebaseManager.cpp:285` |
+| Problema | Severidad | Estado | Resolución / Acción |
+| :--- | :---: | :---: | :--- |
+| Safe Mode inalcanzable (EWMA congelaba temp) | 🔴 | ✅ Resuelto | `HardwareController.cpp`: `-999.0f` resetea EWMA y apaga actuadores. |
+| Watchdog de hardware inactivo | 🔴 | ✅ Resuelto | `main.cpp`: `esp_task_wdt` inicializado y alimentado en loop. |
+| PID degradaba a On/Off binario | 🟡 | ✅ Resuelto | Modulación Time-Proportioning evaluada en tick rápido de loop. |
+| Conflicto Extractor ↔ Fogger simultáneo | 🟡 | ✅ Resuelto | Interlock de exclusión mutua en Árbitro de Conflictos. |
+| Celda Peltier sin protección anti-cycling | 🟡 | ✅ Resuelto | Anti-Short-Cycle de 180s aplicado en `_ejecutarAccion`. |
+| Fragmentación de memoria por `DynamicJson` | 🟡 | ✅ Resuelto | Migrado a `StaticJsonDocument` en Stack/BSS. |
+| Fallo en actualización OTA por Heap/TLS | 🟡 | ✅ Resuelto | `FirebaseManager::end()` ejecutado en `ArduinoOTA.onStart()`. |
+| Validación termodinámica en perfiles | 🟡 | ✅ Resuelto | Motor `validateThermodynamics()` y guards en SCADA React (Informe 76). |
+| Calibración ADC + Multisampling (NTC) | 🟡 | ⏳ Pendiente | Integración `esp_adc_cal` (Sprint 3 / Q4 2026). |
+| Integración sensor CO2 NDIR real | 🟡 | ⏳ Pendiente | SCD30/MH-Z19 por I2C/UART (Sprint 3 / Q4 2026). |
+| Renderizado TFT con Dirty Checking | 🟢 | ⏳ Pendiente | Optimización de refresco parcial ST7735. |
+| Purgar `Secrets.h` del historial Git | 🔴 | ⏳ Pendiente | Rotación de claves y reescritura de commits pasados. |
 
-> 📄 Ver auditoría completa: [`docs/AUDITORIA_INTEGRAL_V3_2026-08-14.md`](docs/AUDITORIA_INTEGRAL_V3_2026-08-14.md)
+> 📄 Registro detallado de seguimiento: [`docs/CHECKLIST_CORRECCIONES_DEUDA_TECNICA.md`](docs/CHECKLIST_CORRECCIONES_DEUDA_TECNICA.md) | [Auditoría Integral V3](docs/AUDITORIA_INTEGRAL_V3_2026-08-14.md)

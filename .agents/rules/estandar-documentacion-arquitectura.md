@@ -10,6 +10,7 @@ description: Obliga a ejecutar el protocolo de documentación y registro formal 
    - Crear el informe técnico correlativo en `informes/`.
    - Actualizar el estado en [ROADMAP.md](../../ROADMAP.md).
    - Actualizar y marcar el ítem en [docs/CHECKLIST_CORRECCIONES_DEUDA_TECNICA.md](../../docs/CHECKLIST_CORRECCIONES_DEUDA_TECNICA.md).
+   - Sincronizar [ESP32_ARCH.md](../../ESP32_ARCH.md) si el cambio afecta firmware, pines, control o deuda técnica del ESP32.
 
 2. **Criterio de Aceptación:**
    Ningún cambio estructural se dará por concluido sin haber dejado esta trazabilidad técnica completa.

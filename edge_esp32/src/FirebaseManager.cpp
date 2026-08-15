@@ -255,9 +255,18 @@ void FirebaseManager::publicarHistorial() {
 bool FirebaseManager::configurarStreams() {
     // Escuchar comandos manuales y configuraciones en RTDB
     String streamPath = "/devices/" + _deviceId + "/commands";
-    Serial.print(F("[Firebase] Preparando suscripciones futuras (Stream) en: "));
+    Serial.print(F("[Firebase] Sincronizando estado inicial y preparando Stream en: "));
     Serial.println(streamPath);
     
+    // 1. Sincronización inicial directa en arranque (Zero Lag)
+    if (Firebase.getJSON(_fbdo, streamPath)) {
+        Serial.println(F("✅ [Firebase] Configuración inicial descargada exitosamente en arranque."));
+        _procesarPayloadStream("/", _fbdo.jsonString());
+    } else {
+        Serial.printf("ℹ️ [Firebase] Lectura inicial de comandos omitida o nodo vacío: %s\n", _fbdo.errorReason().c_str());
+    }
+
+    // 2. Suscripción persistente reactiva vía Server-Sent Events (SSE)
     if (!Firebase.beginStream(_fbdoStream, streamPath)) {
         Serial.printf("[Firebase] Error configurando stream: %s\n", _fbdoStream.errorReason().c_str());
         return false;
@@ -303,7 +312,7 @@ void FirebaseManager::streamTimeoutCallback(bool timeout) {
 void FirebaseManager::_procesarPayloadStream(const String& path, const String& data) {
     Serial.printf("[Firebase] Stream recibido - Path: %s, Data: %s\n", path.c_str(), data.c_str());
     
-    StaticJsonDocument<1024> doc;
+    StaticJsonDocument<2048> doc;
     DeserializationError error = deserializeJson(doc, data);
     
     if (!error && doc.is<JsonObject>()) {
