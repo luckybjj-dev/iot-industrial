@@ -70,15 +70,9 @@ ConfiguracionCultivo FileManager::cargarConfiguracion() {
     _configActual.crop_profile  = doc["crop_profile"] | "DEFAULT";
     _configActual.max_manual_time_ms = doc["max_manual_time_ms"] | 900000;
     
-    if (doc.containsKey("failsafes")) {
-        JsonObject failsafe = doc["failsafes"];
-        _configActual.failsafes.watchdog_timeout_ms       = failsafe["watchdog_timeout_ms"] | 10000;
-        float maxT = failsafe["max_internal_temp_limit_c"].as<float>();
-        _configActual.failsafes.max_internal_temp_limit_c = (maxT > 10.0f) ? maxT : 35.0f;
-    } else {
-        _configActual.failsafes.watchdog_timeout_ms       = 10000;
-        _configActual.failsafes.max_internal_temp_limit_c = 35.0f;
-    }
+    JsonObject failsafe = doc["failsafes"];
+    _configActual.failsafes.watchdog_timeout_ms       = failsafe["watchdog_timeout_ms"] | 10000;
+    _configActual.failsafes.max_internal_temp_limit_c = failsafe["max_internal_temp_limit_c"] | 35.0;
 
     JsonObject crop = doc["crop"];
     _configActual.crop.kingdom        = crop["kingdom"] | "FUNGI";
@@ -214,15 +208,9 @@ bool FileManager::guardarConfiguracionJson(const String& jsonString) {
     nuevaConfig.crop_profile  = doc["crop_profile"] | _configActual.crop_profile;
     nuevaConfig.max_manual_time_ms = doc["max_manual_time_ms"] | _configActual.max_manual_time_ms;
     
-    if (doc.containsKey("failsafes")) {
-        JsonObject failsafe = doc["failsafes"];
-        nuevaConfig.failsafes.watchdog_timeout_ms       = failsafe["watchdog_timeout_ms"] | _configActual.failsafes.watchdog_timeout_ms;
-        float maxT = failsafe["max_internal_temp_limit_c"].as<float>();
-        nuevaConfig.failsafes.max_internal_temp_limit_c = (maxT > 10.0f) ? maxT : 35.0f;
-    } else {
-        nuevaConfig.failsafes.watchdog_timeout_ms       = (_configActual.failsafes.watchdog_timeout_ms > 0) ? _configActual.failsafes.watchdog_timeout_ms : 10000;
-        nuevaConfig.failsafes.max_internal_temp_limit_c = (_configActual.failsafes.max_internal_temp_limit_c > 10.0f) ? _configActual.failsafes.max_internal_temp_limit_c : 35.0f;
-    }
+    JsonObject failsafe = doc["failsafes"];
+    nuevaConfig.failsafes.watchdog_timeout_ms       = failsafe["watchdog_timeout_ms"] | _configActual.failsafes.watchdog_timeout_ms;
+    nuevaConfig.failsafes.max_internal_temp_limit_c = failsafe["max_internal_temp_limit_c"] | _configActual.failsafes.max_internal_temp_limit_c;
     
     if (doc.containsKey("crop")) {
         JsonObject crop = doc["crop"];

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { subscribeToAllDevices, subscribeToDeviceConfig, sendCommand, sendModeCommand, sendConfigRules, updateConfigField } from './services/firebaseService';
-import type { EstadoCamara, ConfiguracionCultivo, DeviceCropProfile, TelemetriaFungi } from './types/cultivo';
+import type { EstadoCamara, ConfiguracionCultivo, DeviceCropProfile } from './types/cultivo';
 import { MetricCard } from './components/MetricCard';
 import { TelemetryDashboard } from './components/TelemetryDashboard';
 import { SemaforoEstabilidad } from './components/SemaforoEstabilidad';
@@ -28,7 +28,6 @@ function Dashboard() {
   
   // Estado optimista para hacer que la UI se sienta instantánea aunque el hardware demore
   const [optimisticModes, setOptimisticModes] = useState<Record<string, 'AUTO' | 'MANUAL'>>({});
-  const [optimisticActuators, setOptimisticActuators] = useState<Record<string, Record<string, boolean>>>({});
   
   // Timer manual
   const [manualStartTimes, setManualStartTimes] = useState<Record<string, number>>({});
@@ -78,11 +77,6 @@ function Dashboard() {
           delete next[camara.deviceId];
           return next;
         });
-        setOptimisticActuators(prev => {
-          const next = { ...prev };
-          delete next[camara.deviceId];
-          return next;
-        });
         // Enviar comando AUTO a Firebase
         sendModeCommand(camara.deviceId, 'AUTO')
           .catch(err => console.error('[AutoRevert] Error:', err))
@@ -93,67 +87,35 @@ function Dashboard() {
 
   useEffect(() => {
     // Suscribirse a Firebase RTDB para Telemetría
-    const unsubscribeTelemetria = subscribeToAllDevices(
-      (devices) => {
-        setCamaras(devices);
-        setError(null);
-
-        // Limpiar estados optimistas SOLO cuando recibimos update real del servidor que coincida
-        setOptimisticModes(prev => {
-          const next = { ...prev };
-          let changed = false;
-          devices.forEach(dev => {
-            if (next[dev.deviceId] === dev.modo_operacion) {
-              delete next[dev.deviceId];
-              changed = true;
-            }
-          });
-          return changed ? next : prev;
+    const unsubscribeTelemetria = subscribeToAllDevices((devices) => {
+      setCamaras(devices);
+      setError(null);
+      // Limpiar estados optimistas SOLO cuando recibimos update real del servidor que coincida
+      setOptimisticModes(prev => {
+        const next = { ...prev };
+        let changed = false;
+        devices.forEach(dev => {
+          if (next[dev.deviceId] === dev.modo_operacion) {
+            delete next[dev.deviceId];
+            changed = true;
+          }
         });
-
-        // Limpiar estados optimistas de actuadores cuando coincida la telemetría real
-        setOptimisticActuators(prev => {
-          const next = { ...prev };
-          let changed = false;
-          devices.forEach(dev => {
-            if (!dev.telemetria || !next[dev.deviceId]) return;
-            const devOpt = { ...next[dev.deviceId] };
-            let devChanged = false;
-            (Object.keys(devOpt) as (keyof TelemetriaFungi)[]).forEach(actuatorKey => {
-              if (dev.telemetria && (dev.telemetria as any)[actuatorKey] === devOpt[actuatorKey]) {
-                delete devOpt[actuatorKey];
-                devChanged = true;
-              }
-            });
-            if (devChanged) {
-              if (Object.keys(devOpt).length === 0) {
-                delete next[dev.deviceId];
-              } else {
-                next[dev.deviceId] = devOpt;
-              }
-              changed = true;
-            }
-          });
-          return changed ? next : prev;
+        return changed ? next : prev;
+      });
+      
+      // Update manual start times
+      setManualStartTimes(prev => {
+        const next = { ...prev };
+        devices.forEach(dev => {
+          if (dev.modo_operacion === 'MANUAL' && !next[dev.deviceId]) {
+            next[dev.deviceId] = Date.now();
+          } else if (dev.modo_operacion === 'AUTO') {
+            delete next[dev.deviceId];
+          }
         });
-        
-        // Update manual start times
-        setManualStartTimes(prev => {
-          const next = { ...prev };
-          devices.forEach(dev => {
-            if (dev.modo_operacion === 'MANUAL' && !next[dev.deviceId]) {
-              next[dev.deviceId] = Date.now();
-            } else if (dev.modo_operacion === 'AUTO') {
-              delete next[dev.deviceId];
-            }
-          });
-          return next;
-        });
-      },
-      (err) => {
-        setError(`Error de conexión con Firebase: ${err.message}`);
-      }
-    );
+        return next;
+      });
+    });
 
     return () => unsubscribeTelemetria();
   }, []);
@@ -190,24 +152,6 @@ function Dashboard() {
     try {
       const newMode = currentMode === 'AUTO' ? 'MANUAL' : 'AUTO';
       setOptimisticModes(prev => ({ ...prev, [deviceId]: newMode }));
-
-      if (newMode === 'MANUAL') {
-        // Iniciar el temporizador instantáneamente en la UI
-        setManualStartTimes(prev => ({ ...prev, [deviceId]: Date.now() }));
-      } else {
-        // Limpiar temporizador y estados optimistas de actuadores al volver a AUTO
-        setManualStartTimes(prev => {
-          const next = { ...prev };
-          delete next[deviceId];
-          return next;
-        });
-        setOptimisticActuators(prev => {
-          const next = { ...prev };
-          delete next[deviceId];
-          return next;
-        });
-      }
-
       await sendModeCommand(deviceId, newMode);
     } catch (err) {
       console.error("Error al enviar comando de modo", err);
@@ -226,37 +170,12 @@ function Dashboard() {
 
   const handleToggleActuator = async (deviceId: string, actuator: string, currentState: boolean, currentMode: 'AUTO' | 'MANUAL') => {
     if (currentMode === 'AUTO') return;
-    const targetState = !currentState;
-
-    // Feedback optimista inmediato en la UI
-    setOptimisticActuators(prev => ({
-      ...prev,
-      [deviceId]: {
-        ...(prev[deviceId] || {}),
-        [actuator]: targetState
-      }
-    }));
-
     try {
-      await sendCommand(deviceId, actuator, targetState);
+      await sendCommand(deviceId, actuator, !currentState);
       showInfo(`Comando enviado a ${actuator.replace('_on', '').toUpperCase()}. El controlador de hardware procesará la orden respetando los tiempos de protección térmicos (hasta 3 min).`);
     } catch (err) {
       console.error("Error al enviar comando", err);
       setError("Error al encender/apagar el actuador.");
-      // Revertir estado optimista en caso de fallo
-      setOptimisticActuators(prev => {
-        const next = { ...prev };
-        if (next[deviceId]) {
-          const updated = { ...next[deviceId] };
-          delete updated[actuator];
-          if (Object.keys(updated).length === 0) {
-            delete next[deviceId];
-          } else {
-            next[deviceId] = updated;
-          }
-        }
-        return next;
-      });
     }
   };
 
@@ -430,7 +349,7 @@ function Dashboard() {
                           isOffline={offlineStatus.isOffline}
                           lastSeen={offlineStatus.lastSeen}
                         />
-
+  
                         {/* HERO CARDS - Métricas (Ocultas si el equipo está offline para no mostrar datos falsos/viejos) */}
                         {!offlineStatus.isOffline && (
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
@@ -481,27 +400,27 @@ function Dashboard() {
                             })()}
                             target={crop ? `~ ${crop.temp_sustrato_ideal} °C` : undefined}
                           />
-                          <MetricCard
-                            title="VPD (Déficit Presión)"
-                            value={camara.telemetria.vpd?.toFixed(2) || '--'}
-                            unit="kPa"
-                            icon={Activity}
-                            colorClass="text-purple-400"
-                            status={
-                              (() => {
-                                if (camara.telemetria.vpd === null || camara.telemetria.vpd === undefined || !crop) return 'STABLE';
-                                const calcVpd = (t: number, h: number) => {
-                                  const svp = 0.61078 * Math.exp((17.27 * t) / (t + 237.3));
-                                  const avp = svp * (h / 100.0);
-                                  return svp - avp;
-                                };
-                                const minVpd = calcVpd(crop.temp_ideal_min, crop.hum_ideal_max);
-                                const maxVpd = calcVpd(crop.temp_ideal_max, crop.hum_ideal_min);
-                                return (camara.telemetria.vpd < minVpd || camara.telemetria.vpd > maxVpd) ? 'WARNING' : 'STABLE';
-                              })()
-                            }
-                            target={getTarget('VPD')}
-                          />
+                        <MetricCard
+                          title="VPD (Déficit Presión)"
+                          value={camara.telemetria.vpd?.toFixed(2) || '--'}
+                          unit="kPa"
+                          icon={Activity}
+                          colorClass="text-purple-400"
+                          status={
+                            (() => {
+                              if (camara.telemetria.vpd === null || camara.telemetria.vpd === undefined || !crop) return 'STABLE';
+                              const calcVpd = (t: number, h: number) => {
+                                const svp = 0.61078 * Math.exp((17.27 * t) / (t + 237.3));
+                                const avp = svp * (h / 100.0);
+                                return svp - avp;
+                              };
+                              const minVpd = calcVpd(crop.temp_ideal_min, crop.hum_ideal_max);
+                              const maxVpd = calcVpd(crop.temp_ideal_max, crop.hum_ideal_min);
+                              return (camara.telemetria.vpd < minVpd || camara.telemetria.vpd > maxVpd) ? 'WARNING' : 'STABLE';
+                            })()
+                          }
+                          target={getTarget('VPD')}
+                        />
                           <MetricCard
                             title="Nivel CO2"
                             value={camara.telemetria.co2_ppm?.toString() || '--'}
@@ -571,49 +490,39 @@ function Dashboard() {
                           </div>
                           
                           {/* Actuadores List */}
-                          {(() => {
-                            const devOptActuators = optimisticActuators[camara.deviceId] || {};
-                            const getActuatorValue = (key: string, realVal: boolean | undefined): boolean => {
-                              if (devOptActuators[key] !== undefined) {
-                                return devOptActuators[key];
-                              }
-                              return realVal ?? false;
-                            };
-
-                            return [
-                              { id: 'fogger_on', label: 'Niebla', icon: Droplets, val: getActuatorValue('fogger_on', camara.telemetria.fogger_on), locked: camara.telemetria.fogger_locked, activeBg: 'bg-cyan-500/20 text-cyan-500 border-cyan-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
-                              { id: 'extractor_on', label: 'Extractor', icon: Wind, val: getActuatorValue('extractor_on', camara.telemetria.extractor_on), locked: camara.telemetria.extractor_locked, activeBg: 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
-                              { id: 'heater_on', label: 'Calefactor', icon: Activity, val: getActuatorValue('heater_on', camara.telemetria.heater_on), locked: camara.telemetria.heater_locked, activeBg: 'bg-amber-500/20 text-amber-500 border-amber-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
-                              { id: 'cooler_on', label: 'Enfriador', icon: Snowflake, val: getActuatorValue('cooler_on', camara.telemetria.cooler_on), locked: false, activeBg: 'bg-blue-500/20 text-blue-500 border-blue-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
-                              { id: 'light_on', label: 'Luz', icon: Power, val: getActuatorValue('light_on', camara.telemetria.light_on), locked: false, activeBg: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
-                            ].map((act) => (
-                              <div key={act.id} className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5 relative">
-                                <span className="text-neutral-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
-                                  <act.icon size={14}/> {act.label}
-                                  {modo === 'MANUAL' && act.locked && (
-                                    <span className="text-red-500 ml-1" title="Bloqueado por protección térmica (Anti-Short Cycle)">🔒</span>
-                                  )}
-                                </span>
-                                <button 
-                                  disabled={modo === 'AUTO' || (modo === 'MANUAL' && act.locked)}
-                                  onClick={() => handleToggleActuator(camara.deviceId, act.id, act.val, modo)}
-                                  className={`px-4 py-1.5 rounded-lg text-xs font-black tracking-widest uppercase transition-all duration-300 border ${
-                                    modo === 'AUTO'
-                                      ? act.val 
-                                        ? act.activeBg 
-                                        : 'bg-neutral-900 text-neutral-600 border-neutral-800'
-                                      : act.val 
-                                        ? act.manualBg 
-                                        : act.locked 
-                                          ? 'bg-red-950/30 text-red-500 border-red-500/20 cursor-not-allowed'
-                                          : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700 border-neutral-700'
-                                  }`}
-                                >
-                                  {modo === 'MANUAL' && act.locked ? 'LOCKED' : (act.val ? 'ON' : 'OFF')}
-                                </button>
-                              </div>
-                            ));
-                          })()}
+                          {[
+                            { id: 'fogger_on', label: 'Niebla', icon: Droplets, val: camara.telemetria.fogger_on, locked: camara.telemetria.fogger_locked, activeBg: 'bg-cyan-500/20 text-cyan-500 border-cyan-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
+                            { id: 'extractor_on', label: 'Extractor', icon: Wind, val: camara.telemetria.extractor_on, locked: camara.telemetria.extractor_locked, activeBg: 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
+                            { id: 'heater_on', label: 'Calefactor', icon: Activity, val: camara.telemetria.heater_on, locked: camara.telemetria.heater_locked, activeBg: 'bg-amber-500/20 text-amber-500 border-amber-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
+                            { id: 'cooler_on', label: 'Enfriador', icon: Snowflake, val: camara.telemetria.cooler_on ?? false, locked: false, activeBg: 'bg-blue-500/20 text-blue-500 border-blue-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
+                            { id: 'light_on', label: 'Luz', icon: Power, val: camara.telemetria.light_on, locked: false, activeBg: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
+                          ].map((act) => (
+                            <div key={act.id} className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5 relative">
+                              <span className="text-neutral-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                                <act.icon size={14}/> {act.label}
+                                {modo === 'MANUAL' && act.locked && (
+                                  <span className="text-red-500 ml-1" title="Bloqueado por protección térmica (Anti-Short Cycle)">🔒</span>
+                                )}
+                              </span>
+                              <button 
+                                disabled={modo === 'AUTO' || (modo === 'MANUAL' && act.locked)}
+                                onClick={() => handleToggleActuator(camara.deviceId, act.id, act.val, modo)}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-black tracking-widest uppercase transition-all duration-300 border ${
+                                  modo === 'AUTO'
+                                    ? act.val 
+                                      ? act.activeBg 
+                                      : 'bg-neutral-900 text-neutral-600 border-neutral-800'
+                                    : act.val 
+                                      ? act.manualBg 
+                                      : act.locked 
+                                        ? 'bg-red-950/30 text-red-500 border-red-500/20 cursor-not-allowed'
+                                        : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700 border-neutral-700'
+                                }`}
+                              >
+                                {modo === 'MANUAL' && act.locked ? 'LOCKED' : (act.val ? 'ON' : 'OFF')}
+                              </button>
+                            </div>
+                          ))}
                         </div>
 
                         {/* GRÁFICO HISTÓRICO UNIFICADO (TELEMETRÍA) */}

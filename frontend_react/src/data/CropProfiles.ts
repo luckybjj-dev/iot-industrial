@@ -1717,15 +1717,15 @@ export const CROP_PROFILES: Record<string, CropProfile> = {
                 day: { min: 22, max: 26 },
                 night: { min: 18, max: 21 },
               },
-              humidity: { min: 60, max: 70 },
+              humidity: { min: 65, max: 75 },
               vpd: { min: 0.8, max: 1.2 },
-              co2: { min: 800, max: 1000 },
+              co2: { min: 1000, max: 1200 },
               fae: { ach: { min: 4, max: 6 } },
               lighting: {
                 photoperiod: '16/8'
               }
             }
-          },
+          }
         ]
   },
 };
@@ -1817,17 +1817,13 @@ export const generateDeviceProfile = (phase: CropPhase): DeviceCropProfile => {
   const co2IdealMax = phase.targets.co2?.max || 800;
   const co2CritMax = co2IdealMax + (co2IdealMax * 0.5); // 50% extra como limite critico
 
-  // Si no hay sustrato explícito, estimamos sustrato = promedio ambiental + 2°C (termogénesis)
-  const estimatedSubstrateIdeal = Math.round(((tempIdealMin + tempIdealMax) / 2) + 2);
-  const estimatedSubstrateCritMax = tempCritMax + 2;
-
   return {
       temp_ideal_min: tempIdealMin,
       temp_ideal_max: tempIdealMax,
       temp_crit_min: tempCritMin,
       temp_crit_max: tempCritMax,
-      temp_sustrato_ideal: phase.targets.temperature.substrate ? Math.round((phase.targets.temperature.substrate.min + phase.targets.temperature.substrate.max) / 2) : estimatedSubstrateIdeal,
-      temp_sustrato_crit_max: phase.targets.temperature.substrate ? phase.targets.temperature.substrate.max + 2 : estimatedSubstrateCritMax,
+      temp_sustrato_ideal: phase.targets.temperature.substrate ? Math.round((phase.targets.temperature.substrate.min + phase.targets.temperature.substrate.max) / 2) : tempIdealMin,
+      temp_sustrato_crit_max: phase.targets.temperature.substrate ? phase.targets.temperature.substrate.max + 2 : tempCritMax,
       hum_ideal_min: humIdealMin,
       hum_ideal_max: humIdealMax,
       hum_crit_min: humCritMin,

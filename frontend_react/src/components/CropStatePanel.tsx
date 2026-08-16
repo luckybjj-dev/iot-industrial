@@ -211,15 +211,12 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config, isOff
         if (currentIndex === -1) return null;
 
         return (
-            <div className="mt-4 p-3 bg-black/40 border border-white/5 rounded-xl">
-                <div className="flex items-center justify-between relative px-3">
-                    {/* Línea horizontal continua centrada en los nodos */}
-                    <div className="absolute left-4 right-4 top-1/2 -translate-y-1/2 h-1 bg-neutral-800 rounded-full z-0"></div>
+            <div className="mt-6">
+                <div className="flex items-center justify-between relative">
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-neutral-800 rounded-full z-0"></div>
                     {phases.map((phase, idx) => {
                         const isPast = idx < currentIndex;
                         const isCurrent = idx === currentIndex;
-                        const isFirst = idx === 0;
-                        const isLast = idx === phases.length - 1;
                         
                         let bgColor = 'bg-neutral-800';
                         let borderColor = 'border-neutral-700';
@@ -232,25 +229,20 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config, isOff
                             borderColor = 'border-amber-400';
                         }
 
-                        // Posicionamiento inteligente del tooltip para evitar desborde
-                        let tooltipAlignClass = '-translate-x-1/2 left-1/2';
-                        if (isFirst) tooltipAlignClass = 'left-0';
-                        else if (isLast) tooltipAlignClass = 'right-0';
-
                         return (
                             <div key={phase.id} className="relative z-10 flex flex-col items-center group cursor-default">
-                                <div className={`w-3.5 h-3.5 md:w-4 md:h-4 rounded-full border-2 transition-all ${bgColor} ${borderColor} ${isCurrent ? 'shadow-[0_0_12px_rgba(245,158,11,0.8)] scale-125' : ''}`}></div>
-                                <div className={`absolute top-6 whitespace-nowrap text-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/95 border border-white/10 px-2.5 py-1.5 rounded-lg text-[10px] text-neutral-300 pointer-events-none z-30 shadow-xl ${tooltipAlignClass}`}>
+                                <div className={`w-3 h-3 md:w-4 md:h-4 rounded-full border-2 transition-all ${bgColor} ${borderColor} ${isCurrent ? 'shadow-[0_0_10px_rgba(245,158,11,0.6)] scale-125' : ''}`}></div>
+                                <div className="absolute top-6 whitespace-nowrap text-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/90 px-2 py-1 rounded text-[10px] text-neutral-300 pointer-events-none z-20">
                                     <span className="font-bold text-white block">{phase.name}</span>
-                                    <span className="text-emerald-400 font-mono">{phase.duration_days} días</span> {phase.transition_hours ? <span className="text-neutral-400">· Trans: {phase.transition_hours}h</span> : ''}
+                                    {phase.duration_days} días {phase.transition_hours ? `(Trans: ${phase.transition_hours}h)` : ''}
                                 </div>
                             </div>
                         );
                     })}
                 </div>
-                <div className="flex justify-between mt-3 px-2">
-                    <span className="text-[10px] text-emerald-500/80 uppercase tracking-widest font-bold">Inicio</span>
-                    <span className="text-[10px] text-neutral-500 uppercase tracking-widest font-bold">Fin de Ciclo</span>
+                <div className="flex justify-between mt-2 px-1">
+                    <span className="text-[10px] text-emerald-500/70 uppercase tracking-widest font-bold">Inicio</span>
+                    <span className="text-[10px] text-neutral-500/70 uppercase tracking-widest font-bold">Fin de Ciclo</span>
                 </div>
             </div>
         );
@@ -282,7 +274,7 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config, isOff
 
     return (
         <StatsAccordion title={titleContent} defaultOpen={true}>
-            <div className="relative overflow-visible -mt-4">
+            <div className="relative overflow-hidden -mt-4">
                 {/* Soft background glow */}
                 <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
 

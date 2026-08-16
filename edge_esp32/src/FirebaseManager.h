@@ -71,10 +71,7 @@ private:
     unsigned long _intervaloReconexionMs = 2000;
     static constexpr unsigned long MAX_INTERVALO_RECONEXION_MS = 60000;
     
-    // Buffer para desacoplar procesamiento de stream fuera de la tarea FreeRTOS (evita Stack Overflow)
-    volatile bool _streamPendiente = false;
-    String _streamPath;
-    String _streamData;
+    // No async callbacks needed for simple FirebaseESP32
     
     // Handlers para Stream (Configuraciones y Comandos)
     bool configurarStreams();
@@ -83,6 +80,10 @@ private:
 
     // Mantenemos una instancia estática para que los callbacks puedan acceder a la clase
     static FirebaseManager* _instancia;
+
+    volatile bool _streamPendiente = false;
+    String _streamPath;
+    String _streamData;
 
     void _procesarPayloadStream(const String& path, const String& data);
 };

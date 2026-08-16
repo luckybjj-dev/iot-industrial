@@ -17,6 +17,7 @@ const firebaseConfig = {
 // Inicializar Firebase
 const app = initializeApp(firebaseConfig);
 
-// Inicializar Realtime Database y Auth con URL explícita para evitar desconexiones
-export const database = getDatabase(app, firebaseConfig.databaseURL || 'https://invernadero-industrial-default-rtdb.firebaseio.com');
+// Inicializar Realtime Database y Auth
+const dbUrl = firebaseConfig.databaseURL || 'https://invernadero-industrial-default-rtdb.firebaseio.com';
+export const database = getDatabase(app, dbUrl);
 export const auth = getAuth(app);

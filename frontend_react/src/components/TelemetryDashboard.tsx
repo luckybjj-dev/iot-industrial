@@ -6,7 +6,6 @@ import { Activity, Thermometer, Droplets, Wind, Database } from 'lucide-react';
 import { fetchDeviceHistory } from '../services/firebaseService';
 import type { HistorialData, DeviceCropProfile, TelemetriaFungi } from '../types/cultivo';
 
-
 interface Props {
   deviceId: string;
   config?: DeviceCropProfile;
@@ -35,8 +34,8 @@ export const TelemetryDashboard: React.FC<Props> = ({ deviceId, config, realtime
 
     const loadData = async () => {
       try {
-        // Descargamos los últimos 500 registros para renderizado instantáneo del gráfico histórico
-        const history = await fetchDeviceHistory(deviceId, 500); 
+        // Descargamos los últimos 300 registros para renderizado instantáneo del gráfico
+        const history = await fetchDeviceHistory(deviceId, 300); 
         if (isMounted) {
           setData(history);
         }

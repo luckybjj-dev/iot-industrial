@@ -1,4 +1,4 @@
-import { ref, onValue, update, set, remove, query, limitToLast, get } from 'firebase/database';
+import { ref, onValue, update, set, remove, query, limitToLast, orderByKey, get } from 'firebase/database';
 import { database } from '../config/firebase';
 import type { EstadoCamara, TelemetriaFungi, HistorialData, ConfiguracionCultivo } from '../types/cultivo';
 
@@ -6,16 +6,18 @@ import type { EstadoCamara, TelemetriaFungi, HistorialData, ConfiguracionCultivo
  * Suscribirse a TODOS los dispositivos en tiempo real
  */
 export const subscribeToAllDevices = (
-  callback: (devices: EstadoCamara[]) => void,
-  onError?: (error: Error) => void
+  callback: (devices: EstadoCamara[]) => void
 ) => {
   const telemetryRef = ref(database, 'telemetry');
-  const dbUrl = import.meta.env.VITE_FIREBASE_DATABASE_URL || 'https://invernadero-industrial-default-rtdb.firebaseio.com';
   
-  const parseRawObject = (data: any) => {
-    if (data && typeof data === 'object') {
+  const unsubscribe = onValue(telemetryRef, (snapshot) => {
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+      
       const devicesArray: EstadoCamara[] = Object.keys(data).map(deviceId => {
         const deviceNode = data[deviceId];
+        
+        // Extraer modo de operación, priorizando la data de telemetría (para ignorar campos fantasma legacy)
         const modo = (deviceNode.data && deviceNode.data.modo_operacion) || deviceNode.modo_operacion || 'AUTO';
         
         return {
@@ -29,36 +31,12 @@ export const subscribeToAllDevices = (
       
       callback(devicesArray);
     } else {
+      console.log("[Firebase] Base de datos vacía en la ruta /telemetry");
       callback([]);
     }
-  };
-
-  const parseData = (snapshot: any) => {
-    if (snapshot.exists()) {
-      parseRawObject(snapshot.val());
-    } else {
-      callback([]);
-    }
-  };
-
-  // 1. Fetch REST ultra rápido (< 50ms) para renderizado inmediato
-  fetch(`${dbUrl}/telemetry.json`)
-    .then(res => res.json())
-    .then(data => {
-      if (data) parseRawObject(data);
-    })
-    .catch(err => console.warn("[Firebase] Fallback REST inicial:", err));
-
-  // 2. Fetch SDK get() inicial
-  get(telemetryRef).then(parseData).catch((error) => {
-    console.error("[Firebase] Error en lectura get():", error);
-    if (onError) onError(error);
-  });
-
-  // 3. Suscripción en tiempo real (mantiene la reactividad viva)
-  const unsubscribe = onValue(telemetryRef, parseData, (error) => {
-    console.error("[Firebase] Error de lectura en tiempo real:", error);
-    if (onError) onError(error);
+  }, (error) => {
+    console.error("[Firebase] Error de lectura:", error);
+    // Podríamos disparar el callback con un error si tuviéramos manejo de errores
   });
 
   return unsubscribe;
@@ -71,22 +49,8 @@ export const subscribeToDeviceConfig = (
   deviceId: string,
   callback: (config: ConfiguracionCultivo | null) => void
 ) => {
-  const configRef = ref(database, `devices/${deviceId}/commands`);
-  const dbUrl = import.meta.env.VITE_FIREBASE_DATABASE_URL || 'https://invernadero-industrial-default-rtdb.firebaseio.com';
+  const configRef = ref(database, `devices/${deviceId}/commands`); // En el MVP, la config viaja como comando retenido
   
-  fetch(`${dbUrl}/devices/${deviceId}/commands.json`)
-    .then(res => res.json())
-    .then(data => {
-      if (data) callback(data as ConfiguracionCultivo);
-    })
-    .catch(err => console.warn("[Firebase] Fetch REST config inicial:", err));
-
-  get(configRef).then((snapshot) => {
-    if (snapshot.exists()) {
-      callback(snapshot.val() as ConfiguracionCultivo);
-    }
-  }).catch((err) => console.error("[Firebase] Error get config:", err));
-
   const unsubscribe = onValue(configRef, (snapshot) => {
     if (snapshot.exists()) {
       callback(snapshot.val() as ConfiguracionCultivo);
@@ -159,21 +123,19 @@ export const sendConfigRules = async (deviceId: string, config: any) => {
 };
 
 /**
- * Enviar comando de actuador en modo MANUAL con sincronización atómica.
+ * Enviar comando de actuador a ruta hija directa.
  *
- * Realiza un update en la raíz /devices/{deviceId}/commands asegurando que:
- * 1. modo_operacion sea 'MANUAL'
- * 2. El actuador objetivo tome el nuevo estado booleano
- * Esto previene la condición de carrera donde el ESP32 descarte el comando
- * por encontrarse transitoriamente en modo AUTO.
+ * IMPORTANTE: Primero borramos el valor (remove) y luego lo escribimos (set).
+ * Esto garantiza que Firebase SIEMPRE detecte un cambio de valor y dispare
+ * el stream callback en el ESP32, incluso si el valor nuevo es igual al
+ * valor retenido anteriormente (ej: commands/light_on = true persistido,
+ * pero la lógica AUTO apagó la luz físicamente sin actualizar commands/).
  */
 export const sendCommand = async (deviceId: string, actuator: string, state: any) => {
-  const rootCommandsRef = ref(database, `devices/${deviceId}/commands`);
+  const commandRef = ref(database, `devices/${deviceId}/commands/${actuator}`);
   try {
-    await update(rootCommandsRef, {
-      modo_operacion: 'MANUAL',
-      [actuator]: state
-    });
+    await remove(commandRef);   // Fuerza cambio: null -> state (siempre dispara stream)
+    await set(commandRef, state);
   } catch (error) {
     console.error('Error enviando comando a Firebase:', error);
     throw error;
@@ -198,21 +160,36 @@ export const sendModeCommand = async (deviceId: string, mode: 'AUTO' | 'MANUAL')
 /**
  * Obtener datos históricos de un dispositivo
  */
-export const fetchDeviceHistory = async (deviceId: string, limit: number = 500): Promise<HistorialData[]> => {
+export const fetchDeviceHistory = async (deviceId: string, limit: number = 300): Promise<HistorialData[]> => {
+  const historyRef = ref(database, `history/${deviceId}`);
+  const historyQuery = query(historyRef, orderByKey(), limitToLast(limit));
+
   try {
-    const historyRef = ref(database, `history/${deviceId}`);
-    const historyQuery = query(historyRef, limitToLast(limit));
     const snapshot = await get(historyQuery);
     if (snapshot.exists()) {
       const data = snapshot.val();
       const historyArray: HistorialData[] = Object.values(data);
       return historyArray.sort((a, b) => a.timestamp - b.timestamp);
     }
-    return [];
-  } catch (error) {
-    console.error('Error obteniendo historial de Firebase:', error);
-    return [];
+  } catch (sdkError) {
+    console.warn('[Firebase] SDK get() error, intentando fallback REST:', sdkError);
   }
+
+  // Fallback REST directo de alta resiliencia
+  try {
+    const res = await fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/history/${deviceId}.json?orderBy="$key"&limitToLast=${limit}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data === 'object') {
+        const historyArray: HistorialData[] = Object.values(data);
+        return historyArray.sort((a, b) => a.timestamp - b.timestamp);
+      }
+    }
+  } catch (restError) {
+    console.error('[Firebase] Fallback REST falló:', restError);
+  }
+
+  return [];
 };
 
 /**

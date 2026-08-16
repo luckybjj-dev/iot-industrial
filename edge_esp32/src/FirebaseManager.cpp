@@ -48,11 +48,6 @@ void FirebaseManager::end() {
 // loop()
 // ============================================================
 void FirebaseManager::loop() {
-    if (_streamPendiente) {
-        _streamPendiente = false;
-        _procesarPayloadStream(_streamPath, _streamData);
-    }
-
     if (Firebase.ready()) {
         _conectado = true;
         _intervaloReconexionMs = 2000; // Restablecer intervalo al recuperar conexión
@@ -62,6 +57,11 @@ void FirebaseManager::loop() {
             }
         }
         
+        if (_streamPendiente) {
+            _streamPendiente = false;
+            _procesarPayloadStream(_streamPath, _streamData);
+        }
+
         // Si el stream levantó la bandera, forzamos un envío de telemetría de inmediato
         if (_forzarTelemetria) {
             _forzarTelemetria = false;
@@ -308,9 +308,8 @@ void FirebaseManager::streamTimeoutCallback(bool timeout) {
  * en el HardwareController.
  */
 void FirebaseManager::_procesarPayloadStream(const String& path, const String& data) {
-    Serial.printf("[Firebase] Stream recibido - Path: %s, Data: %s\n", path.c_str(), data.c_str());
+    Serial.printf("[Firebase] Stream procesando en main loop - Path: %s, Data: %s\n", path.c_str(), data.c_str());
     
-    // DynamicJsonDocument para evitar Stack Overflow en la tarea FreeRTOS Stream_99
     DynamicJsonDocument doc(3072);
     DeserializationError error = deserializeJson(doc, data);
     

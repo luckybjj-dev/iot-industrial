@@ -12,7 +12,6 @@ void HardwareController::begin() {
     pinMode(PIN_EXTRACTOR, OUTPUT);
     pinMode(PIN_LIGHT, OUTPUT);
 
-    // Con transistores NPN buffer: LOW = Transistor OFF (Relé Low-Level Trigger 5V apagado)
     digitalWrite(PIN_HEATER, LOW);
     digitalWrite(PIN_COOLER, LOW);
     digitalWrite(PIN_FOGGER, LOW);
@@ -294,7 +293,6 @@ void HardwareController::_ejecutarAccion(int pin, bool& estadoActual, bool nuevo
     estadoActual = nuevoEstado;
     ultimoCambio = now;
     
-    // Transistor NPN buffer: HIGH = Transistor ON = Relé 5V Low-Level Trigger ACTIVADO
     digitalWrite(pin, estadoActual ? HIGH : LOW);
 }
 
@@ -376,8 +374,6 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
                 req_cooler = true;
                 req_heater = false; // Seguridad extra
                 proxEstado = EstadoOperacional::EMERGENCIA;
-                Serial.printf("🚨 [EMERGENCIA] T_act=%.2f (Max=%.2f, Crit=%.2f) | T_sust=%.2f (Crit=%.2f)\n", 
-                              tempActual, maxInterno, maxCrit, tempSustrato, maxSustratoCrit);
             } 
             // 2. Toxicidad de Gases (CO2)
             else if (co2Actual >= _config.crop.co2_crit_max) {
