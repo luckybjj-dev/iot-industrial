@@ -144,6 +144,8 @@ void setup() {
  * 3. Si no ha pasado el tiempo, el ciclo termina instantáneamente y vuelve a empezar,
  *    permitiendo que los procesos en segundo plano (FreeRTOS) respiren.
  */
+static volatile bool _otaEnProgreso = false;
+
 void loop() {
     // 0. Alimentar Hardware Watchdog en cada iteración del bucle principal
     esp_task_wdt_reset();
@@ -172,13 +174,16 @@ void loop() {
             // CALLBACKS: Desconectar Firebase durante el flash para evitar
             // competencia de CPU/heap que causa el fallo al 100% de OTA
             ArduinoOTA.onStart([]() {
+                _otaEnProgreso = true;
                 Serial.println(F("[OTA] Inicio de flash... Deteniendo Firebase para liberar Heap/Sockets."));
                 firebase.end();
             });
             ArduinoOTA.onEnd([]() {
+                _otaEnProgreso = false;
                 Serial.println(F("[OTA] Flash completado. Reiniciando..."));
             });
             ArduinoOTA.onError([](ota_error_t error) {
+                _otaEnProgreso = false;
                 Serial.printf("[OTA] Error [%u]: ", error);
                 if (error == OTA_AUTH_ERROR) Serial.println(F("Auth Failed"));
                 else if (error == OTA_BEGIN_ERROR) Serial.println(F("Begin Failed"));
@@ -193,9 +198,16 @@ void loop() {
         // Atiende peticiones entrantes de actualización de firmware de forma asíncrona.
         ArduinoOTA.handle();
 
+        if (_otaEnProgreso) {
+            delay(1);
+            return;
+        }
+
         // Mantiene viva (keep-alive) la conexión asíncrona a Firebase y procesa mensajes entrantes.
         firebase.loop(); 
     }
+
+    if (_otaEnProgreso) return;
 
     // 2. Control de Tiempo Asíncrono
     // millis() devuelve la cantidad de milisegundos desde que la placa se encendió.

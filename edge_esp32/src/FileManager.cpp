@@ -100,34 +100,34 @@ ConfiguracionCultivo FileManager::cargarConfiguracion() {
 
 
 void FileManager::_crearConfiguracionPorDefecto() {
-    Serial.println(F("[LittleFS] Creando perfil inicial (MODO FUNGI PMV) por defecto..."));
+    Serial.println(F("[LittleFS] Creando perfil inicial (STANDBY / MONITOREO) por defecto..."));
     
-    _configActual.greenhouse_id = "FUNGI_CHAMBER_01";
-    _configActual.crop_profile  = "Fungi_Fruiting_v1";
+    _configActual.greenhouse_id = "CHAMBER_01";
+    _configActual.crop_profile  = "STANDBY";
     _configActual.max_manual_time_ms = 900000; // 15 minutos
 
     _configActual.failsafes.watchdog_timeout_ms       = 10000;
-    _configActual.failsafes.max_internal_temp_limit_c = 35.0; // Evitar apagar todo muy rápido
+    _configActual.failsafes.max_internal_temp_limit_c = 35.0; // Umbral de emergencia global
 
-    // Setup de parámetros seguros de Fungi (Oyster Mushrooms por ejemplo)
-    _configActual.crop.kingdom        = "FUNGI";
-    _configActual.crop.temp_ideal_min = 18.0f;
-    _configActual.crop.temp_ideal_max = 24.0f;
-    _configActual.crop.temp_crit_min  = 10.0f;
-    _configActual.crop.temp_crit_max  = 29.0f;
+    // Sin perfil biológico activo por defecto (actuadores en reposo)
+    _configActual.crop.kingdom        = "NONE";
+    _configActual.crop.temp_ideal_min = 0.0f;
+    _configActual.crop.temp_ideal_max = 0.0f;
+    _configActual.crop.temp_crit_min  = 0.0f;
+    _configActual.crop.temp_crit_max  = 35.0f;
     
-    _configActual.crop.temp_sustrato_ideal    = 24.0f;
-    _configActual.crop.temp_sustrato_crit_max = 27.0f;
+    _configActual.crop.temp_sustrato_ideal    = 0.0f;
+    _configActual.crop.temp_sustrato_crit_max = 35.0f;
     
-    _configActual.crop.hum_ideal_min = 85.0f;
-    _configActual.crop.hum_ideal_max = 95.0f;
-    _configActual.crop.hum_crit_min  = 75.0f;
+    _configActual.crop.hum_ideal_min = 0.0f;
+    _configActual.crop.hum_ideal_max = 100.0f;
+    _configActual.crop.hum_crit_min  = 0.0f;
     
-    _configActual.crop.co2_ideal_min = 400;
-    _configActual.crop.co2_ideal_max = 800;
-    _configActual.crop.co2_crit_max  = 1000;
+    _configActual.crop.co2_ideal_min = 0;
+    _configActual.crop.co2_ideal_max = 2000;
+    _configActual.crop.co2_crit_max  = 3000;
     
-    _configActual.crop.light_hours_on = 12;
+    _configActual.crop.light_hours_on = 0;
 
     guardarConfiguracion(_configActual);
 }

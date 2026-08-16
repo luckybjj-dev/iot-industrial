@@ -157,8 +157,9 @@ void FirebaseManager::publicarTelemetria() {
     // Enviar el estado actual del modo de operación y la máquina de estados al Dashboard
     json.set("modo_operacion", _hw.getModoOperacion() == ModoOperacion::AUTO ? "AUTO" : "MANUAL");
     
-    String estadoStr = "NORMAL";
+    String estadoStr = "MONITOREO";
     switch (_hw.getEstadoOperacional()) {
+        case EstadoOperacional::STANDBY: estadoStr = "MONITOREO"; break;
         case EstadoOperacional::NORMAL: estadoStr = "NORMAL"; break;
         case EstadoOperacional::CALENTANDO: estadoStr = "CALENTANDO"; break;
         case EstadoOperacional::ENFRIANDO: estadoStr = "ENFRIANDO"; break;
@@ -333,6 +334,14 @@ void FirebaseManager::_procesarPayloadStream(const String& path, const String& d
             _hw.setConfiguracion(cfg);
         }
         
+        if (doc.containsKey("activeProfileName")) {
+            String pName = doc["activeProfileName"].as<String>();
+            if (pName == "null" || pName.length() == 0 || pName == "STANDBY" || pName == "NONE") {
+                _hw.setPerfilActivo(false);
+                Serial.println(F("ℹ️ [Firebase] activeProfileName nulo/vacío detectado. Modo STANDBY / MONITOREO activado."));
+            }
+        }
+
         if (doc.containsKey("crop")) {
             _fm.guardarConfiguracionJson(data);
             _hw.setConfiguracion(_fm.cargarConfiguracion());
@@ -350,7 +359,12 @@ void FirebaseManager::_procesarPayloadStream(const String& path, const String& d
         val.replace("\"", ""); 
         val.trim(); // MUY IMPORTANTE: Eliminar saltos de linea o espacios
         
-        if (path.indexOf("modo_operacion") >= 0) {
+        if (path.indexOf("activeProfileName") >= 0) {
+            if (val == "null" || val.length() == 0 || val == "STANDBY" || val == "NONE") {
+                _hw.setPerfilActivo(false);
+                Serial.println(F("ℹ️ [Firebase] activeProfileName restablecido. Modo STANDBY / MONITOREO activado."));
+            }
+        } else if (path.indexOf("modo_operacion") >= 0) {
             if (val == "AUTO") _hw.setModoOperacion(ModoOperacion::AUTO);
             else if (val == "MANUAL") _hw.setModoOperacion(ModoOperacion::MANUAL);
         } else if (path.indexOf("heater_on") >= 0) {

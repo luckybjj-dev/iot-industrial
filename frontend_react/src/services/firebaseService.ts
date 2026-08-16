@@ -97,19 +97,35 @@ export const subscribeToDeviceConfig = (
 export const sendConfigRules = async (deviceId: string, config: any) => {
   try {
     if (config === null) {
-      // Detener plan: Borrar estado del plan pero retener el perfil base de crop para los failsafes
+      const standbyCrop = {
+        kingdom: "NONE",
+        temp_ideal_min: 0,
+        temp_ideal_max: 0,
+        temp_crit_min: 0,
+        temp_crit_max: 35,
+        temp_sustrato_ideal: 0,
+        temp_sustrato_crit_max: 35,
+        hum_ideal_min: 0,
+        hum_ideal_max: 100,
+        hum_crit_min: 0,
+        co2_ideal_min: 0,
+        co2_ideal_max: 2000,
+        co2_crit_max: 3000,
+        light_hours_on: 0
+      };
+
       fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/plan_state.json`, { method: 'DELETE' }).catch(() => {});
       fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands.json`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ activePhaseName: null, activeProfileName: null })
+        body: JSON.stringify({ activePhaseName: null, activeProfileName: "STANDBY", crop: standbyCrop })
       }).catch(() => {});
       
       const configRef = ref(database, `devices/${deviceId}/commands`);
       await Promise.race([
         Promise.all([
           remove(ref(database, `devices/${deviceId}/plan_state`)),
-          update(configRef, { activePhaseName: null, activeProfileName: null })
+          update(configRef, { activePhaseName: null, activeProfileName: "STANDBY", crop: standbyCrop })
         ]),
         new Promise(r => setTimeout(r, 2000))
       ]);

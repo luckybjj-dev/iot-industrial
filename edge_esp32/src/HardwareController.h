@@ -111,6 +111,7 @@ struct ActuadorData {
 // Estado Operacional (Telemetría de Máquina de Estados)
 // -----------------------------------------------------------
 enum class EstadoOperacional {
+    STANDBY,
     NORMAL,
     CALENTANDO,
     ENFRIANDO, // Futura expansión
@@ -163,6 +164,7 @@ public:
     void setExtractor(bool estado);
     void setLight(bool estado);
     void setModoOperacion(ModoOperacion modo);
+    void setPerfilActivo(bool activo) { _perfilActivo = activo; }
 
     // Getters de estado
     const SensorData&   getSensores()   const { return _sensores; }
@@ -170,6 +172,7 @@ public:
     const ConfiguracionCultivo& getConfiguracion() const { return _config; }
     ModoOperacion getModoOperacion()    const { return _modoActual; }
     EstadoOperacional getEstadoOperacional() const { return _estadoActual; }
+    bool tienePerfilActivo() const { return _perfilActivo; }
 
     // Consultas de bloqueo por protección de hardware (Anti-Short Cycle)
     bool isHeaterLocked(unsigned long now) const { return (now - _last_heater_switch < MIN_RELAY_TIME_MS && _last_heater_switch != 0); }
@@ -199,8 +202,9 @@ private:
     ///@}
 
     ModoOperacion _modoActual = ModoOperacion::AUTO;
-    EstadoOperacional _estadoActual = EstadoOperacional::NORMAL;
+    EstadoOperacional _estadoActual = EstadoOperacional::STANDBY;
     unsigned long _tiempoInicioManual = 0;
+    bool _perfilActivo = false;
     
     // Capa 3: Filtro de Hardware (Debounce)
     const unsigned long MIN_RELAY_TIME_MS = 180000; // 3 Minutos de seguridad (Anti-Corto Ciclo)

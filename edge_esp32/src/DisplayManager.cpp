@@ -28,6 +28,17 @@ void DisplayManager::begin() {
 void DisplayManager::render() {
     // No usamos fillScreen() en cada ciclo para evitar parpadeos perceptibles.
     // Los textos se sobreescriben directamente con setTextColor(fg, bg).
+    _tft.setCursor(5, 5);
+    if (_hw.tienePerfilActivo()) {
+        _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+        String name = _hw.getConfiguracion().crop_profile;
+        if (name.length() > 14) name = name.substring(0, 14);
+        _tft.printf("CULT: %-14s", name.c_str());
+    } else {
+        _tft.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
+        _tft.print(F("ESTADO: MONITOREO   "));
+    }
+
     _drawSensores(_hw.getSensores());
     _drawActuadores(_hw.getActuadores());
     _drawEstadoRed();

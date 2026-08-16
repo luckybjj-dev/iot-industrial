@@ -55,6 +55,19 @@ void HardwareController::begin() {
 
 void HardwareController::setConfiguracion(const ConfiguracionCultivo& config) {
     _config = config;
+    if (_config.crop_profile != "STANDBY" && 
+        _config.crop_profile != "NONE" && 
+        _config.crop_profile != "DEFAULT" &&
+        _config.crop_profile.length() > 0 &&
+        _config.crop.temp_ideal_min > 0 &&
+        _config.crop.temp_ideal_max > 0) {
+        _perfilActivo = true;
+        Serial.printf("✅ [Hardware] Perfil biológico activo: %s (Min: %.1f, Max: %.1f)\n", 
+            _config.crop_profile.c_str(), _config.crop.temp_ideal_min, _config.crop.temp_ideal_max);
+    } else {
+        _perfilActivo = false;
+        Serial.println(F("ℹ️ [Hardware] Sin perfil biológico activo. Entrando a modo STANDBY / MONITOREO."));
+    }
 }
 
 void HardwareController::setModoOperacion(ModoOperacion modo) {
@@ -332,17 +345,35 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
         float humActual = (_sensores.dhtOk || _sensores.dht2Ok) ? _sensores.ewma_hum : -999.0f;
         int co2Actual = _sensores.co2Ok ? (int)_sensores.ewma_co2 : 400;
 
-        // Falla catastrófica de sensores: Apagar actuadores climáticos por seguridad (Safe Mode)
+        // 1. Falla catastrófica de sensores: Apagar actuadores climáticos por seguridad (Safe Mode)
         if (tempActual == -999.0f) {
             proxEstado = EstadoOperacional::SAFE_MODE;
             req_heater = false;
             req_cooler = false;
             req_fogger = false;
             req_extractor = false;
-            if (horaDia >= 0 && horaDia < _config.crop.light_hours_on) {
-                req_light = true;
+            req_light = false;
+        } 
+        // 2. Modo STANDBY / MONITOREO (Sin perfil biológico activo o plan detenido)
+        else if (!_perfilActivo) {
+            proxEstado = EstadoOperacional::STANDBY;
+            req_heater = false;
+            req_cooler = false;
+            req_fogger = false;
+            req_extractor = false;
+            req_light = false;
+
+            // Failsafe de Emergencia Catastrófica (Incluso en Standby, si hay incendio o sobrecalentamiento > 35°C protegemos el hardware)
+            float tempSustrato = _sensores.analogicoOk ? _sensores.ewma_sustrato : -999.0f;
+            float maxInterno = (_config.failsafes.max_internal_temp_limit_c > 10.0f) ? _config.failsafes.max_internal_temp_limit_c : 35.0f;
+            if (tempActual >= maxInterno || (tempSustrato != -999.0f && tempSustrato >= 35.0f)) {
+                req_extractor = true;
+                req_cooler = true;
+                proxEstado = EstadoOperacional::EMERGENCIA;
             }
-        } else {
+        } 
+        // 3. Modo AUTO con Perfil Biológico Activo
+        else {
             /**
              * @brief Integración Continua del Lazo PID y Time-Proportioning.
              * @details 
