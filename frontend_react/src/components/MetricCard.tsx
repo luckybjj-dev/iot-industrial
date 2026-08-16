@@ -60,14 +60,14 @@ export const MetricCard: React.FC<MetricCardProps> = ({
                         {subtext}
                     </div>
                 )}
-                <div className="h-4 mt-1 flex items-center">
+                <div className="h-4 mt-1 flex items-center min-w-0">
                     {target ? (
-                        <div className="text-[11px] font-bold text-emerald-400 font-mono tracking-wider uppercase whitespace-nowrap">
+                        <div className="text-[11px] font-bold text-emerald-400 font-mono tracking-wide uppercase truncate" title={target}>
                             {target}
                         </div>
                     ) : (
-                        <div className="text-[10px] font-bold text-neutral-600 font-mono tracking-wider uppercase whitespace-nowrap">
-                            Ideal: --
+                        <div className="text-[10px] font-bold text-neutral-600 font-mono tracking-wide uppercase">
+                            --
                         </div>
                     )}
                 </div>

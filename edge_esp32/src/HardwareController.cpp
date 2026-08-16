@@ -423,11 +423,11 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
                     req_heater = false;
                     proxEstado = EstadoOperacional::ENFRIANDO;
                 }
-                // 4. Demanda de Calor (Controlado por PID con Histéresis)
+                // 4. Demanda de Calor (Control Térmico con Histéresis y Lazo PID)
                 else {
                     bool demandaCalor = (_estadoActual == EstadoOperacional::CALENTANDO)
-                        ? (tempActual <= (_config.crop.temp_ideal_min + HIST_TEMP) || _pidOutput > 0)
-                        : (tempActual <= _config.crop.temp_ideal_min || _pidOutput > 0);
+                        ? (tempActual < (_config.crop.temp_ideal_min + HIST_TEMP))
+                        : (tempActual < _config.crop.temp_ideal_min);
 
                     if (demandaCalor) {
                         req_heater = true;
