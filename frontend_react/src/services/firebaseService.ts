@@ -6,37 +6,63 @@ import type { EstadoCamara, TelemetriaFungi, HistorialData, ConfiguracionCultivo
  * Suscribirse a TODOS los dispositivos en tiempo real
  */
 export const subscribeToAllDevices = (
-  callback: (devices: EstadoCamara[]) => void
+  callback: (devices: EstadoCamara[]) => void,
+  onError?: (error: Error) => void
 ) => {
   const telemetryRef = ref(database, 'telemetry');
   
+  const parseDevices = (data: any): EstadoCamara[] => {
+    if (!data || typeof data !== 'object') return [];
+    return Object.keys(data).map(deviceId => {
+      const deviceNode = data[deviceId];
+      if (!deviceNode) return null;
+      
+      const modo = (deviceNode.data && deviceNode.data.modo_operacion) || deviceNode.modo_operacion || 'AUTO';
+      
+      return {
+        deviceId,
+        estado: deviceNode.status || 'ONLINE',
+        telemetria: deviceNode.data as TelemetriaFungi,
+        modo_operacion: modo,
+        ultima_actualizacion: new Date().toLocaleTimeString()
+      };
+    }).filter(Boolean) as EstadoCamara[];
+  };
+
+  // 1. Carga inicial ultra rápida vía REST para renderizado instantáneo (< 50ms)
+  fetch('https://invernadero-industrial-default-rtdb.firebaseio.com/telemetry.json')
+    .then(res => res.json())
+    .then(data => {
+      if (data) {
+        const devs = parseDevices(data);
+        if (devs.length > 0) callback(devs);
+      }
+    })
+    .catch(err => console.warn('[Firebase] Fallback REST inicial:', err));
+
+  // 2. Carga inicial vía SDK get()
+  get(telemetryRef)
+    .then(snapshot => {
+      if (snapshot.exists()) {
+        const devs = parseDevices(snapshot.val());
+        if (devs.length > 0) callback(devs);
+      }
+    })
+    .catch(err => console.warn('[Firebase] get() inicial:', err));
+
+  // 3. Suscripción en tiempo real continua por WebSocket
   const unsubscribe = onValue(telemetryRef, (snapshot) => {
     if (snapshot.exists()) {
       const data = snapshot.val();
-      
-      const devicesArray: EstadoCamara[] = Object.keys(data).map(deviceId => {
-        const deviceNode = data[deviceId];
-        
-        // Extraer modo de operación, priorizando la data de telemetría (para ignorar campos fantasma legacy)
-        const modo = (deviceNode.data && deviceNode.data.modo_operacion) || deviceNode.modo_operacion || 'AUTO';
-        
-        return {
-          deviceId,
-          estado: deviceNode.status || 'OFFLINE',
-          telemetria: deviceNode.data as TelemetriaFungi,
-          modo_operacion: modo,
-          ultima_actualizacion: new Date().toLocaleTimeString()
-        };
-      });
-      
-      callback(devicesArray);
+      const devs = parseDevices(data);
+      callback(devs);
     } else {
       console.log("[Firebase] Base de datos vacía en la ruta /telemetry");
       callback([]);
     }
   }, (error) => {
     console.error("[Firebase] Error de lectura:", error);
-    // Podríamos disparar el callback con un error si tuviéramos manejo de errores
+    if (onError) onError(error);
   });
 
   return unsubscribe;

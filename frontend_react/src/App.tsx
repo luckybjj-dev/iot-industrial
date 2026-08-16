@@ -115,6 +115,8 @@ function Dashboard() {
         });
         return next;
       });
+    }, (err) => {
+      setError(`Error de conexión con Firebase RTDB: ${err.message}`);
     });
 
     return () => unsubscribeTelemetria();
