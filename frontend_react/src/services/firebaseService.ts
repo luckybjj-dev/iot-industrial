@@ -11,7 +11,7 @@ export const subscribeToAllDevices = (
 ) => {
   const telemetryRef = ref(database, 'telemetry');
   
-  const unsubscribe = onValue(telemetryRef, (snapshot) => {
+  const parseData = (snapshot: any) => {
     if (snapshot.exists()) {
       const data = snapshot.val();
       
@@ -35,8 +35,17 @@ export const subscribeToAllDevices = (
       console.log("[Firebase] Base de datos vacía en la ruta /telemetry");
       callback([]);
     }
-  }, (error) => {
-    console.error("[Firebase] Error de lectura:", error);
+  };
+
+  // 1. Fetch inicial inmediato vía REST (garantiza renderizado instantáneo < 100ms)
+  get(telemetryRef).then(parseData).catch((error) => {
+    console.error("[Firebase] Error en lectura inicial:", error);
+    if (onError) onError(error);
+  });
+
+  // 2. Suscripción en tiempo real (mantiene la sincronización viva)
+  const unsubscribe = onValue(telemetryRef, parseData, (error) => {
+    console.error("[Firebase] Error de lectura en tiempo real:", error);
     if (onError) onError(error);
   });
 
@@ -52,6 +61,12 @@ export const subscribeToDeviceConfig = (
 ) => {
   const configRef = ref(database, `devices/${deviceId}/commands`); // En el MVP, la config viaja como comando retenido
   
+  get(configRef).then((snapshot) => {
+    if (snapshot.exists()) {
+      callback(snapshot.val() as ConfiguracionCultivo);
+    }
+  }).catch((err) => console.error("[Firebase] Error get config:", err));
+
   const unsubscribe = onValue(configRef, (snapshot) => {
     if (snapshot.exists()) {
       callback(snapshot.val() as ConfiguracionCultivo);
