@@ -79,35 +79,63 @@ export const SemaforoEstabilidad: React.FC<Props> = ({ telemetria, crop, modo_op
         case 'NORMAL':
           return {
             estado: 'CLIMA ESTABLE',
-            mensaje: 'Todas las variables dentro del rango ideal',
+            mensaje: 'Todas las variables dentro del rango ideal (Actuadores en reposo)',
             colorClass: 'text-emerald-400 bg-emerald-950/30 border-emerald-500/50',
             Icon: CheckCircle2,
             isCriticalPulse: false
           };
-        case 'CALENTANDO':
+        case 'CALENTANDO': {
+          const tempVal = telemetria.temp_promedio != null ? `${telemetria.temp_promedio.toFixed(1)}°C` : '--';
+          const minVal = crop?.temp_ideal_min != null ? `${crop.temp_ideal_min}°C` : '--';
           return {
             estado: 'CALENTANDO',
-            mensaje: 'Sistema compensando: Temperatura baja',
+            mensaje: `Sistema compensando: Temperatura ambiental baja (${tempVal} < ${minVal}) → Calefactor ON (Modulación SSR)`,
             colorClass: 'text-amber-400 bg-amber-950/30 border-amber-500/50',
             Icon: AlertTriangle,
             isCriticalPulse: false
           };
-        case 'ENFRIANDO':
+        }
+        case 'ENFRIANDO': {
+          const co2Exceso = crop && telemetria.co2_ppm != null && telemetria.co2_ppm >= crop.co2_crit_max;
+          let razon = 'Exceso térmico';
+          if (co2Exceso) {
+            razon = `Acumulación de CO2 (${telemetria.co2_ppm} ppm >= ${crop?.co2_crit_max} ppm) → Extractor ON`;
+          } else if (crop && telemetria.temp_promedio != null && telemetria.temp_promedio > crop.temp_ideal_max) {
+            razon = `Temperatura ambiental alta (${telemetria.temp_promedio.toFixed(1)}°C > ${crop.temp_ideal_max}°C) → Enfriador/Extractor ON`;
+          } else {
+            razon = 'Disipación de calor o ventilación activa';
+          }
           return {
             estado: 'ENFRIANDO / EXTRAYENDO',
-            mensaje: 'Sistema compensando: Exceso de Calor o CO2',
+            mensaje: `Sistema compensando: ${razon}`,
             colorClass: 'text-blue-400 bg-blue-950/30 border-blue-500/50',
             Icon: AlertTriangle,
             isCriticalPulse: false
           };
-        case 'HUMIDIFICANDO':
+        }
+        case 'HUMIDIFICANDO': {
+          let razon = 'Niebla ON activa';
+          const humBaja = crop && telemetria.humedad_promedio != null && telemetria.humedad_promedio < crop.hum_ideal_min;
+          const vpdAlto = telemetria.vpd != null && telemetria.vpd > 1.00;
+
+          if (humBaja && vpdAlto) {
+            razon = `Humedad baja (${telemetria.humedad_promedio?.toFixed(1)}% < ${crop?.hum_ideal_min}%) y VPD elevado (${telemetria.vpd?.toFixed(2)} kPa)`;
+          } else if (humBaja) {
+            razon = `Humedad ambiental baja (${telemetria.humedad_promedio?.toFixed(1)}% < ${crop?.hum_ideal_min}%)`;
+          } else if (vpdAlto) {
+            razon = `Déficit de Presión de Vapor (VPD) alto (${telemetria.vpd?.toFixed(2)} kPa > 1.00 kPa)`;
+          } else {
+            razon = 'Estabilización de microclima hídrico';
+          }
+
           return {
             estado: 'HUMIDIFICANDO',
-            mensaje: 'Sistema compensando: Humedad baja',
+            mensaje: `Sistema compensando: ${razon} → Niebla ON`,
             colorClass: 'text-cyan-400 bg-cyan-950/30 border-cyan-500/50',
             Icon: AlertTriangle,
             isCriticalPulse: false
           };
+        }
         case 'SAFE_MODE':
           return {
             estado: 'SAFE MODE',
