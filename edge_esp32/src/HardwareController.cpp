@@ -440,15 +440,20 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
             if (humActual != -999.0f && proxEstado != EstadoOperacional::EMERGENCIA) {
                 float vpdActual = _sensores.ewmaInitialized ? _sensores.ewma_vpd : _sensores.vpd;
 
-                // Demanda de Humidificación: Humedad baja O VPD alto (> 1.20 kPa estrés de desecación)
-                bool demandaNiebla = (_estadoActual == EstadoOperacional::HUMIDIFICANDO)
-                    ? (humActual <= (_config.crop.hum_ideal_min + HIST_HUM) || (vpdActual > 1.00f && vpdActual > 0.0f))
-                    : (humActual <= _config.crop.hum_ideal_min || (vpdActual > 1.20f && vpdActual > 0.0f));
+                // Límite superior de VPD derivado de la receta activa (temperatura máxima y humedad mínima permitidas)
+                float vpdMaxReceta = (_config.crop.temp_ideal_max > 0 && _config.crop.hum_ideal_min > 0)
+                    ? calcularVPD(_config.crop.temp_ideal_max, _config.crop.hum_ideal_min)
+                    : 1.20f;
 
-                // Demanda de Extracción por Saturación: Humedad excesiva O VPD estancado (< 0.25 kPa riesgo de condensación)
+                // Demanda de Humidificación: Humedad baja O VPD que excede el límite superior de la receta
+                bool demandaNiebla = (_estadoActual == EstadoOperacional::HUMIDIFICANDO)
+                    ? (humActual <= (_config.crop.hum_ideal_min + HIST_HUM) || (vpdActual > (vpdMaxReceta - 0.10f) && vpdActual > 0.0f))
+                    : (humActual <= _config.crop.hum_ideal_min || (vpdActual > vpdMaxReceta && vpdActual > 0.0f));
+
+                // Demanda de Extracción por Saturación: Humedad excesiva
                 bool excesoHumedad = _actuadores.extractor_ON
-                    ? (humActual >= (_config.crop.hum_ideal_max - HIST_HUM) || (vpdActual < 0.35f && humActual >= _config.crop.hum_ideal_max))
-                    : (humActual >= _config.crop.hum_ideal_max || (vpdActual < 0.25f && humActual >= _config.crop.hum_ideal_max));
+                    ? (humActual >= (_config.crop.hum_ideal_max - HIST_HUM))
+                    : (humActual >= _config.crop.hum_ideal_max);
 
                 if (demandaNiebla) {
                     req_fogger = true;

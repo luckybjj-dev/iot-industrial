@@ -116,14 +116,20 @@ export const SemaforoEstabilidad: React.FC<Props> = ({ telemetria, crop, modo_op
         case 'HUMIDIFICANDO': {
           let razon = 'Niebla ON activa';
           const humBaja = crop && telemetria.humedad_promedio != null && telemetria.humedad_promedio < crop.hum_ideal_min;
-          const vpdAlto = telemetria.vpd != null && telemetria.vpd > 1.00;
+          
+          const calcVpd = (t: number, h: number) => {
+            const svp = 0.61078 * Math.exp((17.27 * t) / (t + 237.3));
+            return svp * (1 - (h / 100.0));
+          };
+          const vpdMax = crop ? calcVpd(crop.temp_ideal_max, crop.hum_ideal_min) : 1.20;
+          const vpdAlto = telemetria.vpd != null && telemetria.vpd > vpdMax;
 
           if (humBaja && vpdAlto) {
-            razon = `Humedad baja (${telemetria.humedad_promedio?.toFixed(1)}% < ${crop?.hum_ideal_min}%) y VPD elevado (${telemetria.vpd?.toFixed(2)} kPa)`;
+            razon = `Humedad baja (${telemetria.humedad_promedio?.toFixed(1)}% < ${crop?.hum_ideal_min}%) y VPD elevado (${telemetria.vpd?.toFixed(2)} > ${vpdMax.toFixed(2)} kPa)`;
           } else if (humBaja) {
             razon = `Humedad ambiental baja (${telemetria.humedad_promedio?.toFixed(1)}% < ${crop?.hum_ideal_min}%)`;
           } else if (vpdAlto) {
-            razon = `Déficit de Presión de Vapor (VPD) alto (${telemetria.vpd?.toFixed(2)} kPa > 1.00 kPa)`;
+            razon = `Déficit de Presión de Vapor (VPD) alto (${telemetria.vpd?.toFixed(2)} > ${vpdMax.toFixed(2)} kPa)`;
           } else {
             razon = 'Estabilización de microclima hídrico';
           }
