@@ -63,19 +63,20 @@ export const SemaforoEstabilidad: React.FC<Props> = ({ telemetria, crop, modo_op
       };
     }
 
+    const isStandbyOrNoCrop = !crop || crop.temp_ideal_min === 0 || crop.temp_ideal_max === 0;
+
+    if (isStandbyOrNoCrop || telemetria.estado_operacional === 'MONITOREO' || telemetria.estado_operacional === 'STANDBY') {
+      return {
+        estado: 'MODO MONITOREO',
+        mensaje: 'Sin perfil de cultivo asignado. Sensores en línea y actuadores en reposo',
+        colorClass: 'text-cyan-400 bg-cyan-950/30 border-cyan-500/50',
+        Icon: Activity,
+        isCriticalPulse: false
+      };
+    }
+
     if (telemetria.estado_operacional) {
       switch (telemetria.estado_operacional) {
-        case 'MONITOREO':
-        case 'STANDBY':
-          return {
-            estado: 'MODO MONITOREO',
-            mensaje: crop && crop.temp_ideal_min > 0 
-              ? 'Sincronizando receta biológica con el microcontrolador...' 
-              : 'Sensores en línea. Actuadores en reposo (Modo Monitoreo)',
-            colorClass: 'text-cyan-400 bg-cyan-950/30 border-cyan-500/50',
-            Icon: Activity,
-            isCriticalPulse: false
-          };
         case 'NORMAL':
           return {
             estado: 'CLIMA ESTABLE',

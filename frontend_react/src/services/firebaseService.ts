@@ -29,16 +29,20 @@ export const subscribeToAllDevices = (
     }).filter(Boolean) as EstadoCamara[];
   };
 
-  // 1. Carga inicial ultra rápida vía REST para renderizado instantáneo (< 50ms)
-  fetch('https://invernadero-industrial-default-rtdb.firebaseio.com/telemetry.json')
-    .then(res => res.json())
-    .then(data => {
-      if (data) {
-        const devs = parseDevices(data);
-        if (devs.length > 0) callback(devs);
-      }
-    })
-    .catch(err => console.warn('[Firebase] Fallback REST inicial:', err));
+  const fetchDirect = () => {
+    fetch('https://invernadero-industrial-default-rtdb.firebaseio.com/telemetry.json')
+      .then(res => res.json())
+      .then(data => {
+        if (data) {
+          const devs = parseDevices(data);
+          if (devs.length > 0) callback(devs);
+        }
+      })
+      .catch(err => console.warn('[Firebase] Polling REST telemetria:', err));
+  };
+
+  // 1. Carga inicial ultra rápida vía REST (< 50ms)
+  fetchDirect();
 
   // 2. Carga inicial vía SDK get()
   get(telemetryRef)
@@ -51,13 +55,12 @@ export const subscribeToAllDevices = (
     .catch(err => console.warn('[Firebase] get() inicial:', err));
 
   // 3. Suscripción en tiempo real continua por WebSocket
-  const unsubscribe = onValue(telemetryRef, (snapshot) => {
+  const unsubscribeSdk = onValue(telemetryRef, (snapshot) => {
     if (snapshot.exists()) {
       const data = snapshot.val();
       const devs = parseDevices(data);
       callback(devs);
     } else {
-      console.log("[Firebase] Base de datos vacía en la ruta /telemetry");
       callback([]);
     }
   }, (error) => {
@@ -65,7 +68,13 @@ export const subscribeToAllDevices = (
     if (onError) onError(error);
   });
 
-  return unsubscribe;
+  // 4. Heartbeat continuo de respaldo (cada 2.5s) para garantizar que las variables nunca se queden estáticas
+  const heartbeatTimer = setInterval(fetchDirect, 2500);
+
+  return () => {
+    unsubscribeSdk();
+    clearInterval(heartbeatTimer);
+  };
 };
 
 /**
@@ -88,16 +97,20 @@ export const subscribeToDeviceConfig = (
     };
   };
 
-  // 1. Carga inicial ultra rápida vía REST para renderizado instantáneo (< 50ms)
-  fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}.json`)
-    .then(res => res.json())
-    .then(data => {
-      if (data) {
-        const parsed = parseConfigData(data);
-        if (parsed) callback(parsed);
-      }
-    })
-    .catch(err => console.warn('[Firebase] Fallback REST device config:', err));
+  const fetchConfigDirect = () => {
+    fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}.json`)
+      .then(res => res.json())
+      .then(data => {
+        if (data) {
+          const parsed = parseConfigData(data);
+          if (parsed) callback(parsed);
+        }
+      })
+      .catch(err => console.warn('[Firebase] Polling REST device config:', err));
+  };
+
+  // 1. Carga inicial ultra rápida vía REST (< 50ms)
+  fetchConfigDirect();
 
   // 2. Carga inicial vía SDK get()
   get(configRef)
@@ -109,7 +122,7 @@ export const subscribeToDeviceConfig = (
     .catch(err => console.warn('[Firebase] get() device config:', err));
 
   // 3. Suscripción en tiempo real continua por WebSocket
-  const unsubscribe = onValue(configRef, (snapshot) => {
+  const unsubscribeSdk = onValue(configRef, (snapshot) => {
     if (snapshot.exists()) {
       callback(snapshot.val() as ConfiguracionCultivo);
     } else {
@@ -117,7 +130,13 @@ export const subscribeToDeviceConfig = (
     }
   });
 
-  return unsubscribe;
+  // 4. Heartbeat de sincronización continua (cada 3s)
+  const configTimer = setInterval(fetchConfigDirect, 3000);
+
+  return () => {
+    unsubscribeSdk();
+    clearInterval(configTimer);
+  };
 };
 
 /**
@@ -230,23 +249,25 @@ export const sendConfigRules = async (deviceId: string, config: any) => {
 };
 
 /**
- * Enviar comando de actuador a ruta hija directa.
+ * Enviar comando de actuador de forma atómica con modo MANUAL
  */
 export const sendCommand = async (deviceId: string, actuator: string, state: any) => {
-  // REST directo inmediato
-  fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands/${actuator}.json`, {
-    method: 'PUT',
+  const payload = {
+    modo_operacion: 'MANUAL',
+    [actuator]: state
+  };
+
+  // REST directo inmediato atómico
+  fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands.json`, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(state)
+    body: JSON.stringify(payload)
   }).catch(err => console.warn('[Firebase] REST command fallback:', err));
 
-  const commandRef = ref(database, `devices/${deviceId}/commands/${actuator}`);
+  const commandRef = ref(database, `devices/${deviceId}/commands`);
   try {
     await Promise.race([
-      (async () => {
-        await remove(commandRef);
-        await set(commandRef, state);
-      })(),
+      update(commandRef, payload),
       new Promise(resolve => setTimeout(resolve, 2000))
     ]);
   } catch (error) {
@@ -337,13 +358,17 @@ export const subscribeToPlanState = (
 ) => {
   const planRef = ref(database, `devices/${deviceId}/plan_state`);
 
+  const fetchPlanDirect = () => {
+    fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/plan_state.json`)
+      .then(res => res.json())
+      .then(data => {
+        callback(data || null);
+      })
+      .catch(err => console.warn('[Firebase] Polling REST plan_state:', err));
+  };
+
   // 1. Carga inicial ultra rápida vía REST (< 50ms)
-  fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/plan_state.json`)
-    .then(res => res.json())
-    .then(data => {
-      if (data) callback(data);
-    })
-    .catch(err => console.warn('[Firebase] Fallback REST plan_state:', err));
+  fetchPlanDirect();
 
   // 2. Carga inicial vía SDK get()
   get(planRef)
@@ -354,13 +379,20 @@ export const subscribeToPlanState = (
     })
     .catch(err => console.warn('[Firebase] get() plan_state:', err));
 
-  // 3. Suscripción en tiempo real
-  const unsubscribe = onValue(planRef, (snapshot: any) => {
+  // 3. Suscripción en tiempo real continua por WebSocket
+  const unsubscribeSdk = onValue(planRef, (snapshot: any) => {
     if (snapshot.exists()) {
       callback(snapshot.val());
     } else {
       callback(null);
     }
   });
-  return unsubscribe;
+
+  // 4. Heartbeat de sincronización continua (cada 3s)
+  const planTimer = setInterval(fetchPlanDirect, 3000);
+
+  return () => {
+    unsubscribeSdk();
+    clearInterval(planTimer);
+  };
 };

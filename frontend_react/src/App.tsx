@@ -28,6 +28,7 @@ function Dashboard() {
   
   // Estado optimista para hacer que la UI se sienta instantánea aunque el hardware demore
   const [optimisticModes, setOptimisticModes] = useState<Record<string, 'AUTO' | 'MANUAL'>>({});
+  const [optimisticActuators, setOptimisticActuators] = useState<Record<string, Record<string, boolean>>>({});
   
   // Timer manual
   const [manualStartTimes, setManualStartTimes] = useState<Record<string, number>>({});
@@ -90,7 +91,8 @@ function Dashboard() {
     const unsubscribeTelemetria = subscribeToAllDevices((devices) => {
       setCamaras(devices);
       setError(null);
-      // Limpiar estados optimistas SOLO cuando recibimos update real del servidor que coincida
+      
+      // Limpiar estados optimistas de modo SOLO cuando el servidor confirme
       setOptimisticModes(prev => {
         const next = { ...prev };
         let changed = false;
@@ -102,14 +104,35 @@ function Dashboard() {
         });
         return changed ? next : prev;
       });
+
+      // Limpiar estados optimistas de actuadores cuando la telemetría coincida
+      setOptimisticActuators(prev => {
+        const next = { ...prev };
+        let changed = false;
+        devices.forEach(dev => {
+          const devOpts = next[dev.deviceId];
+          if (devOpts && dev.telemetria) {
+            Object.keys(devOpts).forEach(actKey => {
+              if ((dev.telemetria as any)[actKey] === devOpts[actKey]) {
+                delete devOpts[actKey];
+                changed = true;
+              }
+            });
+            if (Object.keys(devOpts).length === 0) {
+              delete next[dev.deviceId];
+            }
+          }
+        });
+        return changed ? next : prev;
+      });
       
-      // Update manual start times
+      // Sincronizar tiempos de inicio manual
       setManualStartTimes(prev => {
         const next = { ...prev };
         devices.forEach(dev => {
           if (dev.modo_operacion === 'MANUAL' && !next[dev.deviceId]) {
             next[dev.deviceId] = Date.now();
-          } else if (dev.modo_operacion === 'AUTO') {
+          } else if (dev.modo_operacion === 'AUTO' && !optimisticModes[dev.deviceId]) {
             delete next[dev.deviceId];
           }
         });
@@ -120,16 +143,13 @@ function Dashboard() {
     });
 
     return () => unsubscribeTelemetria();
-  }, []);
+  }, [optimisticModes]);
 
   // ── SUSCRIPCIÓN A CONFIGURACIONES ──────────────────────────────────────
-  // Usa un ref para rastrear suscripciones activas y evitar que se
-  // destruyan cada vez que 'camaras' se actualiza por telemetría.
   const configSubsRef = useRef<Record<string, () => void>>({});
 
   useEffect(() => {
     camaras.forEach(camara => {
-      // Solo suscribirse si no hay listener activo para este deviceId
       if (!configSubsRef.current[camara.deviceId]) {
         const unsub = subscribeToDeviceConfig(camara.deviceId, (config) => {
           if (config) {
@@ -139,7 +159,6 @@ function Dashboard() {
         configSubsRef.current[camara.deviceId] = unsub;
       }
     });
-    // No cleanup aquí — las suscripciones persisten mientras el componente viva
   }, [camaras]);
 
   // Cleanup global al desmontar
@@ -154,6 +173,18 @@ function Dashboard() {
     try {
       const newMode = currentMode === 'AUTO' ? 'MANUAL' : 'AUTO';
       setOptimisticModes(prev => ({ ...prev, [deviceId]: newMode }));
+      
+      // Iniciar o limpiar el cronómetro inmediatamente en la UI
+      if (newMode === 'MANUAL') {
+        setManualStartTimes(prev => ({ ...prev, [deviceId]: Date.now() }));
+      } else {
+        setManualStartTimes(prev => {
+          const next = { ...prev };
+          delete next[deviceId];
+          return next;
+        });
+      }
+
       await sendModeCommand(deviceId, newMode);
     } catch (err) {
       console.error("Error al enviar comando de modo", err);
@@ -173,19 +204,42 @@ function Dashboard() {
   const handleToggleActuator = async (deviceId: string, actuator: string, currentState: boolean, currentMode: 'AUTO' | 'MANUAL') => {
     if (currentMode === 'AUTO') return;
     try {
-      await sendCommand(deviceId, actuator, !currentState);
+      const newState = !currentState;
+      // Actualización visual instantánea
+      setOptimisticActuators(prev => ({
+        ...prev,
+        [deviceId]: { ...(prev[deviceId] || {}), [actuator]: newState }
+      }));
+
+      await sendCommand(deviceId, actuator, newState);
       showInfo(`Comando enviado a ${actuator.replace('_on', '').toUpperCase()}. El controlador de hardware procesará la orden respetando los tiempos de protección térmicos (hasta 3 min).`);
     } catch (err) {
       console.error("Error al enviar comando", err);
       setError("Error al encender/apagar el actuador.");
+      // Rollback en caso de error
+      setOptimisticActuators(prev => {
+        const next = { ...prev };
+        if (next[deviceId]) {
+          delete next[deviceId][actuator];
+        }
+        return next;
+      });
     }
   };
 
-  // updateConfigField ahora viene del import de firebaseService.ts
-  // Usa update() en la raíz /commands/ (correcto para campos de config)
-
   const handleSaveRules = async (deviceId: string, crop: DeviceCropProfile, profileName?: string, phaseName?: string, planState?: any) => {
     try {
+      // Optimistic update para reflejar el perfil de inmediato sin esperar a F5
+      setConfigs(prev => ({
+        ...prev,
+        [deviceId]: {
+          crop,
+          activeProfileName: profileName || 'Desconocido',
+          activePhaseName: phaseName || 'Desconocida',
+          ...planState
+        }
+      }));
+
       await sendConfigRules(deviceId, { 
         crop: crop,
         activeProfileName: profileName || 'Desconocido',
@@ -506,33 +560,36 @@ function Dashboard() {
                             { id: 'heater_on', label: 'Calefactor', icon: Activity, val: camara.telemetria.heater_on, locked: camara.telemetria.heater_locked, activeBg: 'bg-amber-500/20 text-amber-500 border-amber-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
                             { id: 'cooler_on', label: 'Enfriador', icon: Snowflake, val: camara.telemetria.cooler_on ?? false, locked: false, activeBg: 'bg-blue-500/20 text-blue-500 border-blue-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
                             { id: 'light_on', label: 'Luz', icon: Power, val: camara.telemetria.light_on, locked: false, activeBg: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
-                          ].map((act) => (
-                            <div key={act.id} className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5 relative">
-                              <span className="text-neutral-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
-                                <act.icon size={14}/> {act.label}
-                                {modo === 'MANUAL' && act.locked && (
-                                  <span className="text-red-500 ml-1" title="Bloqueado por protección térmica (Anti-Short Cycle)">🔒</span>
-                                )}
-                              </span>
-                              <button 
-                                disabled={modo === 'AUTO' || (modo === 'MANUAL' && act.locked)}
-                                onClick={() => handleToggleActuator(camara.deviceId, act.id, act.val, modo)}
-                                className={`px-4 py-1.5 rounded-lg text-xs font-black tracking-widest uppercase transition-all duration-300 border ${
-                                  modo === 'AUTO'
-                                    ? act.val 
-                                      ? act.activeBg 
-                                      : 'bg-neutral-900 text-neutral-600 border-neutral-800'
-                                    : act.val 
-                                      ? act.manualBg 
-                                      : act.locked 
-                                        ? 'bg-red-950/30 text-red-500 border-red-500/20 cursor-not-allowed'
-                                        : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700 border-neutral-700'
-                                }`}
-                              >
-                                {modo === 'MANUAL' && act.locked ? 'LOCKED' : (act.val ? 'ON' : 'OFF')}
-                              </button>
-                            </div>
-                          ))}
+                          ].map((act) => {
+                            const effectiveVal = optimisticActuators[camara.deviceId]?.[act.id] ?? act.val;
+                            return (
+                              <div key={act.id} className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5 relative">
+                                <span className="text-neutral-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                                  <act.icon size={14}/> {act.label}
+                                  {modo === 'MANUAL' && act.locked && (
+                                    <span className="text-red-500 ml-1" title="Bloqueado por protección térmica (Anti-Short Cycle)">🔒</span>
+                                  )}
+                                </span>
+                                <button 
+                                  disabled={modo === 'AUTO' || (modo === 'MANUAL' && act.locked)}
+                                  onClick={() => handleToggleActuator(camara.deviceId, act.id, effectiveVal, modo)}
+                                  className={`px-4 py-1.5 rounded-lg text-xs font-black tracking-widest uppercase transition-all duration-300 border ${
+                                    modo === 'AUTO'
+                                      ? effectiveVal 
+                                        ? act.activeBg 
+                                        : 'bg-neutral-900 text-neutral-600 border-neutral-800'
+                                      : effectiveVal 
+                                        ? act.manualBg 
+                                        : act.locked 
+                                          ? 'bg-red-950/30 text-red-500 border-red-500/20 cursor-not-allowed'
+                                          : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700 border-neutral-700'
+                                  }`}
+                                >
+                                  {modo === 'MANUAL' && act.locked ? 'LOCKED' : (effectiveVal ? 'ON' : 'OFF')}
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
 
                         {/* GRÁFICO HISTÓRICO UNIFICADO (TELEMETRÍA) */}

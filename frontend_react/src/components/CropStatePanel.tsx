@@ -78,6 +78,8 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config, isOff
     const handleStopPlan = async () => {
         if (!window.confirm("¿Seguro que deseas detener el ciclo por completo? Se perderá el progreso actual.")) return;
         setLoading(true);
+        // Actualización optimista inmediata en UI
+        setPlanState(null);
         try {
             await sendConfigRules(deviceId, null);
         } catch (e) {
@@ -160,43 +162,42 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config, isOff
                         });
                         alert('Transición continua iniciada. El reloj se ha adelantado a las últimas horas de esta fase.');
                     } catch (e) {
-                        alert('Error al iniciar la transición suave');
-                    } finally {
-                        setLoading(false);
+                        console.error('Error al avanzar suavemente:', e);
+                        alert('Error al actualizar fase.');
                     }
+                    setLoading(false);
                     return;
                 }
             }
         } else if (direction === 'PREV') {
             if (targetIndex < 0) {
-                alert('Ya estás en la primera fase.');
+                alert('El cultivo ya está en su fase inicial.');
                 return;
             }
-            if (!window.confirm(`¿Estás seguro de retroceder bruscamente a la fase: ${phases[targetIndex].name}?`)) return;
+            if (!window.confirm(`¿Estás seguro de retroceder hacia: ${phases[targetIndex].name}?`)) return;
         }
 
-        const targetPhase = phases[targetIndex];
-        const nextNextPhase = phases[targetIndex + 1];
+        // Salto directo sin transición
         setLoading(true);
-
         try {
-            const currentPhaseConfig = generateDeviceProfile(targetPhase);
-            const nextPhaseConfig = nextNextPhase ? generateDeviceProfile(nextNextPhase) : null;
+            const nextPhase = phases[targetIndex];
+            const nextPhaseConfig = generateDeviceProfile(nextPhase);
 
             await sendConfigRules(deviceId, {
                 activeProfileName: profile.commonName,
-                activePhaseName: targetPhase.name,
+                activePhaseName: nextPhase.name,
                 phaseStartTime: Date.now(),
-                duration_days: targetPhase.duration_days || 14,
-                transition_hours: targetPhase.transition_hours || 48,
-                currentPhaseConfig,
-                nextPhaseConfig
+                duration_days: nextPhase.duration_days || 14,
+                transition_hours: nextPhase.transition_hours || 0,
+                currentPhaseConfig: nextPhaseConfig,
+                nextPhaseConfig: null,
+                transitioningTo: null
             });
         } catch (e) {
-            alert('Error al navegar de fase');
-        } finally {
-            setLoading(false);
+            console.error('Error al cambiar de fase:', e);
+            alert('Error al actualizar fase.');
         }
+        setLoading(false);
     };
 
     const renderCompactTimeline = () => {
@@ -211,7 +212,7 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config, isOff
         if (currentIndex === -1) return null;
 
         return (
-            <div className="mt-6">
+            <div className="mt-4 px-6 md:px-8">
                 <div className="flex items-center justify-between relative">
                     <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-neutral-800 rounded-full z-0"></div>
                     {phases.map((phase, idx) => {
@@ -229,10 +230,16 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config, isOff
                             borderColor = 'border-amber-400';
                         }
 
+                        const tooltipAlignment = idx === 0 
+                            ? 'left-0' 
+                            : idx === phases.length - 1 
+                                ? 'right-0' 
+                                : 'left-1/2 -translate-x-1/2';
+
                         return (
                             <div key={phase.id} className="relative z-10 flex flex-col items-center group cursor-default">
                                 <div className={`w-3 h-3 md:w-4 md:h-4 rounded-full border-2 transition-all ${bgColor} ${borderColor} ${isCurrent ? 'shadow-[0_0_10px_rgba(245,158,11,0.6)] scale-125' : ''}`}></div>
-                                <div className="absolute top-6 whitespace-nowrap text-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/90 px-2 py-1 rounded text-[10px] text-neutral-300 pointer-events-none z-20">
+                                <div className={`absolute top-6 whitespace-nowrap text-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/95 px-2.5 py-1.5 rounded-lg border border-white/10 text-[10px] text-neutral-300 pointer-events-none z-30 shadow-xl ${tooltipAlignment}`}>
                                     <span className="font-bold text-white block">{phase.name}</span>
                                     {phase.duration_days ?? 14} días {phase.transition_hours ? `(Trans: ${phase.transition_hours}h)` : ''}
                                 </div>
@@ -274,7 +281,7 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config, isOff
 
     return (
         <StatsAccordion title={titleContent} defaultOpen={true}>
-            <div className="relative overflow-hidden -mt-4">
+            <div className="relative overflow-visible pb-2 -mt-4">
                 {/* Soft background glow */}
                 <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
 
