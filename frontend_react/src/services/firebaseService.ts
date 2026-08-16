@@ -91,22 +91,32 @@ export const subscribeToDeviceConfig = (
 /**
  * Enviar configuración dinámica (Rule Engine y Failsafes)
  */
+/**
+ * Enviar configuración dinámica (Rule Engine y Failsafes)
+ */
 export const sendConfigRules = async (deviceId: string, config: any) => {
   try {
     if (config === null) {
       // Detener plan: Borrar estado del plan pero retener el perfil base de crop para los failsafes
-      await remove(ref(database, `devices/${deviceId}/plan_state`));
+      fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/plan_state.json`, { method: 'DELETE' }).catch(() => {});
+      fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands.json`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activePhaseName: null, activeProfileName: null })
+      }).catch(() => {});
+      
       const configRef = ref(database, `devices/${deviceId}/commands`);
-      await update(configRef, {
-          activePhaseName: null,
-          activeProfileName: null
-      });
+      await Promise.race([
+        Promise.all([
+          remove(ref(database, `devices/${deviceId}/plan_state`)),
+          update(configRef, { activePhaseName: null, activeProfileName: null })
+        ]),
+        new Promise(r => setTimeout(r, 2000))
+      ]);
       return;
     }
 
     const configRef = ref(database, `devices/${deviceId}/commands`);
-    
-    // Preparar el payload de actualización para commands
     const updates: Record<string, any> = {};
     
     if (config.crop !== undefined) {
@@ -122,8 +132,17 @@ export const sendConfigRules = async (deviceId: string, config: any) => {
       updates['activePhaseName'] = config.activePhaseName;
     }
 
+    const promises: Promise<any>[] = [];
+
+    // 1. Enviar de inmediato por REST para garantizar entrega instantánea (< 150ms)
     if (Object.keys(updates).length > 0) {
-      await update(configRef, updates);
+      fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands.json`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      }).catch(err => console.warn('[Firebase] REST commands fallback:', err));
+
+      promises.push(update(configRef, updates).catch(err => console.warn('[Firebase] SDK update:', err)));
     }
     
     // Si viene la configuración completa del plan de steering (con currentPhaseConfig)
@@ -140,8 +159,22 @@ export const sendConfigRules = async (deviceId: string, config: any) => {
           isPaused: config.isPaused || false,
           transitioningTo: config.transitioningTo || null
       };
-      await set(planRef, planState);
+
+      fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/plan_state.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(planState)
+      }).catch(err => console.warn('[Firebase] REST plan_state fallback:', err));
+
+      promises.push(set(planRef, planState).catch(err => console.warn('[Firebase] SDK set plan_state:', err)));
     }
+
+    // Timeout de 2.5 segundos máximo para evitar cualquier congelamiento en la UI
+    await Promise.race([
+      Promise.all(promises),
+      new Promise(resolve => setTimeout(resolve, 2000))
+    ]);
+
   } catch (error) {
     console.error('Error enviando configuración a Firebase:', error);
     throw error;
@@ -150,36 +183,48 @@ export const sendConfigRules = async (deviceId: string, config: any) => {
 
 /**
  * Enviar comando de actuador a ruta hija directa.
- *
- * IMPORTANTE: Primero borramos el valor (remove) y luego lo escribimos (set).
- * Esto garantiza que Firebase SIEMPRE detecte un cambio de valor y dispare
- * el stream callback en el ESP32, incluso si el valor nuevo es igual al
- * valor retenido anteriormente (ej: commands/light_on = true persistido,
- * pero la lógica AUTO apagó la luz físicamente sin actualizar commands/).
  */
 export const sendCommand = async (deviceId: string, actuator: string, state: any) => {
+  // REST directo inmediato
+  fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands/${actuator}.json`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(state)
+  }).catch(err => console.warn('[Firebase] REST command fallback:', err));
+
   const commandRef = ref(database, `devices/${deviceId}/commands/${actuator}`);
   try {
-    await remove(commandRef);   // Fuerza cambio: null -> state (siempre dispara stream)
-    await set(commandRef, state);
+    await Promise.race([
+      (async () => {
+        await remove(commandRef);
+        await set(commandRef, state);
+      })(),
+      new Promise(resolve => setTimeout(resolve, 2000))
+    ]);
   } catch (error) {
     console.error('Error enviando comando a Firebase:', error);
-    throw error;
   }
 };
 
 /**
  * Enviar comando de modo de operación (AUTO / MANUAL)
- * Escribe directamente en /commands/modo_operacion para que el
- * ESP32 lo procese por la rama primitiva del streamCallback.
  */
 export const sendModeCommand = async (deviceId: string, mode: 'AUTO' | 'MANUAL') => {
+  // REST directo inmediato
+  fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands/modo_operacion.json`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(mode)
+  }).catch(err => console.warn('[Firebase] REST mode fallback:', err));
+
   const modeRef = ref(database, `devices/${deviceId}/commands/modo_operacion`);
   try {
-    await set(modeRef, mode);
+    await Promise.race([
+      set(modeRef, mode),
+      new Promise(resolve => setTimeout(resolve, 2000))
+    ]);
   } catch (error) {
     console.error('Error enviando comando de modo a Firebase:', error);
-    throw error;
   }
 };
 

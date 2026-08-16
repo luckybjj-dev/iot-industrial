@@ -333,15 +333,15 @@ void FirebaseManager::_procesarPayloadStream(const String& path, const String& d
             _hw.setConfiguracion(cfg);
         }
         
-        if (path == "/crop" || path == "/config") {
+        if (doc.containsKey("crop")) {
+            _fm.guardarConfiguracionJson(data);
+            _hw.setConfiguracion(_fm.cargarConfiguracion());
+            Serial.println(F("✅ [Firebase] CropProfile recibido (nodo 'crop') y aplicado a LittleFS + Control."));
+        } else if (path == "/crop" || path == "/config" || path.indexOf("crop") >= 0) {
             String wrappedJson = "{\"crop\":" + data + "}";
             _fm.guardarConfiguracionJson(wrappedJson);
             _hw.setConfiguracion(_fm.cargarConfiguracion());
-            Serial.println(F("✅ [Firebase] CropProfile recibido (ruta específica) y aplicado."));
-        } else if (doc.containsKey("crop")) {
-            _fm.guardarConfiguracionJson(data);
-            _hw.setConfiguracion(_fm.cargarConfiguracion());
-            Serial.println(F("✅ [Firebase] CropProfile recibido (raíz) y aplicado."));
+            Serial.println(F("✅ [Firebase] CropProfile recibido (subruta) y aplicado a LittleFS + Control."));
         }
     } else {
         // Es un valor primitivo (boolean o string), o JSON inválido que asumimos como primitivo.
