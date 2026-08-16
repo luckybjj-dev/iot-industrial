@@ -6,7 +6,8 @@ import type { EstadoCamara, TelemetriaFungi, HistorialData, ConfiguracionCultivo
  * Suscribirse a TODOS los dispositivos en tiempo real
  */
 export const subscribeToAllDevices = (
-  callback: (devices: EstadoCamara[]) => void
+  callback: (devices: EstadoCamara[]) => void,
+  onError?: (error: Error) => void
 ) => {
   const telemetryRef = ref(database, 'telemetry');
   
@@ -36,7 +37,7 @@ export const subscribeToAllDevices = (
     }
   }, (error) => {
     console.error("[Firebase] Error de lectura:", error);
-    // Podríamos disparar el callback con un error si tuviéramos manejo de errores
+    if (onError) onError(error);
   });
 
   return unsubscribe;

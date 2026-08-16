@@ -93,9 +93,15 @@ function Dashboard() {
 
   useEffect(() => {
     // Suscribirse a Firebase RTDB para Telemetría
-    const unsubscribeTelemetria = subscribeToAllDevices((devices) => {
-      setCamaras(devices);
-      setError(null);
+    const unsubscribeTelemetria = subscribeToAllDevices(
+      (devices) => {
+        setCamaras(devices);
+        setError(null);
+      },
+      (err) => {
+        setError(`Error de conexión con Firebase: ${err.message}`);
+      }
+    );
       // Limpiar estados optimistas SOLO cuando recibimos update real del servidor que coincida
       setOptimisticModes(prev => {
         const next = { ...prev };
