@@ -1822,8 +1822,12 @@ export const generateDeviceProfile = (phase: CropPhase): DeviceCropProfile => {
       temp_ideal_max: tempIdealMax,
       temp_crit_min: tempCritMin,
       temp_crit_max: tempCritMax,
-      temp_sustrato_ideal: phase.targets.temperature.substrate ? Math.round((phase.targets.temperature.substrate.min + phase.targets.temperature.substrate.max) / 2) : tempIdealMin,
-      temp_sustrato_crit_max: phase.targets.temperature.substrate ? phase.targets.temperature.substrate.max + 2 : tempCritMax,
+      temp_sustrato_ideal: phase.targets.temperature.substrate 
+        ? Math.round((phase.targets.temperature.substrate.min + phase.targets.temperature.substrate.max) / 2) 
+        : Math.round((tempIdealMin + tempIdealMax) / 2) + 3,
+      temp_sustrato_crit_max: phase.targets.temperature.substrate 
+        ? phase.targets.temperature.substrate.max + 2 
+        : tempCritMax,
       hum_ideal_min: humIdealMin,
       hum_ideal_max: humIdealMax,
       hum_crit_min: humCritMin,
