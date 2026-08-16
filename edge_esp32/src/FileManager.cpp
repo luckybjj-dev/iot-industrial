@@ -67,7 +67,13 @@ ConfiguracionCultivo FileManager::cargarConfiguracion() {
     }
 
     _configActual.greenhouse_id = doc["greenhouse_id"] | "CHAMBER_01";
-    _configActual.crop_profile  = doc["crop_profile"] | "DEFAULT";
+    if (doc.containsKey("crop_profile")) {
+        _configActual.crop_profile = doc["crop_profile"].as<String>();
+    } else if (doc.containsKey("activeProfileName")) {
+        _configActual.crop_profile = doc["activeProfileName"].as<String>();
+    } else {
+        _configActual.crop_profile = "STANDBY";
+    }
     _configActual.max_manual_time_ms = doc["max_manual_time_ms"] | 900000;
     
     JsonObject failsafe = doc["failsafes"];
@@ -75,24 +81,26 @@ ConfiguracionCultivo FileManager::cargarConfiguracion() {
     _configActual.failsafes.max_internal_temp_limit_c = failsafe["max_internal_temp_limit_c"] | 35.0;
 
     JsonObject crop = doc["crop"];
-    _configActual.crop.kingdom        = crop["kingdom"] | "FUNGI";
-    _configActual.crop.temp_ideal_min = crop["temp_ideal_min"] | 20.0f;
-    _configActual.crop.temp_ideal_max = crop["temp_ideal_max"] | 24.0f;
-    _configActual.crop.temp_crit_min  = crop["temp_crit_min"] | 15.0f;
-    _configActual.crop.temp_crit_max  = crop["temp_crit_max"] | 28.0f;
-    
-    _configActual.crop.temp_sustrato_ideal    = crop["temp_sustrato_ideal"] | 24.0f;
-    _configActual.crop.temp_sustrato_crit_max = crop["temp_sustrato_crit_max"] | 27.0f;
-    
-    _configActual.crop.hum_ideal_min  = crop["hum_ideal_min"] | 85.0f;
-    _configActual.crop.hum_ideal_max  = crop["hum_ideal_max"] | 95.0f;
-    _configActual.crop.hum_crit_min   = crop["hum_crit_min"] | 70.0f;
-    
-    _configActual.crop.co2_ideal_min  = crop["co2_ideal_min"] | 400;
-    _configActual.crop.co2_ideal_max  = crop["co2_ideal_max"] | 800;
-    _configActual.crop.co2_crit_max   = crop["co2_crit_max"] | 1200;
-    
-    _configActual.crop.light_hours_on = crop["light_hours_on"] | 12;
+    if (crop) {
+        _configActual.crop.kingdom        = crop["kingdom"] | "NONE";
+        _configActual.crop.temp_ideal_min = crop.containsKey("temp_ideal_min") ? crop["temp_ideal_min"].as<float>() : 0.0f;
+        _configActual.crop.temp_ideal_max = crop.containsKey("temp_ideal_max") ? crop["temp_ideal_max"].as<float>() : 0.0f;
+        _configActual.crop.temp_crit_min  = crop.containsKey("temp_crit_min") ? crop["temp_crit_min"].as<float>() : 0.0f;
+        _configActual.crop.temp_crit_max  = crop.containsKey("temp_crit_max") ? crop["temp_crit_max"].as<float>() : 35.0f;
+        
+        _configActual.crop.temp_sustrato_ideal    = crop.containsKey("temp_sustrato_ideal") ? crop["temp_sustrato_ideal"].as<float>() : 0.0f;
+        _configActual.crop.temp_sustrato_crit_max = crop.containsKey("temp_sustrato_crit_max") ? crop["temp_sustrato_crit_max"].as<float>() : 35.0f;
+        
+        _configActual.crop.hum_ideal_min  = crop.containsKey("hum_ideal_min") ? crop["hum_ideal_min"].as<float>() : 0.0f;
+        _configActual.crop.hum_ideal_max  = crop.containsKey("hum_ideal_max") ? crop["hum_ideal_max"].as<float>() : 100.0f;
+        _configActual.crop.hum_crit_min   = crop.containsKey("hum_crit_min") ? crop["hum_crit_min"].as<float>() : 0.0f;
+        
+        _configActual.crop.co2_ideal_min  = crop.containsKey("co2_ideal_min") ? crop["co2_ideal_min"].as<int>() : 0;
+        _configActual.crop.co2_ideal_max  = crop.containsKey("co2_ideal_max") ? crop["co2_ideal_max"].as<int>() : 2000;
+        _configActual.crop.co2_crit_max   = crop.containsKey("co2_crit_max") ? crop["co2_crit_max"].as<int>() : 3000;
+        
+        _configActual.crop.light_hours_on = crop.containsKey("light_hours_on") ? crop["light_hours_on"].as<int>() : 0;
+    }
 
     Serial.println("[LittleFS] Configuración cargada con éxito. Perfil: " + _configActual.crop_profile);
     return _configActual;

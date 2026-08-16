@@ -296,7 +296,7 @@ function Dashboard() {
                       <p className="text-neutral-500 text-xs font-mono tracking-widest mb-3">TS: {camara.ultima_actualizacion || 'N/A'}</p>
                       
                       {/* Active Profile Info */}
-                      {(config as any)?.activeProfileName && (
+                      {(config as any)?.activeProfileName && (config as any)?.activeProfileName !== 'STANDBY' && (config as any)?.activeProfileName !== 'NONE' && (
                         <div className="inline-flex items-center gap-2 bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-lg">
                           <Sprout size={14} className="text-purple-400" />
                           <div>

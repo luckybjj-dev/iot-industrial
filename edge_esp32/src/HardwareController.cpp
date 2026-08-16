@@ -57,7 +57,7 @@ void HardwareController::setConfiguracion(const ConfiguracionCultivo& config) {
     _config = config;
     if (_config.crop_profile != "STANDBY" && 
         _config.crop_profile != "NONE" && 
-        _config.crop_profile != "DEFAULT" &&
+        _config.crop_profile != "null" &&
         _config.crop_profile.length() > 0 &&
         _config.crop.temp_ideal_min > 0 &&
         _config.crop.temp_ideal_max > 0) {

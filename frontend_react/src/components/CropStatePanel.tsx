@@ -73,7 +73,7 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config, isOff
 
     const activeProfileName = planState?.activeProfileName || config?.activeProfileName;
     const activePhaseName = planState?.activePhaseName || config?.activePhaseName;
-    const isActive = !!(activeProfileName && activePhaseName);
+    const isActive = !!(activeProfileName && activePhaseName && activeProfileName !== 'STANDBY' && activeProfileName !== 'NONE');
 
     const handleStopPlan = async () => {
         if (!window.confirm("¿Seguro que deseas detener el ciclo por completo? Se perderá el progreso actual.")) return;

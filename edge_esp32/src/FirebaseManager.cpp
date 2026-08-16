@@ -334,18 +334,10 @@ void FirebaseManager::_procesarPayloadStream(const String& path, const String& d
             _hw.setConfiguracion(cfg);
         }
         
-        if (doc.containsKey("activeProfileName")) {
-            String pName = doc["activeProfileName"].as<String>();
-            if (pName == "null" || pName.length() == 0 || pName == "STANDBY" || pName == "NONE") {
-                _hw.setPerfilActivo(false);
-                Serial.println(F("ℹ️ [Firebase] activeProfileName nulo/vacío detectado. Modo STANDBY / MONITOREO activado."));
-            }
-        }
-
-        if (doc.containsKey("crop")) {
+        if (doc.containsKey("activeProfileName") || doc.containsKey("crop")) {
             _fm.guardarConfiguracionJson(data);
             _hw.setConfiguracion(_fm.cargarConfiguracion());
-            Serial.println(F("✅ [Firebase] CropProfile recibido (nodo 'crop') y aplicado a LittleFS + Control."));
+            Serial.println(F("✅ [Firebase] Configuración de cultivo recibida y sincronizada en LittleFS + HardwareController."));
         } else if (path == "/crop" || path == "/config" || path.indexOf("crop") >= 0) {
             String wrappedJson = "{\"crop\":" + data + "}";
             _fm.guardarConfiguracionJson(wrappedJson);
@@ -361,8 +353,15 @@ void FirebaseManager::_procesarPayloadStream(const String& path, const String& d
         
         if (path.indexOf("activeProfileName") >= 0) {
             if (val == "null" || val.length() == 0 || val == "STANDBY" || val == "NONE") {
-                _hw.setPerfilActivo(false);
+                ConfiguracionCultivo cfg = _hw.getConfiguracion();
+                cfg.crop_profile = "STANDBY";
+                _hw.setConfiguracion(cfg);
                 Serial.println(F("ℹ️ [Firebase] activeProfileName restablecido. Modo STANDBY / MONITOREO activado."));
+            } else {
+                ConfiguracionCultivo cfg = _hw.getConfiguracion();
+                cfg.crop_profile = val;
+                _hw.setConfiguracion(cfg);
+                Serial.printf("✅ [Firebase] activeProfileName actualizado: %s\n", val.c_str());
             }
         } else if (path.indexOf("modo_operacion") >= 0) {
             if (val == "AUTO") _hw.setModoOperacion(ModoOperacion::AUTO);
