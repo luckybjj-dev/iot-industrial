@@ -69,7 +69,9 @@ export const SemaforoEstabilidad: React.FC<Props> = ({ telemetria, crop, modo_op
         case 'STANDBY':
           return {
             estado: 'MODO MONITOREO',
-            mensaje: 'Sensores en línea. Actuadores en reposo (Sin cultivo asignado)',
+            mensaje: crop && crop.temp_ideal_min > 0 
+              ? 'Sincronizando receta biológica con el microcontrolador...' 
+              : 'Sensores en línea. Actuadores en reposo (Modo Monitoreo)',
             colorClass: 'text-cyan-400 bg-cyan-950/30 border-cyan-500/50',
             Icon: Activity,
             isCriticalPulse: false
