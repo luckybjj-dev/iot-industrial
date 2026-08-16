@@ -1,6 +1,6 @@
 #include "HardwareController.h"
 
-HardwareController::HardwareController() : _heaterPID(&_pidInput, &_pidOutput, &_pidSetpoint, 1500.0, 100.0, 250.0, DIRECT) {
+HardwareController::HardwareController() : _heaterPID(&_pidInput, &_pidOutput, &_pidSetpoint, 2.0, 5.0, 1.0, DIRECT) {
 }
 
 void HardwareController::begin() {
@@ -70,38 +70,41 @@ void HardwareController::setModoOperacion(ModoOperacion modo) {
 // Sobrecarga de comandos manuales
 void HardwareController::setHeater(bool estado) {
     if (_modoActual == ModoOperacion::AUTO) {
-        setModoOperacion(ModoOperacion::MANUAL);
+        Serial.println(F("❌ [Hardware] Ignorando comando de Calefactor. Sistema en modo AUTO."));
+        return;
     }
-    Serial.printf("[Hardware] setHeater(%s) manual ejecutado.\n", estado ? "ON" : "OFF");
-    _ejecutarAccion(PIN_HEATER, _actuadores.heater_ON, estado, _last_heater_switch, millis(), true);
+    _ejecutarAccion(PIN_HEATER, _actuadores.heater_ON, estado, _last_heater_switch, millis(), false);
 }
 void HardwareController::setFogger(bool estado) {
     if (_modoActual == ModoOperacion::AUTO) {
-        setModoOperacion(ModoOperacion::MANUAL);
+        Serial.println(F("❌ [Hardware] Ignorando comando de Niebla. Sistema en modo AUTO."));
+        return;
     }
-    Serial.printf("[Hardware] setFogger(%s) manual ejecutado.\n", estado ? "ON" : "OFF");
-    _ejecutarAccion(PIN_FOGGER, _actuadores.fogger_ON, estado, _last_fogger_switch, millis(), true);
+    _ejecutarAccion(PIN_FOGGER, _actuadores.fogger_ON, estado, _last_fogger_switch, millis(), false);
 }
 void HardwareController::setExtractor(bool estado) {
     if (_modoActual == ModoOperacion::AUTO) {
-        setModoOperacion(ModoOperacion::MANUAL);
+        Serial.println(F("❌ [Hardware] Ignorando comando de Extractor. Sistema en modo AUTO."));
+        return;
     }
-    Serial.printf("[Hardware] setExtractor(%s) manual ejecutado.\n", estado ? "ON" : "OFF");
-    _ejecutarAccion(PIN_EXTRACTOR, _actuadores.extractor_ON, estado, _last_extractor_switch, millis(), true);
+    _ejecutarAccion(PIN_EXTRACTOR, _actuadores.extractor_ON, estado, _last_extractor_switch, millis(), false);
 }
 void HardwareController::setLight(bool estado) {
     if (_modoActual == ModoOperacion::AUTO) {
-        setModoOperacion(ModoOperacion::MANUAL);
+        Serial.println(F("❌ [Hardware] Ignorando comando de Luz. Sistema en modo AUTO."));
+        return;
     }
-    Serial.printf("[Hardware] setLight(%s) manual ejecutado. Estado actual: %s\n", estado ? "ON" : "OFF", _actuadores.light_ON ? "ON" : "OFF");
+    Serial.printf("[Hardware] setLight(%s) llamado. Estado actual: %s\n", estado ? "ON" : "OFF", _actuadores.light_ON ? "ON" : "OFF");
+    // Luz exenta de filtro anti-short-cycle (ignorarFiltro = true)
     _ejecutarAccion(PIN_LIGHT, _actuadores.light_ON, estado, _last_light_switch, millis(), true);
 }
 
 void HardwareController::setCooler(bool estado) {
     if (_modoActual == ModoOperacion::AUTO) {
-        setModoOperacion(ModoOperacion::MANUAL);
+        Serial.println(F("❌ [Hardware] Ignorando comando de Cooler. Sistema en modo AUTO."));
+        return;
     }
-    Serial.printf("[Hardware] setCooler(%s) manual ejecutado.\n", estado ? "ON" : "OFF");
+    // Peltier exento de filtro anti-short-cycle (ignorarFiltro = true)
     _ejecutarAccion(PIN_COOLER, _actuadores.cooler_ON, estado, _last_cooler_switch, millis(), true);
 }
 
@@ -425,7 +428,6 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
                     if (proxEstado == EstadoOperacional::NORMAL) proxEstado = EstadoOperacional::HUMIDIFICANDO;
                 } else if (excesoHumedad) {
                     req_extractor = true;
-                    if (proxEstado == EstadoOperacional::NORMAL) proxEstado = EstadoOperacional::ENFRIANDO;
                 }
             }
 
@@ -475,16 +477,7 @@ void HardwareController::actualizarModulacionSSR(unsigned long now) {
         if (now - _windowStartTime > PID_WINDOW_SIZE) {
             _windowStartTime += PID_WINDOW_SIZE;
         }
-        
-        // Calentamiento inteligente híbrido:
-        // Si estamos a más de 0.5°C por debajo de la meta, forzamos potencia plena continua (100% duty cycle).
-        // En la zona de aproximación (dentro de los 0.5°C), modulamos finamente con el lazo PID.
-        float tempActual = (_sensores.dhtOk || _sensores.dht2Ok) ? _sensores.ewma_temp : -999.0f;
-        bool dutyHeater = true;
-        if (tempActual != -999.0f && tempActual > (_config.crop.temp_ideal_min - 0.5f)) {
-            dutyHeater = (_pidOutput > (now - _windowStartTime));
-        }
-        
+        bool dutyHeater = (_pidOutput > (now - _windowStartTime));
         _ejecutarAccion(PIN_HEATER, _actuadores.heater_ON, dutyHeater, _last_heater_switch, now, true);
     } else {
         if (_actuadores.heater_ON) {

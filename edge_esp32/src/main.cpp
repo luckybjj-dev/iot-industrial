@@ -119,11 +119,6 @@ void setup() {
 
     display.begin();  // Inicializar y encender la pantalla TFT
 
-    // Lectura inicial inmediata para mostrar métricas en TFT desde el segundo 0
-    hw.leerSensores();
-    hw.procesarLogicaDeControl(millis(), net.getHoraInt());
-    display.render();
-
     // 7. Hardware Watchdog Timer (WDT)
     // Previene cuelgues permanentes si un handshake TLS o bucle interno se bloquea.
     uint32_t wdtSec = hw.getConfiguracion().failsafes.watchdog_timeout_ms / 1000;
@@ -177,12 +172,8 @@ void loop() {
             // CALLBACKS: Desconectar Firebase durante el flash para evitar
             // competencia de CPU/heap que causa el fallo al 100% de OTA
             ArduinoOTA.onStart([]() {
-                Serial.println(F("[OTA] Inicio de flash... Deteniendo Firebase y desarmando WDT para flash seguro."));
+                Serial.println(F("[OTA] Inicio de flash... Deteniendo Firebase para liberar Heap/Sockets."));
                 firebase.end();
-                esp_task_wdt_delete(NULL); // Desarmar Watchdog durante la escritura en Flash
-            });
-            ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-                esp_task_wdt_reset();
             });
             ArduinoOTA.onEnd([]() {
                 Serial.println(F("[OTA] Flash completado. Reiniciando..."));

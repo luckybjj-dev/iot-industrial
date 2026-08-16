@@ -26,13 +26,9 @@ void FirebaseManager::begin() {
     _config.api_key = FIREBASE_API_KEY;
     _auth.user.email = FIREBASE_USER_EMAIL;
     _auth.user.password = FIREBASE_USER_PASSWORD;
-    _config.timeout.serverResponse = 10000;
-
-    _fbdo.setResponseSize(2048);
-    _fbdoStream.setResponseSize(2048);
 
     Firebase.begin(&_config, &_auth);
-    Firebase.reconnectWiFi(true); // Permite que Firebase mantenga vivo el WiFi durante los handshakes SSL
+    Firebase.reconnectWiFi(true); // RESTAURADO: Permite que Firebase mantenga vivo el WiFi durante los handshakes SSL
 
     Serial.println(F("[Firebase] Autenticando (Asincrono)..."));
 }
@@ -58,7 +54,6 @@ void FirebaseManager::loop() {
         if (!_streamConfigurado) {
             if (configurarStreams()) {
                 _streamConfigurado = true;
-                _forzarTelemetria = true; // Despachar primera telemetría de inmediato sin esperar 5 segundos
             }
         }
         
@@ -258,9 +253,9 @@ void FirebaseManager::publicarHistorial() {
  * sin necesidad de "polling", cumpliendo con el paradigma de reactividad estricta para IoT.
  */
 bool FirebaseManager::configurarStreams() {
-    // Escuchar comandos manuales y configuraciones en RTDB vía Server-Sent Events (SSE)
+    // Escuchar comandos manuales y configuraciones en RTDB
     String streamPath = "/devices/" + _deviceId + "/commands";
-    Serial.print(F("[Firebase] Configurando Stream SSE en: "));
+    Serial.print(F("[Firebase] Preparando suscripciones futuras (Stream) en: "));
     Serial.println(streamPath);
     
     if (!Firebase.beginStream(_fbdoStream, streamPath)) {
@@ -308,7 +303,7 @@ void FirebaseManager::streamTimeoutCallback(bool timeout) {
 void FirebaseManager::_procesarPayloadStream(const String& path, const String& data) {
     Serial.printf("[Firebase] Stream recibido - Path: %s, Data: %s\n", path.c_str(), data.c_str());
     
-    DynamicJsonDocument doc(1024);
+    StaticJsonDocument<1024> doc;
     DeserializationError error = deserializeJson(doc, data);
     
     if (!error && doc.is<JsonObject>()) {
@@ -333,11 +328,11 @@ void FirebaseManager::_procesarPayloadStream(const String& path, const String& d
         if (path == "/crop" || path == "/config") {
             String wrappedJson = "{\"crop\":" + data + "}";
             _fm.guardarConfiguracionJson(wrappedJson);
-            _hw.setConfiguracion(_fm.getConfiguracionActual());
+            _hw.setConfiguracion(_fm.cargarConfiguracion());
             Serial.println(F("✅ [Firebase] CropProfile recibido (ruta específica) y aplicado."));
         } else if (doc.containsKey("crop")) {
             _fm.guardarConfiguracionJson(data);
-            _hw.setConfiguracion(_fm.getConfiguracionActual());
+            _hw.setConfiguracion(_fm.cargarConfiguracion());
             Serial.println(F("✅ [Firebase] CropProfile recibido (raíz) y aplicado."));
         }
     } else {

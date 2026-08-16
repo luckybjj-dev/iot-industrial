@@ -79,9 +79,6 @@ public:
      */
     ConfiguracionCultivo cargarConfiguracion();
     
-    // Obtener la configuración actual en RAM sin releer LittleFS
-    const ConfiguracionCultivo& getConfiguracionActual() const { return _configActual; }
-    
     /* 
      * Convierte la estructura de configuración (C++) en un documento JSON
      * y lo guarda de forma persistente en LittleFS.
