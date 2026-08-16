@@ -12,11 +12,12 @@ void HardwareController::begin() {
     pinMode(PIN_EXTRACTOR, OUTPUT);
     pinMode(PIN_LIGHT, OUTPUT);
 
+    // Con transistores NPN buffer: LOW = Transistor OFF (Relé Low-Level Trigger 5V apagado)
     digitalWrite(PIN_HEATER, LOW);
     digitalWrite(PIN_COOLER, LOW);
     digitalWrite(PIN_FOGGER, LOW);
     digitalWrite(PIN_EXTRACTOR, LOW);
-    digitalWrite(PIN_LIGHT, HIGH); // Relé de Luz es Activo LOW
+    digitalWrite(PIN_LIGHT, LOW);
 
     _dht.setup(DHTPIN, DHTesp::DHT22);
     _dht2.setup(DHT2PIN, DHTesp::DHT22);
@@ -70,41 +71,38 @@ void HardwareController::setModoOperacion(ModoOperacion modo) {
 // Sobrecarga de comandos manuales
 void HardwareController::setHeater(bool estado) {
     if (_modoActual == ModoOperacion::AUTO) {
-        Serial.println(F("❌ [Hardware] Ignorando comando de Calefactor. Sistema en modo AUTO."));
-        return;
+        setModoOperacion(ModoOperacion::MANUAL);
     }
-    _ejecutarAccion(PIN_HEATER, _actuadores.heater_ON, estado, _last_heater_switch, millis(), false);
+    Serial.printf("[Hardware] setHeater(%s) manual ejecutado.\n", estado ? "ON" : "OFF");
+    _ejecutarAccion(PIN_HEATER, _actuadores.heater_ON, estado, _last_heater_switch, millis(), true);
 }
 void HardwareController::setFogger(bool estado) {
     if (_modoActual == ModoOperacion::AUTO) {
-        Serial.println(F("❌ [Hardware] Ignorando comando de Niebla. Sistema en modo AUTO."));
-        return;
+        setModoOperacion(ModoOperacion::MANUAL);
     }
-    _ejecutarAccion(PIN_FOGGER, _actuadores.fogger_ON, estado, _last_fogger_switch, millis(), false);
+    Serial.printf("[Hardware] setFogger(%s) manual ejecutado.\n", estado ? "ON" : "OFF");
+    _ejecutarAccion(PIN_FOGGER, _actuadores.fogger_ON, estado, _last_fogger_switch, millis(), true);
 }
 void HardwareController::setExtractor(bool estado) {
     if (_modoActual == ModoOperacion::AUTO) {
-        Serial.println(F("❌ [Hardware] Ignorando comando de Extractor. Sistema en modo AUTO."));
-        return;
+        setModoOperacion(ModoOperacion::MANUAL);
     }
-    _ejecutarAccion(PIN_EXTRACTOR, _actuadores.extractor_ON, estado, _last_extractor_switch, millis(), false);
+    Serial.printf("[Hardware] setExtractor(%s) manual ejecutado.\n", estado ? "ON" : "OFF");
+    _ejecutarAccion(PIN_EXTRACTOR, _actuadores.extractor_ON, estado, _last_extractor_switch, millis(), true);
 }
 void HardwareController::setLight(bool estado) {
     if (_modoActual == ModoOperacion::AUTO) {
-        Serial.println(F("❌ [Hardware] Ignorando comando de Luz. Sistema en modo AUTO."));
-        return;
+        setModoOperacion(ModoOperacion::MANUAL);
     }
-    Serial.printf("[Hardware] setLight(%s) llamado. Estado actual: %s\n", estado ? "ON" : "OFF", _actuadores.light_ON ? "ON" : "OFF");
-    // Luz exenta de filtro anti-short-cycle (ignorarFiltro = true)
+    Serial.printf("[Hardware] setLight(%s) manual ejecutado. Estado actual: %s\n", estado ? "ON" : "OFF", _actuadores.light_ON ? "ON" : "OFF");
     _ejecutarAccion(PIN_LIGHT, _actuadores.light_ON, estado, _last_light_switch, millis(), true);
 }
 
 void HardwareController::setCooler(bool estado) {
     if (_modoActual == ModoOperacion::AUTO) {
-        Serial.println(F("❌ [Hardware] Ignorando comando de Cooler. Sistema en modo AUTO."));
-        return;
+        setModoOperacion(ModoOperacion::MANUAL);
     }
-    // Peltier exento de filtro anti-short-cycle (ignorarFiltro = true)
+    Serial.printf("[Hardware] setCooler(%s) manual ejecutado.\n", estado ? "ON" : "OFF");
     _ejecutarAccion(PIN_COOLER, _actuadores.cooler_ON, estado, _last_cooler_switch, millis(), true);
 }
 
@@ -296,11 +294,8 @@ void HardwareController::_ejecutarAccion(int pin, bool& estadoActual, bool nuevo
     estadoActual = nuevoEstado;
     ultimoCambio = now;
     
-    if (pin == PIN_LIGHT) {
-        digitalWrite(pin, estadoActual ? LOW : HIGH); // Activo LOW
-    } else {
-        digitalWrite(pin, estadoActual ? HIGH : LOW);
-    }
+    // Transistor NPN buffer: HIGH = Transistor ON = Relé 5V Low-Level Trigger ACTIVADO
+    digitalWrite(pin, estadoActual ? HIGH : LOW);
 }
 
 void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia) {
@@ -370,10 +365,13 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
 
             // 1. Jerarquía de Supervivencia: Calor Extremo (Ambiente o Sustrato)
             float tempSustrato = _sensores.analogicoOk ? _sensores.ewma_sustrato : -999.0f;
+            float maxInterno = (_config.failsafes.max_internal_temp_limit_c > 10.0f) ? _config.failsafes.max_internal_temp_limit_c : 35.0f;
+            float maxCrit = (_config.crop.temp_crit_max > 10.0f) ? _config.crop.temp_crit_max : 30.0f;
+            float maxSustratoCrit = (_config.crop.temp_sustrato_crit_max > 10.0f) ? _config.crop.temp_sustrato_crit_max : 32.0f;
 
-            if (tempActual >= _config.failsafes.max_internal_temp_limit_c || 
-                tempActual >= _config.crop.temp_crit_max || 
-                (tempSustrato != -999.0f && tempSustrato >= _config.crop.temp_sustrato_crit_max)) {
+            if (tempActual >= maxInterno || 
+                tempActual >= maxCrit || 
+                (tempSustrato != -999.0f && tempSustrato >= maxSustratoCrit)) {
                 req_extractor = true;
                 req_cooler = true;
                 req_heater = false; // Seguridad extra

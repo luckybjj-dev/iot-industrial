@@ -33,11 +33,11 @@ El sistema está diseñado para operar con **independencia total de la red (100%
 | **Termistor NTC 10k** | Analógico (ADC1_CH6) | `GPIO 34` | Temperatura de Sustrato / Raíz | $-10\text{ a }80^\circ\text{C}$ | $^\circ\text{C}$ |
 | **SCD30 (Opcional)** | I2C Bus (`0x61`) | `SDA:21, SCL:22` | Concentración de $\text{CO}_2$ NDIR | $400\text{ a }10000$ | $\text{ppm}$ |
 | **Calefactor (CAL)** | Relé SSR (Estado Sólido) | `GPIO 4` | Elevación Térmica / Resistencia | Activo HIGH (PWM por Software) | Estado / ms |
-| **Enfriador (COOL)** | Relé Electromecánico | `GPIO 17` | Celda Peltier / Climatizador | Activo HIGH | Booleano |
-| **Humidificador (NBL)**| Relé Electromecánico | `GPIO 25` | Generador de Niebla Ultrasónica | Activo HIGH | Booleano |
-| **Extractor (EXT)** | Relé Electromecánico | `GPIO 32` | Evacuación de Calor / $\text{CO}_2$ / $\text{RH}$ | Activo HIGH | Booleano |
-| **Iluminación (LUZ)** | Relé Electromecánico | `GPIO 16` | Lámparas LED / Fotoperiodo | Activo **LOW** (Inverso) | Booleano |
-| **Display TFT ST7735**| SPI Bus | `CS:5, DC:14, RST:13` | HMI Visual Local Anti-Flicker | $160\times 128\text{ px}$ | Gráfico |
+| **Enfriador (COOL)** | Relé 5V Low-Trigger + Buffer NPN | `GPIO 17` | Celda Peltier / Climatizador | Activo HIGH ($3.3\text{V}$ satura NPN) | Booleano |
+| **Humidificador (NBL)**| Relé 5V Low-Trigger + Buffer NPN | `GPIO 25` | Generador de Niebla Ultrasónica | Activo HIGH ($3.3\text{V}$ satura NPN) | Booleano |
+| **Extractor (EXT)** | Relé 5V Low-Trigger + Buffer NPN | `GPIO 32` | Evacuación de Calor / $\text{CO}_2$ / $\text{RH}$ | Activo HIGH ($3.3\text{V}$ satura NPN) | Booleano |
+| **Iluminación (LUZ)** | Relé 5V Low-Trigger + Buffer NPN | `GPIO 16` | Lámparas LED / Fotoperiodo | Activo HIGH ($3.3\text{V}$ satura NPN) | Booleano |
+| **Display TFT ST7735**| SPI Bus | `CS:5, DC:14, RST:13` | HMI Visual Local Anti-Flicker (5 Actuadores: CAL, FRI, EXT, NBL, LUZ) | $160\times 128\text{ px}$ | Gráfico |
 
 ---
 

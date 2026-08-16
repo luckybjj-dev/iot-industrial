@@ -198,25 +198,20 @@ export const sendModeCommand = async (deviceId: string, mode: 'AUTO' | 'MANUAL')
 /**
  * Obtener datos históricos de un dispositivo
  */
-export const fetchDeviceHistory = async (deviceId: string, limit: number = 100): Promise<HistorialData[]> => {
-  const historyRef = ref(database, `history/${deviceId}`);
-  // Firebase guardó los datos usando push, que se ordenan cronológicamente por su llave.
-  // Evitamos orderByChild('timestamp') para no requerir reglas de indexación (.indexOn) en la base de datos.
-  const historyQuery = query(historyRef, limitToLast(limit));
-
+export const fetchDeviceHistory = async (deviceId: string, limit: number = 500): Promise<HistorialData[]> => {
   try {
+    const historyRef = ref(database, `history/${deviceId}`);
+    const historyQuery = query(historyRef, limitToLast(limit));
     const snapshot = await get(historyQuery);
     if (snapshot.exists()) {
       const data = snapshot.val();
-      // data es un objeto con keys generadas por push(). Convertimos a array.
       const historyArray: HistorialData[] = Object.values(data);
-      // Asegurarnos de que el array esté ordenado de más antiguo a más reciente
       return historyArray.sort((a, b) => a.timestamp - b.timestamp);
     }
     return [];
   } catch (error) {
     console.error('Error obteniendo historial de Firebase:', error);
-    throw error;
+    return [];
   }
 };
 

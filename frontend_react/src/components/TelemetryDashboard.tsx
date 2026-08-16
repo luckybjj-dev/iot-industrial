@@ -35,9 +35,8 @@ export const TelemetryDashboard: React.FC<Props> = ({ deviceId, config, realtime
 
     const loadData = async () => {
       try {
-        // Descargamos ~30 días asumiendo 1 dato cada 5 min (aprox 8640). 
-        // El peso es ~1.7 MB, muy seguro para la cuota de 10 GB de Firebase.
-        const history = await fetchDeviceHistory(deviceId, 8640); 
+        // Descargamos los últimos 500 registros para renderizado instantáneo del gráfico histórico
+        const history = await fetchDeviceHistory(deviceId, 500); 
         if (isMounted) {
           setData(history);
         }

@@ -88,29 +88,35 @@ void DisplayManager::_drawSensores(const SensorData& s) {
 }
 
 void DisplayManager::_drawActuadores(const ActuadorData& a) {
-    // Relé A (Térmico SSR) + Relé B (Hídrico Fogger)
+    // Fila 1: Térmico (Calefactor + Enfriador) y Ventilación (Extractor)
     _tft.setCursor(5, 63);
     _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
-    _tft.print(F("CAL: "));
+    _tft.print(F("CAL:"));
     _tft.setTextColor(a.heater_ON ? ST77XX_GREEN : ST77XX_RED, ST77XX_BLACK);
     _tft.print(a.heater_ON ? F("ON ") : F("OFF"));
 
-    _tft.setCursor(75, 63);
+    _tft.setCursor(58, 63);
     _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
-    _tft.print(F("NBL: "));
-    _tft.setTextColor(a.fogger_ON ? ST77XX_GREEN : ST77XX_RED, ST77XX_BLACK);
-    _tft.println(a.fogger_ON ? F("ON ") : F("OFF"));
+    _tft.print(F("FRI:"));
+    _tft.setTextColor(a.cooler_ON ? ST77XX_GREEN : ST77XX_RED, ST77XX_BLACK);
+    _tft.print(a.cooler_ON ? F("ON ") : F("OFF"));
 
-    // Relé C (Extractor) + Relé D (Luz)
+    _tft.setCursor(110, 63);
+    _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
+    _tft.print(F("EXT:"));
+    _tft.setTextColor(a.extractor_ON ? ST77XX_GREEN : ST77XX_RED, ST77XX_BLACK);
+    _tft.println(a.extractor_ON ? F("ON ") : F("OFF"));
+
+    // Fila 2: Hídrico (Fogger) e Iluminación (Luz)
     _tft.setCursor(5, 73);
     _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
-    _tft.print(F("EXT: "));
-    _tft.setTextColor(a.extractor_ON ? ST77XX_GREEN : ST77XX_RED, ST77XX_BLACK);
-    _tft.print(a.extractor_ON ? F("ON ") : F("OFF"));
+    _tft.print(F("NBL:"));
+    _tft.setTextColor(a.fogger_ON ? ST77XX_GREEN : ST77XX_RED, ST77XX_BLACK);
+    _tft.print(a.fogger_ON ? F("ON ") : F("OFF"));
 
-    _tft.setCursor(75, 73);
+    _tft.setCursor(58, 73);
     _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
-    _tft.print(F("LUZ: "));
+    _tft.print(F("LUZ:"));
     _tft.setTextColor(a.light_ON ? ST77XX_GREEN : ST77XX_RED, ST77XX_BLACK);
     _tft.println(a.light_ON ? F("ON ") : F("OFF"));
 }
