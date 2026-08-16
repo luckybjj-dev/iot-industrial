@@ -97,63 +97,63 @@ function Dashboard() {
       (devices) => {
         setCamaras(devices);
         setError(null);
+
+        // Limpiar estados optimistas SOLO cuando recibimos update real del servidor que coincida
+        setOptimisticModes(prev => {
+          const next = { ...prev };
+          let changed = false;
+          devices.forEach(dev => {
+            if (next[dev.deviceId] === dev.modo_operacion) {
+              delete next[dev.deviceId];
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+
+        // Limpiar estados optimistas de actuadores cuando coincida la telemetría real
+        setOptimisticActuators(prev => {
+          const next = { ...prev };
+          let changed = false;
+          devices.forEach(dev => {
+            if (!dev.telemetria || !next[dev.deviceId]) return;
+            const devOpt = { ...next[dev.deviceId] };
+            let devChanged = false;
+            (Object.keys(devOpt) as (keyof TelemetriaFungi)[]).forEach(actuatorKey => {
+              if (dev.telemetria && (dev.telemetria as any)[actuatorKey] === devOpt[actuatorKey]) {
+                delete devOpt[actuatorKey];
+                devChanged = true;
+              }
+            });
+            if (devChanged) {
+              if (Object.keys(devOpt).length === 0) {
+                delete next[dev.deviceId];
+              } else {
+                next[dev.deviceId] = devOpt;
+              }
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+        
+        // Update manual start times
+        setManualStartTimes(prev => {
+          const next = { ...prev };
+          devices.forEach(dev => {
+            if (dev.modo_operacion === 'MANUAL' && !next[dev.deviceId]) {
+              next[dev.deviceId] = Date.now();
+            } else if (dev.modo_operacion === 'AUTO') {
+              delete next[dev.deviceId];
+            }
+          });
+          return next;
+        });
       },
       (err) => {
         setError(`Error de conexión con Firebase: ${err.message}`);
       }
     );
-      // Limpiar estados optimistas SOLO cuando recibimos update real del servidor que coincida
-      setOptimisticModes(prev => {
-        const next = { ...prev };
-        let changed = false;
-        devices.forEach(dev => {
-          if (next[dev.deviceId] === dev.modo_operacion) {
-            delete next[dev.deviceId];
-            changed = true;
-          }
-        });
-        return changed ? next : prev;
-      });
-
-      // Limpiar estados optimistas de actuadores cuando coincida la telemetría real
-      setOptimisticActuators(prev => {
-        const next = { ...prev };
-        let changed = false;
-        devices.forEach(dev => {
-          if (!dev.telemetria || !next[dev.deviceId]) return;
-          const devOpt = { ...next[dev.deviceId] };
-          let devChanged = false;
-          (Object.keys(devOpt) as (keyof TelemetriaFungi)[]).forEach(actuatorKey => {
-            if (dev.telemetria && (dev.telemetria as any)[actuatorKey] === devOpt[actuatorKey]) {
-              delete devOpt[actuatorKey];
-              devChanged = true;
-            }
-          });
-          if (devChanged) {
-            if (Object.keys(devOpt).length === 0) {
-              delete next[dev.deviceId];
-            } else {
-              next[dev.deviceId] = devOpt;
-            }
-            changed = true;
-          }
-        });
-        return changed ? next : prev;
-      });
-      
-      // Update manual start times
-      setManualStartTimes(prev => {
-        const next = { ...prev };
-        devices.forEach(dev => {
-          if (dev.modo_operacion === 'MANUAL' && !next[dev.deviceId]) {
-            next[dev.deviceId] = Date.now();
-          } else if (dev.modo_operacion === 'AUTO') {
-            delete next[dev.deviceId];
-          }
-        });
-        return next;
-      });
-    });
 
     return () => unsubscribeTelemetria();
   }, []);
