@@ -134,5 +134,12 @@
   - *Corrección:* (1) Eliminado `getJSON` síncrono en `configurarStreams`, delegado flujo al stream SSE nativo y optimizado el uso de memoria a Heap (`DynamicJsonDocument(1024)`) con `getConfiguracionActual()` en RAM. (2) Añadida lectura de sensores y llamada inmediata a `display.render()` en `setup()` de `main.cpp`.
   - *Estado de Validación:* ✅ **Verificado en Hardware Físico** — Firmware compilado y flasheado con éxito vía PlatformIO; pantalla TFT y telemetría funcionando de forma continua y estable. ([Informe 22](../informes/22-Resolucion-Stack-Overflow-Estabilidad-TFT-ESP32.md))
 
+- [x] **#23. Implementación del Modo Standby / Monitoreo Determinista**
+  - *Problema:* Al no haber perfil biológico seleccionado o detener un cultivo, el sistema operaba con setpoints residuales antiguos ejecutando acciones correctivas no deseadas.
+  - *Corrección:* Creado el estado operacional `STANDBY / MONITOREO` con `standbyCrop` (setpoints en 0), apagado total de relés, y renderizado visual en semáforo SCADA con insignia Cyan *"Sensores en línea. Actuadores en reposo"*.
+  - *Estado de Validación:* ✅ **Verificado en Hardware y SCADA** — Flasheado en COM9 y verificado en RTDB. ([Informe 24](../informes/24-Implementacion-Modo-Standby-Monitoreo-Edge-SCADA.md))
 
-
+- [x] **#24. Optimización de Setpoints, Termogénesis de Sustrato (+3°C), Control Dinámico de VPD y Diagnóstico SCADA**
+  - *Problema:* (1) Falso positivo de `CALENTANDO` por residuo de integral PID (`_pidOutput > 0`). (2) Umbrales de VPD fijos ($1.00 / 1.20\text{ kPa}$) en conflicto con recetas dinámicas. (3) Temperatura ideal de sustrato sin compensar el calor metabólico endógeno. (4) Desbordamiento visual de targets en tarjetas métricas.
+  - *Corrección:* (1) Desacoplado `demandaCalor` a histéresis térmica pura en `HardwareController.cpp`. (2) Derivación en tiempo real de $VPD_{\text{máx}}$ según receta activa (`calcularVPD`). (3) Auto-cálculo de $T_{\text{sustrato}}^{\text{ideal}} = \text{promedio} + 3^\circ\text{C}$ en `CropProfiles.ts`. (4) Formateo compacto en `MetricCard.tsx` y semáforo inteligente multivariable en `SemaforoEstabilidad.tsx`.
+  - *Estado de Validación:* ✅ **Verificado en Hardware Físico y SCADA** — Flasheado exitoso en COM9, `npm run build` con 0 errores y telemetría en vivo sincronizada en Firebase RTDB. ([Informe 25](../informes/25-Optimizacion-Setpoints-Sustrato-Termodinamico-VPD-Dinamico-SCADA.md))

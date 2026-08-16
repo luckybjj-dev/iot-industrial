@@ -27,12 +27,13 @@
 ### ~~12. Renderizado HMI TFT Anti-Flickering + Métrica VPD y Renderizado en Arranque~~ ✅ COMPLETADO ([Informe 16](./informes/16-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md), [Informe 22](./informes/22-Resolucion-Stack-Overflow-Estabilidad-TFT-ESP32.md))
 ### ~~13. Backoff Exponencial y Eliminación de Heap Fragmentado (StaticJson)~~ ✅ COMPLETADO ([Informe 16](./informes/16-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
 ### ~~14. Modo Standby / Monitoreo Determinista (Sin Perfil Activo)~~ ✅ COMPLETADO ([Informe 24](./informes/24-Implementacion-Modo-Standby-Monitoreo-Edge-SCADA.md))
+### ~~15. Optimización de Setpoints, Termogénesis de Sustrato (+3°C), Control Dinámico de VPD y Diagnóstico SCADA~~ ✅ COMPLETADO ([Informe 25](./informes/25-Optimizacion-Setpoints-Sustrato-Termodinamico-VPD-Dinamico-SCADA.md))
 
-### 15. Crop Steering Algorítmico Dinámico
+### 16. Crop Steering Algorítmico Dinámico
 - **Objetivo:** Automatizar curvas graduales diarias (ej. bajar 1°C/día para simular otoño en Shiitake).
 - **Estado:** Motor V2 implementado en React (`steeringEngine.ts`). Falta validación end-to-end con ESP32.
 
-### 16. Alarmas y Notificaciones Push
+### 17. Alarmas y Notificaciones Push
 - **Objetivo:** Firebase Cloud Functions → Telegram / WhatsApp / FCM.
 - **Impacto:** Alertas instantáneas si la cámara entra en `SAFE_MODE` o excede rangos críticos.
 

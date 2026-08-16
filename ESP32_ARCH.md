@@ -54,16 +54,16 @@ El ESP32 opera como un **PLC Determinista Agnóstico (Stateless PLC)**:
 - Inicializa OTA con password protegido.
 
 ### `HardwareController` — Cerebro del Control
-- **Sensores:** Lee DHT22 ×2 (redundancia dual) + NTC 10K (sustrato via ecuación Beta, β=3950).
+- **Sensores:** Lee DHT22 ×2 (redundancia dual) + NTC 10K (sustrato via ecuación Beta, β=3950) + Sensirion SCD30 I2C (CO2 NDIR).
 - **Fusión Sensorial:** Si ambos DHTs válidos → promedio. Si uno falla → superviviente. Si ambos fallan → `tempPromedio = -999.0f`.
 - **Filtro EWMA:** Media Móvil Exponencial (α=0.1) sobre temperatura, humedad, sustrato, VPD y CO2. Descarta 90% del ruido transitorio.
-- **VPD:** Calculado con ecuación de Tetens: `SVP = 0.61078 × e^(17.27×T / (237.3+T))`.
-- **PID Time-Proportioning:** Modulación PWM por software para calefactor SSR desacoplada en tick rápido (`actualizarModulacionSSR(millis())`) con ventana de 5000 ms.
+- **VPD y Microclima Dinámico:** Calculado con ecuación de Tetens. Los umbrales de activación de niebla se derivan dinámicamente de la receta activa (`calcularVPD(temp_ideal_max, hum_ideal_min)`).
+- **PID Time-Proportioning:** Modulación PWM por software para calefactor SSR desacoplada en tick rápido (`actualizarModulacionSSR(millis())`) con ventana de 5000 ms e histéresis estricta para la máquina de estados.
 - **Árbitro de Conflictos:**
-  1. *P1 (Supervivencia):* `Temp > temp_crit_max` → Extractor/Cooler ON, Calefactor/Fogger OFF.
-  2. *P2 (Emergencia Sustrato):* `Sustrato > 28°C` → Extractor ON, Calefactor OFF.
-  3. *P3 (Frío):* `Temp < temp_ideal_min` → Calefactor ON.
-  4. *P4 (Normal):* Fogger, Extractor, Cooler en rangos `ideal_min/max` con interlock de exclusión mutua (Extractor bloquea Fogger).
+  1. *P1 (Supervivencia):* `Temp > temp_crit_max` ó `Sustrato >= maxSustratoCrit` (32°C) → Extractor/Cooler ON, Calefactor/Fogger OFF.
+  2. *P2 (Modo Standby):* Sin receta activa → `STANDBY / MONITOREO` (relés en reposo total, sensores activos).
+  3. *P3 (Frío/Calor):* `Temp < temp_ideal_min` → Calefactor ON con modulación SSR.
+  4. *P4 (Normal/Hídrico):* Fogger y Extractor gobernados por humedad y VPD dinámico con interlock de exclusión mutua (Extractor bloquea Fogger).
 - **Anti-Short-Cycle:** 180s mínimo entre conmutaciones de Fogger, Extractor y Celda Peltier. Luz exenta (0s).
 - **Modos:** `enum class ModoOperacion { AUTO, MANUAL }`. Manual caduca a los 5 min con auto-reversión a AUTO.
 
