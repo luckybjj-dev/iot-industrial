@@ -10,15 +10,12 @@ export const subscribeToAllDevices = (
   onError?: (error: Error) => void
 ) => {
   const telemetryRef = ref(database, 'telemetry');
+  const dbUrl = import.meta.env.VITE_FIREBASE_DATABASE_URL || 'https://invernadero-industrial-default-rtdb.firebaseio.com';
   
-  const parseData = (snapshot: any) => {
-    if (snapshot.exists()) {
-      const data = snapshot.val();
-      
+  const parseRawObject = (data: any) => {
+    if (data && typeof data === 'object') {
       const devicesArray: EstadoCamara[] = Object.keys(data).map(deviceId => {
         const deviceNode = data[deviceId];
-        
-        // Extraer modo de operación, priorizando la data de telemetría (para ignorar campos fantasma legacy)
         const modo = (deviceNode.data && deviceNode.data.modo_operacion) || deviceNode.modo_operacion || 'AUTO';
         
         return {
@@ -32,18 +29,33 @@ export const subscribeToAllDevices = (
       
       callback(devicesArray);
     } else {
-      console.log("[Firebase] Base de datos vacía en la ruta /telemetry");
       callback([]);
     }
   };
 
-  // 1. Fetch inicial inmediato vía REST (garantiza renderizado instantáneo < 100ms)
+  const parseData = (snapshot: any) => {
+    if (snapshot.exists()) {
+      parseRawObject(snapshot.val());
+    } else {
+      callback([]);
+    }
+  };
+
+  // 1. Fetch REST ultra rápido (< 50ms) para renderizado inmediato
+  fetch(`${dbUrl}/telemetry.json`)
+    .then(res => res.json())
+    .then(data => {
+      if (data) parseRawObject(data);
+    })
+    .catch(err => console.warn("[Firebase] Fallback REST inicial:", err));
+
+  // 2. Fetch SDK get() inicial
   get(telemetryRef).then(parseData).catch((error) => {
-    console.error("[Firebase] Error en lectura inicial:", error);
+    console.error("[Firebase] Error en lectura get():", error);
     if (onError) onError(error);
   });
 
-  // 2. Suscripción en tiempo real (mantiene la sincronización viva)
+  // 3. Suscripción en tiempo real (mantiene la reactividad viva)
   const unsubscribe = onValue(telemetryRef, parseData, (error) => {
     console.error("[Firebase] Error de lectura en tiempo real:", error);
     if (onError) onError(error);
@@ -59,8 +71,16 @@ export const subscribeToDeviceConfig = (
   deviceId: string,
   callback: (config: ConfiguracionCultivo | null) => void
 ) => {
-  const configRef = ref(database, `devices/${deviceId}/commands`); // En el MVP, la config viaja como comando retenido
+  const configRef = ref(database, `devices/${deviceId}/commands`);
+  const dbUrl = import.meta.env.VITE_FIREBASE_DATABASE_URL || 'https://invernadero-industrial-default-rtdb.firebaseio.com';
   
+  fetch(`${dbUrl}/devices/${deviceId}/commands.json`)
+    .then(res => res.json())
+    .then(data => {
+      if (data) callback(data as ConfiguracionCultivo);
+    })
+    .catch(err => console.warn("[Firebase] Fetch REST config inicial:", err));
+
   get(configRef).then((snapshot) => {
     if (snapshot.exists()) {
       callback(snapshot.val() as ConfiguracionCultivo);
