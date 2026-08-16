@@ -65,7 +65,11 @@ export const MetricCard: React.FC<MetricCardProps> = ({
                         <div className="text-[11px] font-bold text-emerald-400 font-mono tracking-wider uppercase whitespace-nowrap">
                             {target}
                         </div>
-                    ) : null}
+                    ) : (
+                        <div className="text-[10px] font-bold text-neutral-600 font-mono tracking-wider uppercase whitespace-nowrap">
+                            Ideal: --
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

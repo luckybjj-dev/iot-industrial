@@ -256,14 +256,14 @@ function Dashboard() {
             {camaras.map((camara) => {
               const modo = optimisticModes[camara.deviceId] || camara.modo_operacion || 'AUTO';
               const config = configs[camara.deviceId];
-              const crop = config?.crop;
+              const crop = config?.crop || (config as any)?.currentPhaseConfig;
               const offlineStatus = deviceOfflineStatus[camara.deviceId] || { isOffline: false, lastSeen: null };
 
               const getTarget = (variable: 'TEMP' | 'HUMEDAD' | 'VPD' | 'CO2') => {
                 if (!crop) return undefined;
-                if (variable === 'TEMP') return `${crop.temp_ideal_min} - ${crop.temp_ideal_max} °C`;
-                if (variable === 'HUMEDAD') return `${crop.hum_ideal_min} - ${crop.hum_ideal_max} %`;
-                if (variable === 'CO2') return `< ${crop.co2_ideal_max} ppm`;
+                if (variable === 'TEMP') return `Ideal: ${crop.temp_ideal_min} - ${crop.temp_ideal_max} °C`;
+                if (variable === 'HUMEDAD') return `Ideal: ${crop.hum_ideal_min} - ${crop.hum_ideal_max} %`;
+                if (variable === 'CO2') return `Ideal: < ${crop.co2_ideal_max} ppm`;
                 if (variable === 'VPD') {
                   const calcVpd = (t: number, h: number) => {
                     const svp = 0.61078 * Math.exp((17.27 * t) / (t + 237.3));
@@ -274,7 +274,7 @@ function Dashboard() {
                   const minVpd = calcVpd(crop.temp_ideal_min, crop.hum_ideal_max).toFixed(2);
                   // El VPD máximo se da con la temperatura más alta y la humedad más baja
                   const maxVpd = calcVpd(crop.temp_ideal_max, crop.hum_ideal_min).toFixed(2);
-                  return `${minVpd} - ${maxVpd} kPa`;
+                  return `Ideal: ${minVpd} - ${maxVpd} kPa`;
                 }
                 return undefined;
               };
@@ -400,7 +400,7 @@ function Dashboard() {
                               if (camara.telemetria.sensor_analogico > crop.temp_sustrato_ideal + 1 || camara.telemetria.sensor_analogico < crop.temp_sustrato_ideal - 1) return 'WARNING';
                               return 'STABLE';
                             })()}
-                            target={crop ? `~ ${crop.temp_sustrato_ideal} °C` : undefined}
+                            target={crop ? `Ideal: ~ ${crop.temp_sustrato_ideal} °C` : undefined}
                           />
                         <MetricCard
                           title="VPD (Déficit Presión)"

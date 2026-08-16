@@ -77,6 +77,38 @@ export const subscribeToDeviceConfig = (
 ) => {
   const configRef = ref(database, `devices/${deviceId}/commands`); // En el MVP, la config viaja como comando retenido
   
+  const parseConfigData = (data: any): ConfiguracionCultivo | null => {
+    if (!data || typeof data !== 'object') return null;
+    return {
+      ...(data.config || {}),
+      ...(data.commands || data),
+      crop: (data.commands && data.commands.crop) || data.crop || (data.plan_state && data.plan_state.currentPhaseConfig),
+      activeProfileName: (data.commands && data.commands.activeProfileName) || data.activeProfileName || (data.plan_state && data.plan_state.activeProfileName),
+      activePhaseName: (data.commands && data.commands.activePhaseName) || data.activePhaseName || (data.plan_state && data.plan_state.activePhaseName)
+    };
+  };
+
+  // 1. Carga inicial ultra rápida vía REST para renderizado instantáneo (< 50ms)
+  fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}.json`)
+    .then(res => res.json())
+    .then(data => {
+      if (data) {
+        const parsed = parseConfigData(data);
+        if (parsed) callback(parsed);
+      }
+    })
+    .catch(err => console.warn('[Firebase] Fallback REST device config:', err));
+
+  // 2. Carga inicial vía SDK get()
+  get(configRef)
+    .then(snapshot => {
+      if (snapshot.exists()) {
+        callback(snapshot.val() as ConfiguracionCultivo);
+      }
+    })
+    .catch(err => console.warn('[Firebase] get() device config:', err));
+
+  // 3. Suscripción en tiempo real continua por WebSocket
   const unsubscribe = onValue(configRef, (snapshot) => {
     if (snapshot.exists()) {
       callback(snapshot.val() as ConfiguracionCultivo);
@@ -252,7 +284,11 @@ export const fetchDeviceHistory = async (deviceId: string, limit: number = 300):
   const historyQuery = query(historyRef, orderByKey(), limitToLast(limit));
 
   try {
-    const snapshot = await get(historyQuery);
+    // Timeout para que no se quede colgado si firebase está intentando reconectar infinitamente
+    const snapshot = await Promise.race([
+      get(historyQuery),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_sdk')), 3000))
+    ]) as any;
     if (snapshot.exists()) {
       const data = snapshot.val();
       const historyArray: HistorialData[] = Object.values(data);
@@ -300,6 +336,25 @@ export const subscribeToPlanState = (
   callback: (planState: any) => void
 ) => {
   const planRef = ref(database, `devices/${deviceId}/plan_state`);
+
+  // 1. Carga inicial ultra rápida vía REST (< 50ms)
+  fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/plan_state.json`)
+    .then(res => res.json())
+    .then(data => {
+      if (data) callback(data);
+    })
+    .catch(err => console.warn('[Firebase] Fallback REST plan_state:', err));
+
+  // 2. Carga inicial vía SDK get()
+  get(planRef)
+    .then(snapshot => {
+      if (snapshot.exists()) {
+        callback(snapshot.val());
+      }
+    })
+    .catch(err => console.warn('[Firebase] get() plan_state:', err));
+
+  // 3. Suscripción en tiempo real
   const unsubscribe = onValue(planRef, (snapshot: any) => {
     if (snapshot.exists()) {
       callback(snapshot.val());
