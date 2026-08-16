@@ -51,7 +51,7 @@ export interface HistorialData {
     cooler_on?: boolean;
 }
 
-export type EstadoOperacional = 'NORMAL' | 'CALENTANDO' | 'ENFRIANDO' | 'HUMIDIFICANDO' | 'SAFE_MODE' | 'EMERGENCIA' | 'MANUAL';
+export type EstadoOperacional = 'MONITOREO' | 'STANDBY' | 'NORMAL' | 'CALENTANDO' | 'ENFRIANDO' | 'HUMIDIFICANDO' | 'SAFE_MODE' | 'EMERGENCIA' | 'MANUAL';
 
 export interface PhaseTargets {
   temperature: { 

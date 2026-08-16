@@ -65,6 +65,15 @@ export const SemaforoEstabilidad: React.FC<Props> = ({ telemetria, crop, modo_op
 
     if (telemetria.estado_operacional) {
       switch (telemetria.estado_operacional) {
+        case 'MONITOREO':
+        case 'STANDBY':
+          return {
+            estado: 'MODO MONITOREO',
+            mensaje: 'Sensores en línea. Actuadores en reposo (Sin cultivo asignado)',
+            colorClass: 'text-cyan-400 bg-cyan-950/30 border-cyan-500/50',
+            Icon: Activity,
+            isCriticalPulse: false
+          };
         case 'NORMAL':
           return {
             estado: 'CLIMA ESTABLE',
