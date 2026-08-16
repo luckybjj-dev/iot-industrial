@@ -376,6 +376,8 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
                 req_cooler = true;
                 req_heater = false; // Seguridad extra
                 proxEstado = EstadoOperacional::EMERGENCIA;
+                Serial.printf("🚨 [EMERGENCIA] T_act=%.2f (Max=%.2f, Crit=%.2f) | T_sust=%.2f (Crit=%.2f)\n", 
+                              tempActual, maxInterno, maxCrit, tempSustrato, maxSustratoCrit);
             } 
             // 2. Toxicidad de Gases (CO2)
             else if (co2Actual >= _config.crop.co2_crit_max) {

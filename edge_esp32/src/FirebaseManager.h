@@ -71,7 +71,10 @@ private:
     unsigned long _intervaloReconexionMs = 2000;
     static constexpr unsigned long MAX_INTERVALO_RECONEXION_MS = 60000;
     
-    // No async callbacks needed for simple FirebaseESP32
+    // Buffer para desacoplar procesamiento de stream fuera de la tarea FreeRTOS (evita Stack Overflow)
+    volatile bool _streamPendiente = false;
+    String _streamPath;
+    String _streamData;
     
     // Handlers para Stream (Configuraciones y Comandos)
     bool configurarStreams();

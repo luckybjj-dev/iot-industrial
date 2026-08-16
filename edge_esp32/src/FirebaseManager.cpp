@@ -48,6 +48,11 @@ void FirebaseManager::end() {
 // loop()
 // ============================================================
 void FirebaseManager::loop() {
+    if (_streamPendiente) {
+        _streamPendiente = false;
+        _procesarPayloadStream(_streamPath, _streamData);
+    }
+
     if (Firebase.ready()) {
         _conectado = true;
         _intervaloReconexionMs = 2000; // Restablecer intervalo al recuperar conexión
@@ -282,7 +287,9 @@ void FirebaseManager::streamCallback(StreamData data) {
                 payload = data.stringData();
             }
         }
-        _instancia->_procesarPayloadStream(data.dataPath(), payload);
+        _instancia->_streamPath = data.dataPath();
+        _instancia->_streamData = payload;
+        _instancia->_streamPendiente = true;
     }
 }
 
@@ -303,21 +310,23 @@ void FirebaseManager::streamTimeoutCallback(bool timeout) {
 void FirebaseManager::_procesarPayloadStream(const String& path, const String& data) {
     Serial.printf("[Firebase] Stream recibido - Path: %s, Data: %s\n", path.c_str(), data.c_str());
     
-    StaticJsonDocument<1024> doc;
+    // DynamicJsonDocument para evitar Stack Overflow en la tarea FreeRTOS Stream_99
+    DynamicJsonDocument doc(3072);
     DeserializationError error = deserializeJson(doc, data);
     
     if (!error && doc.is<JsonObject>()) {
         // Es un objeto JSON completo (por ejemplo, en el arranque o al enviar múltiples configuraciones)
-        if (doc.containsKey("modo_operacion")) {
-            String modo = doc["modo_operacion"].as<String>();
-            if (modo == "AUTO") _hw.setModoOperacion(ModoOperacion::AUTO);
-            else if (modo == "MANUAL") _hw.setModoOperacion(ModoOperacion::MANUAL);
+        String modo = doc.containsKey("modo_operacion") ? doc["modo_operacion"].as<String>() : "";
+        if (modo == "AUTO") {
+            _hw.setModoOperacion(ModoOperacion::AUTO);
+        } else if (modo == "MANUAL") {
+            _hw.setModoOperacion(ModoOperacion::MANUAL);
+            if (doc.containsKey("heater_on")) _hw.setHeater(doc["heater_on"] | false);
+            if (doc.containsKey("cooler_on")) _hw.setCooler(doc["cooler_on"] | false);
+            if (doc.containsKey("fogger_on")) _hw.setFogger(doc["fogger_on"] | false);
+            if (doc.containsKey("extractor_on")) _hw.setExtractor(doc["extractor_on"] | false);
+            if (doc.containsKey("light_on")) _hw.setLight(doc["light_on"] | false);
         }
-        if (doc.containsKey("heater_on")) _hw.setHeater(doc["heater_on"] | false);
-        if (doc.containsKey("cooler_on")) _hw.setCooler(doc["cooler_on"] | false);
-        if (doc.containsKey("fogger_on")) _hw.setFogger(doc["fogger_on"] | false);
-        if (doc.containsKey("extractor_on")) _hw.setExtractor(doc["extractor_on"] | false);
-        if (doc.containsKey("light_on")) _hw.setLight(doc["light_on"] | false);
         
         if (doc.containsKey("max_manual_time_ms")) {
             ConfiguracionCultivo cfg = _hw.getConfiguracion();
