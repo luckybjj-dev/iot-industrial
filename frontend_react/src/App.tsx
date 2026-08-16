@@ -256,7 +256,15 @@ function Dashboard() {
             {camaras.map((camara) => {
               const modo = optimisticModes[camara.deviceId] || camara.modo_operacion || 'AUTO';
               const config = configs[camara.deviceId];
-              const crop = config?.crop || (config as any)?.currentPhaseConfig;
+              const rawCrop = config?.crop || (config as any)?.currentPhaseConfig;
+              const hasActiveProfile = !!(
+                config?.activeProfileName && 
+                config.activeProfileName !== 'STANDBY' && 
+                config.activeProfileName !== 'NONE' && 
+                rawCrop && 
+                rawCrop.temp_ideal_min > 0
+              );
+              const crop = hasActiveProfile ? rawCrop : null;
               const offlineStatus = deviceOfflineStatus[camara.deviceId] || { isOffline: false, lastSeen: null };
 
               const getTarget = (variable: 'TEMP' | 'HUMEDAD' | 'VPD' | 'CO2') => {
