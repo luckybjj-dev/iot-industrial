@@ -212,7 +212,7 @@ function Dashboard() {
       }));
 
       await sendCommand(deviceId, actuator, newState);
-      showInfo(`Comando enviado a ${actuator.replace('_on', '').toUpperCase()}. El controlador de hardware procesará la orden respetando los tiempos de protección térmicos (hasta 3 min).`);
+      showInfo(`Comando enviado a ${actuator.replace('_on', '').toUpperCase()}: ${newState ? 'ENCENDIDO' : 'APAGADO'}`);
     } catch (err) {
       console.error("Error al enviar comando", err);
       setError("Error al encender/apagar el actuador.");

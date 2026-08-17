@@ -249,25 +249,31 @@ export const sendConfigRules = async (deviceId: string, config: any) => {
 };
 
 /**
- * Enviar comando de actuador de forma atómica con modo MANUAL
+ * Enviar comando de actuador individual de forma quirúrgica a su subruta hija
  */
-export const sendCommand = async (deviceId: string, actuator: string, state: any) => {
-  const payload = {
-    modo_operacion: 'MANUAL',
-    [actuator]: state
-  };
-
-  // REST directo inmediato atómico
-  fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands.json`, {
-    method: 'PATCH',
+export const sendCommand = async (deviceId: string, actuator: string, state: boolean) => {
+  // 1. Asegurar modo MANUAL en su subruta
+  fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands/modo_operacion.json`, {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  }).catch(err => console.warn('[Firebase] REST command fallback:', err));
+    body: JSON.stringify('MANUAL')
+  }).catch(() => {});
 
-  const commandRef = ref(database, `devices/${deviceId}/commands`);
+  // 2. Enviar exclusivamente el estado del actuador individual a su subruta
+  fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands/${actuator}.json`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(state)
+  }).catch(err => console.warn('[Firebase] REST actuator command fallback:', err));
+
+  const modeRef = ref(database, `devices/${deviceId}/commands/modo_operacion`);
+  const actuatorRef = ref(database, `devices/${deviceId}/commands/${actuator}`);
   try {
     await Promise.race([
-      update(commandRef, payload),
+      Promise.all([
+        set(modeRef, 'MANUAL'),
+        set(actuatorRef, state)
+      ]),
       new Promise(resolve => setTimeout(resolve, 2000))
     ]);
   } catch (error) {
@@ -276,15 +282,31 @@ export const sendCommand = async (deviceId: string, actuator: string, state: any
 };
 
 /**
- * Enviar comando de modo de operación (AUTO / MANUAL)
+ * Enviar comando de modo de operación (AUTO / MANUAL) con inicialización limpia
  */
 export const sendModeCommand = async (deviceId: string, mode: 'AUTO' | 'MANUAL') => {
-  // REST directo inmediato
+  // REST directo inmediato a la subruta de modo
   fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands/modo_operacion.json`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(mode)
   }).catch(err => console.warn('[Firebase] REST mode fallback:', err));
+
+  // Si pasamos a MANUAL, inicializar todos los actuadores en false en la base de datos
+  if (mode === 'MANUAL') {
+    const cleanState = {
+      heater_on: false,
+      cooler_on: false,
+      fogger_on: false,
+      extractor_on: false,
+      light_on: false
+    };
+    fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands.json`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cleanState)
+    }).catch(() => {});
+  }
 
   const modeRef = ref(database, `devices/${deviceId}/commands/modo_operacion`);
   try {

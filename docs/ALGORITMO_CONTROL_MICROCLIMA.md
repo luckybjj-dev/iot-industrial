@@ -1,10 +1,10 @@
 # ALGORITMO DE CONTROL DE MICROCLIMA INDUSTRIAL (AgriEdge OS)
 
 **Documento Vivo de Arquitectura y Control Embebido**  
-**Componente:** Firmware ESP32 (`edge_esp32/src/`)  
+**Componente:** Firmware ESP32 (`edge_esp32/src/`) y SCADA React (`frontend_react/src/`)  
 **Autor:** Ingeniero de Control y Automatización Senior (AgroTech IoT)  
-**Revisión:** 3.2.0  
-**Última Actualización:** 15 de Agosto de 2026  
+**Revisión:** 3.3.0 (Versión Estable Certificada)  
+**Última Actualización:** 16 de Agosto de 2026  
 
 ---
 
@@ -52,7 +52,9 @@ flowchart TD
     Start([Inicio Loop 5000ms]) --> Step1[Paso 1: Lectura Física de Sensores\nDHT1, DHT2, ADC NTC, SCD30]
     Step1 --> Step2{Paso 2: Validación\n¿Ambos DHT fallaron?}
     Step2 -- Sí (-999.0°C) --> SafeMode[SAFE_MODE: Apagar Calefactor, Cooler,\nFogger y Extractor. Mantener Luz.]
-    Step2 -- No --> Fusion[Fusión Sensorial: Promedio o Fallback individual]
+    Step2 -- No --> StandbyCheck{¿Perfil STANDBY o Sin Receta?}
+    StandbyCheck -- Sí --> StandbyMode[MODO MONITOREO / STANDBY:\nTodos los Actuadores OFF]
+    StandbyCheck -- No --> Fusion[Fusión Sensorial: Promedio o Fallback individual]
     Fusion --> EWMA[Filtro Matemático EWMA\nAlpha = 0.10]
     EWMA --> Step3[Paso 3: Conversión NTC\nCalibración eFuse + Steinhart-Hart]
     Step3 --> Step4[Paso 4: Cálculo VPD Tetens\nSVP - AVP en kPa]
@@ -62,8 +64,8 @@ flowchart TD
     Arbiter -- CO2 >= CO2_crit --> ExtCO2[Extractor ON]
     Arbiter -- T >= T_ideal_max --> Cool[ENFRIANDO: Cooler ON, Extractor ON, Heater OFF]
     Arbiter -- T <= T_ideal_min --> Heat[CALENTANDO: Heater ON Lazo Híbrido PID]
-    Arbiter -- RH <= RH_ideal_min o VPD > 1.20 --> Fog[HUMIDIFICANDO: Fogger ON]
-    Arbiter -- RH >= RH_ideal_max o VPD < 0.25 --> ExtHum[ENFRIANDO: Extractor ON]
+    Arbiter -- RH <= RH_ideal_min o VPD > VPD_max --> Fog[HUMIDIFICANDO: Fogger ON]
+    Arbiter -- RH >= RH_ideal_max o VPD < VPD_min --> ExtHum[ENFRIANDO: Extractor ON]
     
     Emer --> Interlock{Interlock Exclusión Mutua}
     ExtCO2 --> Interlock
@@ -79,12 +81,13 @@ flowchart TD
     Exec[Paso 6: Filtro de Hardware\nAnti-Short-Cycle 180s en Relés Mecánicos] --> Output[digitalWrite Pines Físicos]
     Output --> Telemetry[Publicar Telemetría Firebase + Render TFT]
     SafeMode --> Output
+    StandbyMode --> Output
 ```
 
 ---
 
 ### Paso 1 — Lectura Física de Sensores
-* **Mecanismo:** No bloqueante vía temporizador `millis()` cada $5000\,\text{ms}$ ([`main.cpp:L205`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/main.cpp#L205)).
+* **Mecanismo:** No bloqueante vía temporizador `millis()` cada $5000\,\text{ms}$ ([`main.cpp:L217`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/main.cpp#L217)).
 * **Lecturas:** Se consultan los objetos `DHTesp` para DHT1 y DHT2, se leen 32 muestras del ADC en GPIO 34, y se consulta el bus I2C en `0x61` si el sensor SCD30 está conectado.
 
 ---
@@ -105,7 +108,7 @@ flowchart TD
 ---
 
 ### Paso 3 — Conversión Matemática del Termistor NTC
-La conversión de la sonda analógica de sustrato en [`HardwareController.cpp:L138-158`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/HardwareController.cpp#L138-L158) no usa lecturas crudas directas, sino **Calibración eFuse Two-Point + Multisampling**:
+La conversión de la sonda analógica de sustrato en [`HardwareController.cpp`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/HardwareController.cpp) no usa lecturas crudas directas, sino **Calibración eFuse Two-Point + Multisampling**:
 1. **Multisampling:** 32 lecturas consecutivas separadas por $30\,\mu\text{s}$ para mitigar ruido térmico del ADC:
    $$\text{adcRawAvg} = \frac{1}{32} \sum_{i=1}^{32} \text{ADC}_{\text{raw}}[i]$$
 2. **Linealización eFuse de ESP32:** Se convierte a milivoltios reales con la curva calibrada de fábrica:
@@ -121,7 +124,7 @@ La conversión de la sonda analógica de sustrato en [`HardwareController.cpp:L1
 ---
 
 ### Paso 4 — Cálculo del Déficit de Presión de Vapor (VPD)
-Se implementa la fórmula psicrométrica de **Tetens** ([`HardwareController.cpp:L272-276`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/HardwareController.cpp#L272-L276)):
+Se implementa la fórmula psicrométrica de **Tetens**:
 1. **Presión de Vapor de Saturación (SVP en $\text{kPa}$):**
    $$\text{SVP}(T) = 0.61078 \cdot \exp\left(\frac{17.27 \cdot T}{T + 237.3}\right)$$
 2. **Presión de Vapor Actual (AVP en $\text{kPa}$):**
@@ -135,47 +138,55 @@ Se implementa la fórmula psicrométrica de **Tetens** ([`HardwareController.cpp
 
 La lógica evalúa las condiciones en estricto orden jerárquico determinista:
 
-#### A. Jerarquía 1 (Supervivencia Catastrófica):
+#### A. Jerarquía 0 (Modo STANDBY / MONITOREO):
+* Si `_perfilActivo == false` ($\text{crop\_profile} == \text{"STANDBY"}$ $\lor$ $T_{\text{ideal\_min}} == 0$):
+  * **Estado:** `STANDBY / MONITOREO`
+  * **Comandos:** Todos los actuadores en `OFF` (sensores activos, actuadores en reposo absoluto).
+
+#### B. Jerarquía 1 (Supervivencia Catastrófica):
 * Si $T_{\text{amb}} \ge 35.0^\circ\text{C}$ $\lor$ $T_{\text{amb}} \ge T_{\text{crit\_max}}$ $\lor$ $T_{\text{sustrato}} \ge T_{\text{sustrato\_crit\_max}}$:
   * **Estado:** `EMERGENCIA`
   * **Comandos:** `EXTRACTOR = ON`, `COOLER = ON`, `HEATER = OFF` (bloqueo forzado).
 
-#### B. Jerarquía 2 (Toxicidad por $\text{CO}_2$):
+#### C. Jerarquía 2 (Toxicidad por $\text{CO}_2$):
 * Si $\text{CO}_2 \ge \text{co2\_crit\_max}$:
   * **Comando:** `EXTRACTOR = ON` (purga de aire viciado).
 
-#### C. Jerarquía 3 (Demanda de Frío con Histéresis):
+#### D. Jerarquía 3 (Demanda de Frío con Histéresis):
 * Si $T_{\text{amb}} \ge T_{\text{ideal\_max}}$ (o $T_{\text{amb}} \ge T_{\text{ideal\_max}} - 0.5^\circ\text{C}$ si ya estaba enfriando):
   * **Estado:** `ENFRIANDO`
   * **Comandos:** `COOLER = ON`, `EXTRACTOR = ON`, `HEATER = OFF`.
 
-#### D. Jerarquía 4 (Demanda de Calor — Control Híbrido PID):
+#### E. Jerarquía 4 (Demanda de Calor — Control Híbrido PID):
 * Si $T_{\text{amb}} \le T_{\text{ideal\_min}}$ (o $T_{\text{amb}} \le T_{\text{ideal\_min}} + 0.5^\circ\text{C}$ si ya estaba calentando):
   * **Estado:** `CALENTANDO`
   * **Modulación:**
     * Si $T_{\text{amb}} \le T_{\text{ideal\_min}} - 0.5^\circ\text{C}$: **100% de potencia continua** ($5000\,\text{ms} / 5000\,\text{ms}$).
     * Si $T_{\text{amb}} \in [T_{\text{ideal\_min}} - 0.5^\circ\text{C}, T_{\text{ideal\_min}}]$: Modulación PID ($K_p=1500, K_i=100, K_d=250$) calculando el duty cycle en ventana de $5000\,\text{ms}$.
 
-#### E. Jerarquía 5 (Microclima Hídrico y Transpiración VPD):
-* **Demanda de Humidificación:** Si $\text{RH} \le \text{hum\_ideal\_min}$ $\lor$ $\text{VPD} > 1.20\,\text{kPa}$:
+#### F. Jerarquía 5 (Microclima Hídrico y Transpiración VPD):
+* **Demanda de Humidificación:** Si $\text{RH} \le \text{hum\_ideal\_min}$ $\lor$ $\text{VPD} > \text{VPD}_{\text{máx\_receta}}$:
   * **Comando:** `FOGGER = ON` (Estado: `HUMIDIFICANDO`).
-* **Demanda de Deshumidificación:** Si $\text{RH} \ge \text{hum\_ideal\_max}$ $\lor$ $\text{VPD} < 0.25\,\text{kPa}$:
+* **Demanda de Deshumidificación:** Si $\text{RH} \ge \text{hum\_ideal\_max}$ $\lor$ $\text{VPD} < \text{VPD}_{\text{mín\_receta}}$:
   * **Comando:** `EXTRACTOR = ON` (Estado: `ENFRIANDO`).
 
-#### F. Interlock de Exclusión Mutua:
+#### G. Interlock de Exclusión Mutua:
 * $$\text{Si } \text{EXTRACTOR} == \text{ON} \implies \text{FOGGER} = \text{OFF}$$
   *Inhibe la niebla durante la extracción para no expulsar humedad condensada por los ductos.*
 
-#### G. Fotoperiodo:
-* Si $\text{horaDia} \in [0, \text{light\_hours\_on})$ $\implies$ `LIGHT = ON` (Lógica invertida en hardware: `digitalWrite(PIN_LIGHT, LOW)`).
+#### H. Fotoperiodo:
+* Si $\text{horaDia} \in [0, \text{light\_hours\_on})$ $\implies$ `LIGHT = ON`.
 
 ---
 
 ### Paso 6 — Ejecución Física y Filtro Anti-Short-Cycle
-Antes de conmutar los pines, el método `_ejecutarAccion` ([`HardwareController.cpp:L278-304`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/HardwareController.cpp#L278-L304)) aplica un filtro industrial asimétrico:
-* **APAGAR (`OFF`):** Retardo $= 0\,\text{ms}$ (Corte inmediato por seguridad).
-* **RE-ENCENDER (`ON`):** Requiere que hayan transcurrido al menos **$180\,\text{segundos}$** (`MIN_RELAY_TIME_MS = 180000`) desde el último apagado en relés electromecánicos (`EXTRACTOR`, `FOGGER`, `COOLER`).
-* **Exenciones:** El relé `LIGHT` y el relé SSR de `HEATER` están exentos de este retardo para permitir fotoperiodo exacto y modulación rápida PID.
+Antes de conmutar los pines, el método `_ejecutarAccion` aplica un filtro industrial asimétrico:
+* **En Modo AUTO:**
+  * **APAGAR (`OFF`):** Retardo $= 0\,\text{ms}$ (Corte inmediato por seguridad).
+  * **RE-ENCENDER (`ON`):** Requiere que hayan transcurrido al menos **$180\,\text{segundos}$** (`MIN_RELAY_TIME_MS = 180000`) desde el último apagado en relés electromecánicos (`EXTRACTOR`, `FOGGER`, `COOLER`).
+  * **Exenciones:** El relé `LIGHT` y el relé SSR de `HEATER` están exentos de este retardo para permitir fotoperiodo exacto y modulación rápida PID.
+* **En Modo MANUAL:**
+  * **Bypass Completo:** Todas las órdenes manuales directas (`setLight`, `setHeater`, `setCooler`, `setFogger`, `setExtractor`) se ejecutan con `ignorarFiltro = true`, garantizando conmutación física inmediata ($0\,\text{ms}$) según la voluntad del operador.
 
 ---
 
@@ -184,21 +195,21 @@ Antes de conmutar los pines, el método `_ejecutarAccion` ([`HardwareController.
 | Parámetro | Valor por Defecto | Fuente | Configurable por Usuario | Descripción Técnica |
 | :--- | :--- | :--- | :---: | :--- |
 | `greenhouse_id` | `"CHAMBER_01"` | `config.json` | ✅ Sí | Identificador único del dispositivo / cámara. |
-| `crop_profile` | `"Fungi_Fruiting_v1"` | `config.json` | ✅ Sí | Nombre del perfil biológico activo. |
-| `temp_ideal_min` | $18.0^\circ\text{C}$ (Fungi) / $25.0^\circ\text{C}$ | `config.json` | ✅ Sí | Umbral mínimo para disparo del calefactor PID. |
-| `temp_ideal_max` | $24.0^\circ\text{C}$ (Fungi) / $27.0^\circ\text{C}$ | `config.json` | ✅ Sí | Umbral máximo para disparo de Cooler y Extractor. |
-| `temp_crit_min` | $10.0^\circ\text{C}$ | `config.json` | ✅ Sí | Límite crítico inferior de estrés térmico. |
-| `temp_crit_max` | $28.0^\circ\text{C}$ | `config.json` | ✅ Sí | Límite crítico superior que dispara Failsafe. |
-| `temp_sustrato_ideal` | $24.0^\circ\text{C}$ | `config.json` | ✅ Sí | Temperatura objetivo en la zona radicular. |
-| `temp_sustrato_crit_max` | $27.0^\circ\text{C}$ | `config.json` | ✅ Sí | Límite crítico de fermentación en sustrato. |
-| `hum_ideal_min` | $85.0\%$ | `config.json` | ✅ Sí | Umbral inferior de humedad para encender Fogger. |
-| `hum_ideal_max` | $95.0\%$ | `config.json` | ✅ Sí | Umbral superior de humedad para encender Extractor. |
-| `hum_crit_min` | $70.0\%$ | `config.json` | ✅ Sí | Límite crítico de desecación celular. |
+| `crop_profile` | `"STANDBY"` | `config.json` | ✅ Sí | Nombre del perfil biológico activo. |
+| `temp_ideal_min` | $0.0^\circ\text{C}$ (Standby) / Dinámico | `config.json` | ✅ Sí | Umbral mínimo para disparo del calefactor PID. |
+| `temp_ideal_max` | $0.0^\circ\text{C}$ (Standby) / Dinámico | `config.json` | ✅ Sí | Umbral máximo para disparo de Cooler y Extractor. |
+| `temp_crit_min` | $0.0^\circ\text{C}$ / Dinámico | `config.json` | ✅ Sí | Límite crítico inferior de estrés térmico. |
+| `temp_crit_max` | $35.0^\circ\text{C}$ | `config.json` | ✅ Sí | Límite crítico superior que dispara Failsafe. |
+| `temp_sustrato_ideal` | Dinámico ($T_{\text{prom}} + 3^\circ\text{C}$) | `config.json` | ✅ Sí | Temperatura objetivo radicular con compensación metabólica. |
+| `temp_sustrato_crit_max` | $35.0^\circ\text{C}$ | `config.json` | ✅ Sí | Límite crítico de fermentación en sustrato. |
+| `hum_ideal_min` | $0.0\%$ (Standby) / Dinámico | `config.json` | ✅ Sí | Umbral inferior de humedad para encender Fogger. |
+| `hum_ideal_max` | $100.0\%$ (Standby) / Dinámico | `config.json` | ✅ Sí | Umbral superior de humedad para encender Extractor. |
+| `hum_crit_min` | $0.0\%$ | `config.json` | ✅ Sí | Límite crítico de desecación celular. |
 | `co2_ideal_min` | $400\,\text{ppm}$ | `config.json` | ✅ Sí | Nivel base atmosférico de referencia. |
 | `co2_ideal_max` | $800\,\text{ppm}$ | `config.json` | ✅ Sí | Nivel superior deseable antes de renovación. |
 | `co2_crit_max` | $1000\,\text{ppm}$ | `config.json` | ✅ Sí | Umbral de toxicidad que fuerza extracción. |
-| `light_hours_on` | $12\,\text{horas}$ | `config.json` | ✅ Sí | Horas de luz activas por día (0:00 a N:00). |
-| `max_manual_time_ms` | $900000\,\text{ms}$ ($15\text{ min}$) | `config.json` | ✅ Sí | Tiempo máximo antes de auto-revertir MANUAL a AUTO. |
+| `light_hours_on` | $0\text{ a }18\,\text{horas}$ | `config.json` | ✅ Sí | Horas de luz activas por día (0:00 a N:00). |
+| `max_manual_time_ms` | $300000\,\text{ms}$ ($5\text{ min}$) | `config.json` | ✅ Sí | Tiempo máximo antes de auto-revertir MANUAL a AUTO. |
 | `watchdog_timeout_ms`| $10000\,\text{ms}$ ($10\text{ s}$) | `config.json` | ✅ Sí | Tiempo límite para el Hardware Watchdog. |
 | `max_internal_temp_limit_c` | $35.0^\circ\text{C}$ | `config.json` | ✅ Sí | Límite de seguridad de cabina electrónica. |
 | `ALPHA_EWMA` | `0.10` | Hardcoded | ❌ No (`HardwareController.h`) | Factor de suavizado exponencial paso-bajos. |
@@ -214,28 +225,29 @@ Antes de conmutar los pines, el método `_ejecutarAccion` ([`HardwareController.
 
 | Mecanismo de Protección | Estado | Evidencia en Código | Justificación / Funcionamiento |
 | :--- | :---: | :--- | :--- |
-| **Histéresis (Banda Muerta)** | ✅ Implementado | [`HardwareController.h:44-45`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/HardwareController.h#L44-L45)<br>[`HardwareController.cpp:389-424`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/HardwareController.cpp#L389-L424) | `HIST_TEMP = 0.5°C` y `HIST_HUM = 2.0%` impiden conmutaciones continuas en la frontera del umbral. |
-| **Anti-Short-Cycle (Anti-Chatter)**| ✅ Implementado | [`HardwareController.cpp:278-294`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/HardwareController.cpp#L278-L294) | Bloqueo de 180s antes de re-encender Cooler, Extractor o Fogger. Protege compresores y fuentes de poder. |
-| **Failsafe Térmico de Emergencia** | ✅ Implementado | [`HardwareController.cpp:374-381`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/HardwareController.cpp#L374-L381) | Prioridad P1: Apaga forzosamente el calefactor y activa refrigeración si $T \ge 35^\circ\text{C}$ o sustrato $\ge 27^\circ\text{C}$. |
-| **Fallback ante Sensor Dañado** | ✅ Implementado | [`HardwareController.cpp:161-174`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/HardwareController.cpp#L161-L174) | Redundancia dual DHT22. Si ambos fallan, conmuta a `SAFE_MODE` apagando todos los actuadores de potencia. |
-| **Prioridad y Exclusión de Actuadores**| ✅ Implementado | [`HardwareController.cpp:434-439`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/HardwareController.cpp#L434-L439) | Interlock determinista: El Extractor inhibe forzosamente el Fogger para no expulsar la niebla. |
-| **Hardware Watchdog (WDT)** | ✅ Implementado | [`main.cpp:124-128, 149`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/main.cpp#L124-L128) | `esp_task_wdt` reinicia el ESP32 en 15s si ocurre un bloqueo de CPU o fallo en handshake TLS. |
-| **Modo Supervivencia (Offline Edge)**| ✅ Implementado | [`FileManager.cpp:19-60`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/FileManager.cpp#L19-L60) | El microcontrolador arranca y regula el cultivo usando LittleFS aun si no hay conexión WiFi o Firebase. |
+| **Histéresis (Banda Muerta)** | ✅ Implementado | [`HardwareController.h:44-45`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/HardwareController.h#L44-L45)<br>[`HardwareController.cpp`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/HardwareController.cpp) | `HIST_TEMP = 0.5°C` y `HIST_HUM = 2.0%` impiden conmutaciones continuas en la frontera del umbral. |
+| **Anti-Short-Cycle (Anti-Chatter)**| ✅ Implementado | [`HardwareController.cpp`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/HardwareController.cpp) | Bloqueo de 180s en modo AUTO antes de re-encender Cooler, Extractor o Fogger. Bypass instantáneo en modo MANUAL. |
+| **Failsafe Térmico de Emergencia** | ✅ Implementado | [`HardwareController.cpp`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/HardwareController.cpp) | Prioridad P1: Apaga forzosamente el calefactor y activa refrigeración si $T \ge 35^\circ\text{C}$ o sustrato $\ge 35^\circ\text{C}$. |
+| **Fallback ante Sensor Dañado** | ✅ Implementado | [`HardwareController.cpp`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/HardwareController.cpp) | Redundancia dual DHT22. Si ambos fallan, conmuta a `SAFE_MODE` apagando todos los actuadores de potencia. |
+| **Prioridad y Exclusión de Actuadores**| ✅ Implementado | [`HardwareController.cpp`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/HardwareController.cpp) | Interlock determinista: El Extractor inhibe forzosamente el Fogger para no expulsar la niebla. |
+| **Hardware Watchdog (WDT)** | ✅ Implementado | [`main.cpp`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/main.cpp) | `esp_task_wdt` reinicia el ESP32 en 15s si ocurre un bloqueo de CPU o fallo en handshake TLS. |
+| **Modo Supervivencia (Offline Edge)**| ✅ Implementado | [`FileManager.cpp`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/FileManager.cpp) | El microcontrolador arranca y regula el cultivo usando LittleFS aun si no hay conexión WiFi o Firebase. |
 
 ---
 
-## 5. 🔄 Interacción con Firebase (Control Remoto)
+## 5. 🔄 Interacción con Firebase (Control Remoto Quirúrgico)
 
-1. **Protocolo Downlink (Stream SSE):**
-   * El ESP32 se suscribe reactivamente a `/devices/{deviceId}/commands` usando Server-Sent Events en [`FirebaseManager.cpp:L255-278`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/FirebaseManager.cpp#L255-L278).
-   * Cuando el usuario cambia un setpoint o presiona un botón en el SCADA React, Firebase empuja el payload de inmediato sin polling.
+1. **Protocolo Downlink y Despacho Aislado por Subruta:**
+   * El ESP32 se suscribe reactivamente a `/devices/{deviceId}/commands` usando Server-Sent Events en [`FirebaseManager.cpp`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/FirebaseManager.cpp).
+   * **Despacho Quirúrgico:** Cada botón del SCADA React envía un `PUT` exclusivo a la subruta individual del actuador (`/commands/light_on.json`, `/commands/fogger_on.json`, etc.) con un valor primitivo booleano (`true`/`false`), eliminando colisiones por sobrescritura de objetos en bloque.
 2. **Separación Determinista AUTO vs MANUAL:**
-   * **Modo AUTO:** La máquina de estados del ESP32 gobierna los relés según las reglas agronómicas y el PID. Si llega un comando manual directo (`setHeater`, etc.) mientras está en `AUTO`, el firmware lo **descarta** para proteger la cosecha ([`HardwareController.cpp:L72`](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/edge_esp32/src/HardwareController.cpp#L72)).
-   * **Transición Atómica:** Al enviar un comando manual desde el SCADA, el servicio despacha atómicamente `{ modo_operacion: 'MANUAL', [actuator]: state }`.
-   * **Auto-Reversión de Seguridad (Watchdog de Operador):** El modo manual inicia un cronómetro interno (`_tiempoInicioManual`). Al transcurrir `max_manual_time_ms` (por defecto 15 min), el ESP32 revierte automáticamente a `AUTO` para evitar que un olvido humano destruya el cultivo.
-3. **Telemetría Uplink en Tiempo Real:**
+   * **Modo AUTO:** La máquina de estados del ESP32 gobierna los relés según las reglas agronómicas y el PID. Si llega un comando manual directo mientras está en `AUTO`, el firmware lo descarta para proteger la cosecha.
+   * **Modo MANUAL:** Al entrar a modo manual, los actuadores se inicializan en `false` (reposo) y el operador conmuta cada relé físicamente con respuesta instantánea.
+   * **Auto-Reversión de Seguridad (Watchdog de Operador):** El modo manual inicia un cronómetro interno (`_tiempoInicioManual`). Al transcurrir `max_manual_time_ms` (5 min por defecto), el ESP32 revierte automáticamente a `AUTO`.
+3. **Telemetría Uplink en Tiempo Real con Heartbeat Resiliente:**
    * Cada $5000\,\text{ms}$, el ESP32 empaqueta todas las lecturas filtradas por EWMA, el estado real de los relés físicos, las banderas de bloqueo por anti-short-cycle y el estado operacional en `/telemetry/{deviceId}/data`.
-   * Cada $5\text{ minutos}$, empuja un registro histórico inmutable con timestamp NTP a `/history/{deviceId}`.
+   * El SCADA React complementa la suscripción WebSocket con un heartbeat de polling REST cada 2.5s, garantizando cero congelamientos en pantalla.
+
 
 ---
 
