@@ -99,97 +99,200 @@ void DisplayManager::_drawSensores(const SensorData& s) {
 }
 
 void DisplayManager::_drawActuadores(const ActuadorData& a) {
+    const SensorData& s = _hw.getSensores();
+    bool tienePerfil = _hw.tienePerfilActivo();
+    EstadoOperacional estado = _hw.getEstadoOperacional();
+
     // Fila 1: Calefactor (CAL) + Enfriador (FRI) + Extractor (EXT)
     _tft.setCursor(5, 63);
     _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
     _tft.print(F("CAL:"));
-    _tft.setTextColor(a.heater_ON ? ST77XX_GREEN : ST77XX_RED, ST77XX_BLACK);
-    _tft.print(a.heater_ON ? F("ON ") : F("OF "));
+    if (estado == EstadoOperacional::CALENTANDO && _hw.getModoOperacion() == ModoOperacion::AUTO) {
+        _tft.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
+        _tft.print(F("PID"));
+    } else if (a.heater_ON) {
+        _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+        _tft.print(F("ON "));
+    } else {
+        _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+        _tft.print(F("OF "));
+    }
 
     _tft.setCursor(58, 63);
     _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
     _tft.print(F("FRI:"));
-    _tft.setTextColor(a.cooler_ON ? ST77XX_GREEN : ST77XX_RED, ST77XX_BLACK);
-    _tft.print(a.cooler_ON ? F("ON ") : F("OF "));
+    if (a.cooler_ON) {
+        _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+        _tft.print(F("ON "));
+    } else {
+        _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+        _tft.print(F("OF "));
+    }
 
     _tft.setCursor(110, 63);
     _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
     _tft.print(F("EXT:"));
-    _tft.setTextColor(a.extractor_ON ? ST77XX_GREEN : ST77XX_RED, ST77XX_BLACK);
-    _tft.println(a.extractor_ON ? F("ON ") : F("OF "));
+    if (a.extractor_ON) {
+        _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+        _tft.println(F("ON "));
+    } else {
+        _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+        _tft.println(F("OF "));
+    }
 
     // Fila 2: Niebla (NBL) + Luz (LUZ)
     _tft.setCursor(5, 73);
     _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
     _tft.print(F("NBL:"));
-    _tft.setTextColor(a.fogger_ON ? ST77XX_GREEN : ST77XX_RED, ST77XX_BLACK);
-    _tft.print(a.fogger_ON ? F("ON ") : F("OF "));
+    if (a.fogger_ON) {
+        _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+        _tft.print(F("ON "));
+    } else if (a.extractor_ON && tienePerfil && s.humPromedio != -999.0f && s.humPromedio < _hw.getConfiguracion().crop.hum_ideal_min && _hw.getModoOperacion() == ModoOperacion::AUTO) {
+        _tft.setTextColor(ST77XX_MAGENTA, ST77XX_BLACK);
+        _tft.print(F("INH")); // Inhibido por interlock de extracción
+    } else {
+        _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+        _tft.print(F("OF "));
+    }
 
     _tft.setCursor(58, 73);
     _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
     _tft.print(F("LUZ:"));
-    _tft.setTextColor(a.light_ON ? ST77XX_GREEN : ST77XX_RED, ST77XX_BLACK);
-    _tft.println(a.light_ON ? F("ON ") : F("OF "));
+    if (a.light_ON) {
+        _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+        _tft.println(F("ON "));
+    } else {
+        _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+        _tft.println(F("OF "));
+    }
 }
 
 void DisplayManager::_drawEstadoRed() {
-    // Línea 1: Estado WiFi
-    _tft.setCursor(5, 90);
+    const SensorData& s = _hw.getSensores();
+    const ActuadorData& a = _hw.getActuadores();
+    EstadoOperacional estado = _hw.getEstadoOperacional();
+    bool tienePerfil = _hw.tienePerfilActivo();
     bool redOk = _net.estaConectado() && _firebase.isConnected();
+
+    // Línea 1 Fija (Y=90): Estado de Red y Servidor
+    _tft.setCursor(5, 90);
     if (redOk) {
         _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
-        _tft.println(F("RED: ONLINE        "));
+        _tft.println(F("RED: ONLINE (RTDB OK)   "));
     } else if (_net.estaEnModoAP()) {
         _tft.setTextColor(ST77XX_MAGENTA, ST77XX_BLACK);
-        _tft.println(F("RED: RESCATE AP    "));
+        _tft.println(F("RED: RESCATE AP         "));
     } else {
         _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
-        _tft.println(F("RED: OFFLINE       "));
+        _tft.println(F("RED: OFFLINE (LOCAL)    "));
     }
 
-    // Línea 2: Estado del Servidor RTDB
-    _tft.setCursor(5, 100);
-    if (redOk) {
-        _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
-        _tft.println(F("FIREBASE: CONECTADO"));
-    } else {
-        _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
-        _tft.println(F("FIREBASE: REINTENTO"));
-    }
+    // Ticker Rotativo de 2 líneas inferiores (Alterna cada 3000 ms)
+    int pasoTicker = (millis() / 3000) % 2;
 
-    // Línea 3: Estado Operacional del Sistema
-    _tft.setCursor(5, 112);
-    EstadoOperacional estado = _hw.getEstadoOperacional();
-    _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
-    _tft.print(F("ESTADO: "));
-    switch (estado) {
-        case EstadoOperacional::SAFE_MODE:
-            _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
-            _tft.println(F("SAFE MODE  "));
-            break;
-        case EstadoOperacional::EMERGENCIA:
-            _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
-            _tft.println(F("EMERGENCIA "));
-            break;
-        case EstadoOperacional::CALENTANDO:
-            _tft.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
-            _tft.println(F("CALOR (PID)"));
-            break;
-        case EstadoOperacional::ENFRIANDO:
-            _tft.setTextColor(ST77XX_BLUE, ST77XX_BLACK);
-            _tft.println(F("ENFRIANDO  "));
-            break;
-        case EstadoOperacional::HUMIDIFICANDO:
+    // Línea 2 del Ticker (Y=102)
+    _tft.setCursor(5, 102);
+    if (!tienePerfil || estado == EstadoOperacional::STANDBY) {
+        if (pasoTicker == 0) {
             _tft.setTextColor(ST77XX_CYAN, ST77XX_BLACK);
-            _tft.println(F("HUMIDIFICA "));
-            break;
-        case EstadoOperacional::MANUAL:
-            _tft.setTextColor(ST77XX_MAGENTA, ST77XX_BLACK);
-            _tft.println(F("MANUAL OVR "));
-            break;
-        default:
-            _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
-            _tft.println(F("NORMAL     "));
-            break;
+            _tft.println(F("ESTADO: MODO MONITOREO  "));
+        } else {
+            _tft.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
+            _tft.println(F("PERFIL: EN REPOSO       "));
+        }
+    } else {
+        if (pasoTicker == 0) {
+            // Ciclo 0: Estado Térmico / Operacional Principal
+            _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
+            _tft.print(F("EST: "));
+            switch (estado) {
+                case EstadoOperacional::SAFE_MODE:
+                    _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+                    _tft.println(F("SAFE MODE         "));
+                    break;
+                case EstadoOperacional::EMERGENCIA:
+                    _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+                    _tft.println(F("EMERGENCIA        "));
+                    break;
+                case EstadoOperacional::CALENTANDO:
+                    _tft.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
+                    _tft.println(F("CALOR (PID SSR)   "));
+                    break;
+                case EstadoOperacional::ENFRIANDO:
+                    _tft.setTextColor(ST77XX_BLUE, ST77XX_BLACK);
+                    _tft.println(F("ENFRIANDO         "));
+                    break;
+                case EstadoOperacional::HUMIDIFICANDO:
+                    _tft.setTextColor(ST77XX_CYAN, ST77XX_BLACK);
+                    _tft.println(F("HUMIDIFICANDO     "));
+                    break;
+                case EstadoOperacional::MANUAL:
+                    _tft.setTextColor(ST77XX_MAGENTA, ST77XX_BLACK);
+                    _tft.println(F("MANUAL OVERRIDE   "));
+                    break;
+                default:
+                    _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+                    _tft.println(F("CLIMA ESTABLE     "));
+                    break;
+            }
+        } else {
+            // Ciclo 1: Diagnóstico de Acciones Secundarias y Multivariable
+            if (a.extractor_ON) {
+                _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+                if (s.humPromedio != -999.0f && s.humPromedio >= _hw.getConfiguracion().crop.hum_ideal_max) {
+                    _tft.printf("EXT: EXC HUM >%d%%      \n", (int)_hw.getConfiguracion().crop.hum_ideal_max);
+                } else if (s.co2Ok && s.co2 >= _hw.getConfiguracion().crop.co2_crit_max) {
+                    _tft.println(F("EXT: PURGA DE CO2       "));
+                } else {
+                    _tft.println(F("EXT: VENTILACION ACTIVA "));
+                }
+            } else if (a.fogger_ON) {
+                _tft.setTextColor(ST77XX_CYAN, ST77XX_BLACK);
+                _tft.println(F("NBL: INYECCION ACTIVA   "));
+            } else if (!a.heater_ON && !a.cooler_ON && !a.fogger_ON && !a.extractor_ON && !a.light_ON) {
+                _tft.setTextColor(ST77XX_CYAN, ST77XX_BLACK);
+                _tft.println(F("ACTUADORES: REPOSO (OF) "));
+            } else if (a.light_ON) {
+                _tft.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
+                _tft.println(F("LUZ: FOTOPERIODO ON     "));
+            } else {
+                _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+                _tft.println(F("PARAMETROS EN RANGO     "));
+            }
+        }
+    }
+
+    // Línea 3 del Ticker (Y=114)
+    _tft.setCursor(5, 114);
+    if (!tienePerfil || estado == EstadoOperacional::STANDBY) {
+        _tft.setTextColor(ST77XX_CYAN, ST77XX_BLACK);
+        _tft.println(F("ACTUADORES: REPOSO (OF) "));
+    } else {
+        if (pasoTicker == 0) {
+            if (estado == EstadoOperacional::CALENTANDO) {
+                _tft.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
+                _tft.println(F("CAL: MODULACION TERMICA "));
+            } else if (estado == EstadoOperacional::ENFRIANDO) {
+                _tft.setTextColor(ST77XX_BLUE, ST77XX_BLACK);
+                _tft.println(F("FRI: COMPENSANDO CALOR  "));
+            } else if (estado == EstadoOperacional::HUMIDIFICANDO) {
+                _tft.setTextColor(ST77XX_CYAN, ST77XX_BLACK);
+                _tft.println(F("NBL: REGULANDO VPD      "));
+            } else {
+                _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+                _tft.println(F("VARIABLES BAJO CONTROL  "));
+            }
+        } else {
+            if (a.extractor_ON && s.humPromedio != -999.0f && s.humPromedio < _hw.getConfiguracion().crop.hum_ideal_min) {
+                _tft.setTextColor(ST77XX_MAGENTA, ST77XX_BLACK);
+                _tft.println(F("NBL: INHIBIDA X EXTRACT."));
+            } else if (s.analogicoOk && s.ewma_sustrato >= _hw.getConfiguracion().crop.temp_sustrato_ideal) {
+                _tft.setTextColor(ST77XX_MAGENTA, ST77XX_BLACK);
+                _tft.println(F("SUSTR: CALOR METABOLICO "));
+            } else {
+                _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+                _tft.println(F("SUPERVISION LOCAL OK    "));
+            }
+        }
     }
 }

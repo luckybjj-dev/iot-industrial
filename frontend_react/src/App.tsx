@@ -555,21 +555,102 @@ function Dashboard() {
                           
                           {/* Actuadores List */}
                           {[
-                            { id: 'fogger_on', label: 'Niebla', icon: Droplets, val: camara.telemetria.fogger_on, locked: camara.telemetria.fogger_locked, activeBg: 'bg-cyan-500/20 text-cyan-500 border-cyan-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
-                            { id: 'extractor_on', label: 'Extractor', icon: Wind, val: camara.telemetria.extractor_on, locked: camara.telemetria.extractor_locked, activeBg: 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
-                            { id: 'heater_on', label: 'Calefactor', icon: Activity, val: camara.telemetria.heater_on, locked: camara.telemetria.heater_locked, activeBg: 'bg-amber-500/20 text-amber-500 border-amber-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
-                            { id: 'cooler_on', label: 'Enfriador', icon: Snowflake, val: camara.telemetria.cooler_on ?? false, locked: false, activeBg: 'bg-blue-500/20 text-blue-500 border-blue-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
-                            { id: 'light_on', label: 'Luz', icon: Power, val: camara.telemetria.light_on, locked: false, activeBg: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30', manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400' },
+                            { 
+                              id: 'fogger_on', 
+                              label: 'Niebla', 
+                              icon: Droplets, 
+                              val: camara.telemetria.fogger_on, 
+                              locked: camara.telemetria.fogger_locked, 
+                              activeBg: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40 shadow-[0_0_10px_rgba(6,182,212,0.2)]', 
+                              manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400',
+                              getSublabel: (eff: boolean) => {
+                                if (modo === 'MANUAL') return null;
+                                if (eff) return 'Inyección de Niebla';
+                                const humBaja = crop && camara.telemetria?.humedad_promedio != null && camara.telemetria.humedad_promedio < crop.hum_ideal_min;
+                                if (camara.telemetria?.extractor_on && humBaja) return 'Inhibido por Extracción';
+                                return null;
+                              },
+                              isInhibited: () => {
+                                const humBaja = crop && camara.telemetria?.humedad_promedio != null && camara.telemetria.humedad_promedio < crop.hum_ideal_min;
+                                return modo === 'AUTO' && !camara.telemetria?.fogger_on && camara.telemetria?.extractor_on && humBaja;
+                              }
+                            },
+                            { 
+                              id: 'extractor_on', 
+                              label: 'Extractor', 
+                              icon: Wind, 
+                              val: camara.telemetria.extractor_on, 
+                              locked: camara.telemetria.extractor_locked, 
+                              activeBg: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]', 
+                              manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400',
+                              getSublabel: (eff: boolean) => {
+                                if (modo === 'MANUAL' || !eff) return null;
+                                if (crop && camara.telemetria?.humedad_promedio != null && camara.telemetria.humedad_promedio > crop.hum_ideal_max) return 'Evacuando Humedad';
+                                if (crop && camara.telemetria?.co2_ppm != null && camara.telemetria.co2_ppm >= crop.co2_crit_max) return 'Purga de CO2';
+                                if (crop && camara.telemetria?.temp_promedio != null && camara.telemetria.temp_promedio > crop.temp_ideal_max) return 'Evacuando Calor';
+                                return 'Ventilación Activa';
+                              }
+                            },
+                            { 
+                              id: 'heater_on', 
+                              label: 'Calefactor', 
+                              icon: Activity, 
+                              val: modo === 'AUTO' && camara.telemetria.estado_operacional === 'CALENTANDO' ? true : camara.telemetria.heater_on, 
+                              locked: camara.telemetria.heater_locked, 
+                              activeBg: 'bg-amber-500/20 text-amber-400 border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.2)]', 
+                              manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400',
+                              customLabel: modo === 'AUTO' && camara.telemetria.estado_operacional === 'CALENTANDO' ? 'PID ON' : undefined,
+                              getSublabel: (eff: boolean) => {
+                                if (modo === 'MANUAL' || !eff) return null;
+                                return 'Modulación Térmica';
+                              }
+                            },
+                            { 
+                              id: 'cooler_on', 
+                              label: 'Enfriador', 
+                              icon: Snowflake, 
+                              val: camara.telemetria.cooler_on ?? false, 
+                              locked: false, 
+                              activeBg: 'bg-blue-500/20 text-blue-400 border-blue-500/40 shadow-[0_0_10px_rgba(59,130,246,0.2)]', 
+                              manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400',
+                              getSublabel: (eff: boolean) => {
+                                if (modo === 'MANUAL' || !eff) return null;
+                                return 'Control Frío (Peltier)';
+                              }
+                            },
+                            { 
+                              id: 'light_on', 
+                              label: 'Luz', 
+                              icon: Power, 
+                              val: camara.telemetria.light_on, 
+                              locked: false, 
+                              activeBg: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40 shadow-[0_0_10px_rgba(234,179,8,0.2)]', 
+                              manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400',
+                              getSublabel: (eff: boolean) => {
+                                if (modo === 'MANUAL' || !eff) return null;
+                                return 'Fotoperiodo Activo';
+                              }
+                            },
                           ].map((act) => {
                             const effectiveVal = optimisticActuators[camara.deviceId]?.[act.id] ?? act.val;
+                            const sublabel = act.getSublabel ? act.getSublabel(effectiveVal) : null;
+                            const isInhibited = act.isInhibited ? act.isInhibited() : false;
+
                             return (
                               <div key={act.id} className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5 relative">
-                                <span className="text-neutral-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
-                                  <act.icon size={14}/> {act.label}
-                                  {modo === 'MANUAL' && act.locked && (
-                                    <span className="text-red-500 ml-1" title="Bloqueado por protección térmica (Anti-Short Cycle)">🔒</span>
+                                <div className="flex flex-col">
+                                  <span className="text-neutral-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                                    <act.icon size={14}/> {act.label}
+                                    {modo === 'MANUAL' && act.locked && (
+                                      <span className="text-red-500 ml-1" title="Bloqueado por protección térmica (Anti-Short Cycle)">🔒</span>
+                                    )}
+                                  </span>
+                                  {sublabel && (
+                                    <span className={`text-[10px] font-medium tracking-tight mt-0.5 ${isInhibited ? 'text-magenta-400 text-pink-400' : 'text-neutral-400 opacity-80'}`}>
+                                      {isInhibited ? `⚠️ ${sublabel}` : `• ${sublabel}`}
+                                    </span>
                                   )}
-                                </span>
+                                </div>
                                 <button 
                                   disabled={modo === 'AUTO' || (modo === 'MANUAL' && act.locked)}
                                   onClick={() => handleToggleActuator(camara.deviceId, act.id, effectiveVal, modo)}
@@ -577,7 +658,9 @@ function Dashboard() {
                                     modo === 'AUTO'
                                       ? effectiveVal 
                                         ? act.activeBg 
-                                        : 'bg-neutral-900 text-neutral-600 border-neutral-800'
+                                        : isInhibited
+                                          ? 'bg-pink-950/30 text-pink-400 border-pink-500/30'
+                                          : 'bg-neutral-900 text-neutral-600 border-neutral-800'
                                       : effectiveVal 
                                         ? act.manualBg 
                                         : act.locked 
@@ -585,7 +668,13 @@ function Dashboard() {
                                           : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700 border-neutral-700'
                                   }`}
                                 >
-                                  {modo === 'MANUAL' && act.locked ? 'LOCKED' : (effectiveVal ? 'ON' : 'OFF')}
+                                  {modo === 'MANUAL' && act.locked 
+                                    ? 'LOCKED' 
+                                    : (modo === 'AUTO' && act.customLabel && effectiveVal)
+                                      ? act.customLabel
+                                      : (isInhibited && modo === 'AUTO')
+                                        ? 'INHIB'
+                                        : (effectiveVal ? 'ON' : 'OFF')}
                                 </button>
                               </div>
                             );

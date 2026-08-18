@@ -177,6 +177,9 @@ La lógica evalúa las condiciones en estricto orden jerárquico determinista:
 #### H. Fotoperiodo:
 * Si $\text{horaDia} \in [0, \text{light\_hours\_on})$ $\implies$ `LIGHT = ON`.
 
+> [!NOTE]
+> Para el análisis exhaustivo de todas las combinaciones simultáneas y la política de visualización en el SCADA, consultar la [Matriz de Resolución de Conflictos Multivariable y Acciones Simultáneas](file:///c:/Users/lagos/PROYECTOS/ESP32Proyecto%20-%20Industrial/monitor-iot-backend/proyecto-iot-code-workspace/docs/MATRIZ_CONFLICTOS_ACTUADORES_MICROCLIMA.md).
+
 ---
 
 ### Paso 6 — Ejecución Física y Filtro Anti-Short-Cycle

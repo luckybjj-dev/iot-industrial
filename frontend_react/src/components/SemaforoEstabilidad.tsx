@@ -75,6 +75,28 @@ export const SemaforoEstabilidad: React.FC<Props> = ({ telemetria, crop, modo_op
       };
     }
 
+    // 1. Detección de Anomalía Crítica: Conflicto Térmico Simultáneo (Calor + Frío)
+    if ((telemetria.heater_on || telemetria.estado_operacional === 'CALENTANDO') && telemetria.cooler_on) {
+      return {
+        estado: 'FALLO CRÍTICO: CONFLICTO TÉRMICO',
+        mensaje: 'Anomalía detectada: Calefactor y Enfriador activos simultáneamente. Failsafe activado.',
+        colorClass: 'text-red-500 bg-red-950/30 border-red-500/50',
+        Icon: AlertOctagon,
+        isCriticalPulse: true
+      };
+    }
+
+    // 2. Emergencia Térmica en Zona Radicular / Sustrato (Micelio)
+    if (telemetria.sensor_analogico != null && crop && crop.temp_sustrato_crit_max > 10 && telemetria.sensor_analogico >= crop.temp_sustrato_crit_max) {
+      return {
+        estado: 'EMERGENCIA TÉRMICA EN SUSTRATO',
+        mensaje: `Calefactor inhibido por seguridad: Sustrato caliente (${telemetria.sensor_analogico.toFixed(1)}°C >= ${crop.temp_sustrato_crit_max}°C) → Evacuando calor radicular`,
+        colorClass: 'text-red-500 bg-red-950/30 border-red-500/50',
+        Icon: AlertOctagon,
+        isCriticalPulse: true
+      };
+    }
+
     if (telemetria.estado_operacional) {
       switch (telemetria.estado_operacional) {
         case 'NORMAL':
@@ -85,35 +107,75 @@ export const SemaforoEstabilidad: React.FC<Props> = ({ telemetria, crop, modo_op
             Icon: CheckCircle2,
             isCriticalPulse: false
           };
+
         case 'CALENTANDO': {
           const tempVal = telemetria.temp_promedio != null ? `${telemetria.temp_promedio.toFixed(1)}°C` : '--';
           const minVal = crop?.temp_ideal_min != null ? `${crop.temp_ideal_min}°C` : '--';
+          
+          let estadoTitulo = 'CALENTANDO';
+          let razonesCompensacion = `Calefactor ON (Temp. baja: ${tempVal} < ${minVal})`;
+
+          // Concatenación Multivariable: Si el extractor también está activo por humedad o CO2
+          if (telemetria.extractor_on) {
+            if (crop && telemetria.humedad_promedio != null && telemetria.humedad_promedio > crop.hum_ideal_max) {
+              estadoTitulo = 'CALENTANDO / DESHUMIDIFICANDO';
+              razonesCompensacion += ` + Extractor ON (Exceso humedad: ${telemetria.humedad_promedio.toFixed(1)}% > ${crop.hum_ideal_max}%)`;
+            } else if (crop && telemetria.co2_ppm != null && telemetria.co2_ppm >= crop.co2_crit_max) {
+              estadoTitulo = 'CALENTANDO / PURGANDO CO2';
+              razonesCompensacion += ` + Extractor ON (Purga CO2: ${telemetria.co2_ppm} ppm >= ${crop.co2_crit_max} ppm)`;
+            } else {
+              estadoTitulo = 'CALENTANDO / VENTILANDO';
+              razonesCompensacion += ` + Extractor ON (Ventilación activa)`;
+            }
+          }
+
+          if (telemetria.fogger_on) {
+            razonesCompensacion += ' + Niebla ON';
+          }
+
           return {
-            estado: 'CALENTANDO',
-            mensaje: `Sistema compensando: Temperatura ambiental baja (${tempVal} < ${minVal}) → Calefactor ON (Modulación SSR)`,
+            estado: estadoTitulo,
+            mensaje: `Sistema compensando: ${razonesCompensacion}`,
             colorClass: 'text-amber-400 bg-amber-950/30 border-amber-500/50',
             Icon: AlertTriangle,
             isCriticalPulse: false
           };
         }
+
         case 'ENFRIANDO': {
           const co2Exceso = crop && telemetria.co2_ppm != null && telemetria.co2_ppm >= crop.co2_crit_max;
-          let razon = 'Exceso térmico';
-          if (co2Exceso) {
+          const tempAlta = crop && telemetria.temp_promedio != null && telemetria.temp_promedio > crop.temp_ideal_max;
+          const humExceso = crop && telemetria.humedad_promedio != null && telemetria.humedad_promedio > crop.hum_ideal_max;
+
+          let estadoTitulo = 'ENFRIANDO / EXTRAYENDO';
+          let razon = 'Disipación de calor o ventilación activa';
+
+          if (tempAlta && humExceso) {
+            razon = `Temp. alta (${telemetria.temp_promedio?.toFixed(1)}°C > ${crop?.temp_ideal_max}°C) + Exceso humedad (${telemetria.humedad_promedio?.toFixed(1)}% > ${crop?.hum_ideal_max}%) → Enfriador/Extractor ON`;
+          } else if (co2Exceso) {
+            estadoTitulo = 'PURGANDO CO2';
             razon = `Acumulación de CO2 (${telemetria.co2_ppm} ppm >= ${crop?.co2_crit_max} ppm) → Extractor ON`;
-          } else if (crop && telemetria.temp_promedio != null && telemetria.temp_promedio > crop.temp_ideal_max) {
-            razon = `Temperatura ambiental alta (${telemetria.temp_promedio.toFixed(1)}°C > ${crop.temp_ideal_max}°C) → Enfriador/Extractor ON`;
-          } else {
-            razon = 'Disipación de calor o ventilación activa';
+          } else if (tempAlta) {
+            razon = `Temperatura ambiental alta (${telemetria.temp_promedio?.toFixed(1)}°C > ${crop?.temp_ideal_max}°C) → Enfriador/Extractor ON`;
+          } else if (humExceso) {
+            estadoTitulo = 'DESHUMIDIFICANDO';
+            razon = `Exceso de humedad (${telemetria.humedad_promedio?.toFixed(1)}% > ${crop?.hum_ideal_max}%) → Extractor ON`;
           }
+
+          if (telemetria.fogger_on) {
+            estadoTitulo = 'ENFRIANDO / HUMIDIFICANDO';
+            razon += ' + Niebla ON (Enfriamiento evaporativo)';
+          }
+
           return {
-            estado: 'ENFRIANDO / EXTRAYENDO',
+            estado: estadoTitulo,
             mensaje: `Sistema compensando: ${razon}`,
             colorClass: 'text-blue-400 bg-blue-950/30 border-blue-500/50',
             Icon: AlertTriangle,
             isCriticalPulse: false
           };
         }
+
         case 'HUMIDIFICANDO': {
           let razon = 'Niebla ON activa';
           const humBaja = crop && telemetria.humedad_promedio != null && telemetria.humedad_promedio < crop.hum_ideal_min;
@@ -135,14 +197,20 @@ export const SemaforoEstabilidad: React.FC<Props> = ({ telemetria, crop, modo_op
             razon = 'Estabilización de microclima hídrico';
           }
 
+          let estadoTitulo = 'HUMIDIFICANDO';
+          if (telemetria.heater_on) {
+            razon += ' + Calefactor ON (PID)';
+          }
+
           return {
-            estado: 'HUMIDIFICANDO',
+            estado: estadoTitulo,
             mensaje: `Sistema compensando: ${razon} → Niebla ON`,
             colorClass: 'text-cyan-400 bg-cyan-950/30 border-cyan-500/50',
             Icon: AlertTriangle,
             isCriticalPulse: false
           };
         }
+
         case 'SAFE_MODE':
           return {
             estado: 'SAFE MODE',
@@ -151,13 +219,14 @@ export const SemaforoEstabilidad: React.FC<Props> = ({ telemetria, crop, modo_op
             Icon: Activity,
             isCriticalPulse: false
           };
+
         case 'EMERGENCIA':
           return {
             estado: 'EMERGENCIA',
-            mensaje: 'Variables en niveles críticos, mitigación activa.',
+            mensaje: 'Variables en niveles críticos, mitigación y refrigeración activa.',
             colorClass: 'text-red-500 bg-red-950/30 border-red-500/50',
             Icon: AlertOctagon,
-            isCriticalPulse: false
+            isCriticalPulse: true
           };
       }
     }
