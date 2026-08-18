@@ -10,11 +10,20 @@ interface CropProfileSelectorModalProps {
   onClose: () => void;
   onSave: (deviceProfile: DeviceCropProfile, profileName?: string, phaseName?: string, planState?: any) => Promise<void>;
   deviceId?: string; // Para mostrar el nombre de la cámara
+  activeProfileName?: string;
+  activePhaseName?: string;
 }
 
 type TabType = 'FUNGI' | 'PLANTAE' | 'CUSTOM';
 
-export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> = ({ deviceId, isOpen, onClose, onSave }) => {
+export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> = ({ 
+  deviceId, 
+  isOpen, 
+  onClose, 
+  onSave,
+  activeProfileName,
+  activePhaseName
+}) => {
   const [activeTab, setActiveTab] = useState<TabType>('FUNGI');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProfileId, setSelectedProfileId] = useState<string>('fungi_pleurotus_ostreatus');
@@ -74,6 +83,42 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
   const ALL_PROFILES = { ...CROP_PROFILES, ...customProfiles };
   const profile = ALL_PROFILES[selectedProfileId];
   const phase = profile?.phases.find(p => p.id === selectedPhaseId);
+
+  // Perfil actualmente activo en ejecución en el hardware
+  const activeProfileObj = React.useMemo(() => {
+    if (!activeProfileName) return null;
+    const all = { ...CROP_PROFILES, ...customProfiles };
+    return Object.values(all).find(p => 
+      p.commonName.toLowerCase() === activeProfileName.toLowerCase() ||
+      p.scientificName.toLowerCase() === activeProfileName.toLowerCase() ||
+      p.id === activeProfileName
+    ) || null;
+  }, [activeProfileName, customProfiles]);
+
+  // Auto-seleccionar el perfil y fase activos al abrir el modal
+  useEffect(() => {
+    if (isOpen && activeProfileObj) {
+      setSelectedProfileId(activeProfileObj.id);
+      const tab = customProfiles[activeProfileObj.id] ? 'CUSTOM' : activeProfileObj.kingdom;
+      setActiveTab(tab);
+
+      if (activePhaseName) {
+        const matchedPhase = activeProfileObj.phases.find(ph => 
+          ph.name.toLowerCase() === activePhaseName.toLowerCase() ||
+          ph.id === activePhaseName
+        );
+        if (matchedPhase) {
+          setSelectedPhaseId(matchedPhase.id);
+        } else if (activeProfileObj.phases[0]) {
+          setSelectedPhaseId(activeProfileObj.phases[0].id);
+        }
+      } else if (activeProfileObj.phases[0]) {
+        setSelectedPhaseId(activeProfileObj.phases[0].id);
+      }
+      setIsEditing(false);
+      setEditedTargets(null);
+    }
+  }, [isOpen, activeProfileObj, activePhaseName]);
 
   // Filter logic
   const filteredProfiles = Object.values(ALL_PROFILES).filter(p => {
@@ -709,6 +754,46 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
         {/* BODY - SCROLLABLE */}
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           
+          {/* HERO BANNER: PERFIL EN EJECUCIÓN (ACCESO RÁPIDO O(1)) */}
+          {activeProfileObj && (
+            <div className="p-4 rounded-xl border border-emerald-500/40 bg-gradient-to-r from-emerald-950/40 via-emerald-900/20 to-black/40 shadow-[0_0_25px_rgba(16,185,129,0.15)] flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="p-3 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                  <Zap size={24} className="animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500 text-black shadow-sm flex items-center gap-1">
+                      🟢 EN EJECUCIÓN EN ESTA CÁMARA
+                    </span>
+                    {activePhaseName && (
+                      <span className="text-xs text-neutral-300 font-semibold">• Fase: {activePhaseName}</span>
+                    )}
+                  </div>
+                  <div className="text-lg font-bold text-white mt-1 flex items-center gap-2">
+                    {activeProfileObj.commonName}
+                    <span className="text-xs text-neutral-400 font-normal italic">({activeProfileObj.scientificName})</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2 w-full md:w-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tab = customProfiles[activeProfileObj.id] ? 'CUSTOM' : activeProfileObj.kingdom;
+                    setActiveTab(tab);
+                    const targetPhaseId = (activePhaseName && activeProfileObj.phases.find(ph => ph.name.toLowerCase() === activePhaseName.toLowerCase() || ph.id === activePhaseName)?.id) || activeProfileObj.phases[0].id;
+                    handleSelectProfile(activeProfileObj.id, targetPhaseId);
+                    setIsEditing(true);
+                  }}
+                  className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/20 cursor-pointer"
+                >
+                  <Edit3 size={15} /> Modificar Receta Activa
+                </button>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'CUSTOM' && (
             <div className="mb-6">
               {renderCustomBuilder()}
@@ -719,34 +804,46 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
             <>
               {/* SPECIES GRID */}
               <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3">
-                {filteredProfiles.map((p) => (
-                  <div key={p.id} className="relative group">
-                    <button
-                      onClick={() => handleSelectProfile(p.id, p.phases[0].id)}
-                      className={`w-full p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                        selectedProfileId === p.id 
-                          ? 'bg-emerald-500/10 border-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/50' 
-                          : 'bg-black/20 border-white/5 text-neutral-400 hover:border-white/20 hover:bg-white/5'
-                      }`}
-                    >
-                      <div className="font-bold text-lg leading-tight pr-6">{p.commonName}</div>
-                      <div className="text-xs italic opacity-70 mt-1">{p.scientificName}</div>
-                      {activeTab === 'CUSTOM' && (
-                        <div className="text-[10px] mt-2 text-purple-400 font-semibold uppercase tracking-wider">Perfil Personalizado</div>
-                      )}
-                    </button>
-                    {/* Botón eliminar — solo visible en tab CUSTOM */}
-                    {activeTab === 'CUSTOM' && customProfiles[p.id] && (
+                {filteredProfiles.map((p) => {
+                  const isActiveRunning = activeProfileObj && p.id === activeProfileObj.id;
+                  return (
+                    <div key={p.id} className="relative group">
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleDeleteCustomProfile(p.id, p.commonName); }}
-                        className="absolute top-2 right-2 p-1.5 text-neutral-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                        title={`Eliminar perfil "${p.commonName}"`}
+                        onClick={() => handleSelectProfile(p.id, p.phases[0].id)}
+                        className={`w-full p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                          selectedProfileId === p.id 
+                            ? 'bg-emerald-500/10 border-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/50' 
+                            : isActiveRunning
+                              ? 'bg-emerald-950/20 border-emerald-500/50 text-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.1)] hover:border-emerald-400'
+                              : 'bg-black/20 border-white/5 text-neutral-400 hover:border-white/20 hover:bg-white/5'
+                        }`}
                       >
-                        <Trash2 size={14} />
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="font-bold text-lg leading-tight">{p.commonName}</div>
+                          {isActiveRunning && (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500 text-black shadow-sm flex items-center gap-1 flex-shrink-0">
+                              🟢 ACTIVO
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs italic opacity-70 mt-1">{p.scientificName}</div>
+                        {activeTab === 'CUSTOM' && (
+                          <div className="text-[10px] mt-2 text-purple-400 font-semibold uppercase tracking-wider">Perfil Personalizado</div>
+                        )}
                       </button>
-                    )}
-                  </div>
-                ))}
+                      {/* Botón eliminar — solo visible en tab CUSTOM */}
+                      {activeTab === 'CUSTOM' && customProfiles[p.id] && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteCustomProfile(p.id, p.commonName); }}
+                          className="absolute top-2 right-2 p-1.5 text-neutral-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                          title={`Eliminar perfil "${p.commonName}"`}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               {/* ENCYCLOPEDIA */}

@@ -708,6 +708,8 @@ function Dashboard() {
                   {editingRulesFor === camara.deviceId && (
                     <CropProfileSelectorModal
                       deviceId={camara.deviceId}
+                      activeProfileName={config?.activeProfileName}
+                      activePhaseName={config?.activePhaseName}
                       isOpen={true}
                       onClose={() => setEditingRulesFor(null)}
                       onSave={async (newRules, profileName, phaseName, planState) => {
