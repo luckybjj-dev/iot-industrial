@@ -192,14 +192,19 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
   };
 
   const handleResetCurrentPhase = () => {
-    if (!phase) return;
-    setEditedTargets(JSON.parse(JSON.stringify(phase.targets)));
-    setEditDuration(phase.duration_days || 14);
-    setEditTransition(phase.transition_hours || 48);
-    const parts = (phase.targets.lighting?.photoperiod || '12/12').split('/');
+    if (!profile || !phase) return;
+    const originalProfile = CROP_PROFILES[selectedProfileId] || profile;
+    const originalPhase = originalProfile.phases.find(p => p.id === selectedPhaseId) || phase;
+
+    setEditedTargets(JSON.parse(JSON.stringify(originalPhase.targets)));
+    setEditDuration(originalPhase.duration_days || 14);
+    setEditTransition(originalPhase.transition_hours || 48);
+    const parts = (originalPhase.targets.lighting?.photoperiod || '12/12').split('/');
     const parseH = (v: string) => isNaN(parseInt(v)) ? 12 : parseInt(v);
     setEditLightHours(parseH(parts[0]));
     setEditDarkHours(parseH(parts[1]));
+    setEditProfileName(originalProfile.commonName);
+    setEditProfileDesc(originalProfile.description);
   };
 
   const startEditing = () => {
@@ -507,11 +512,38 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
                   </div>
                 )}
               </div>
-              <p className="text-sm text-neutral-300 mb-2">{isEditing ? editProfileDesc : profile.description}</p>
-              <div className="text-xs text-neutral-400 flex gap-4">
-                <span>Especie: <strong className="text-white">{isEditing ? editProfileName : profile.commonName}</strong> ({profile.scientificName})</span>
-                <span>Fases: <strong className="text-white">{profile.phases.length} etapas</strong></span>
-              </div>
+              {isEditing ? (
+                <div className="space-y-3 mb-3 mt-2">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-neutral-400 block mb-1">Nombre Común de la Especie</label>
+                    <input
+                      type="text"
+                      value={editProfileName}
+                      onChange={(e) => setEditProfileName(e.target.value)}
+                      className="w-full bg-black/50 border border-white/20 focus:border-emerald-500 rounded-lg px-3 py-1.5 text-sm font-bold text-white outline-none"
+                      placeholder="Ej. Frutilla Monterey"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-neutral-400 block mb-1">Descripción / Resumen del Cultivo</label>
+                    <textarea
+                      value={editProfileDesc}
+                      onChange={(e) => setEditProfileDesc(e.target.value)}
+                      rows={2}
+                      className="w-full bg-black/50 border border-white/20 focus:border-emerald-500 rounded-lg px-3 py-1.5 text-xs text-neutral-200 outline-none resize-none"
+                      placeholder="Describe las características y manejo agronómico..."
+                    />
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-neutral-300 mb-2">{profile.description}</p>
+                  <div className="text-xs text-neutral-400 flex gap-4">
+                    <span>Especie: <strong className="text-white">{profile.commonName}</strong> ({profile.scientificName})</span>
+                    <span>Fases: <strong className="text-white">{profile.phases.length} etapas</strong></span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
