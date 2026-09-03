@@ -40,7 +40,7 @@ ConfiguracionCultivo FileManager::cargarConfiguracion() {
         return _configActual;
     }
 
-    StaticJsonDocument<2048> doc;
+    DynamicJsonDocument doc(4096);
     DeserializationError error = deserializeJson(doc, file);
     file.close();
 
@@ -100,6 +100,10 @@ ConfiguracionCultivo FileManager::cargarConfiguracion() {
         _configActual.crop.co2_crit_max   = crop.containsKey("co2_crit_max") ? crop["co2_crit_max"].as<int>() : 3000;
         
         _configActual.crop.light_hours_on = crop.containsKey("light_hours_on") ? crop["light_hours_on"].as<int>() : 0;
+
+        _configActual.crop.hum_suelo_ideal_min = crop.containsKey("hum_suelo_ideal_min") ? crop["hum_suelo_ideal_min"].as<float>() : 0.0f;
+        _configActual.crop.hum_suelo_ideal_max = crop.containsKey("hum_suelo_ideal_max") ? crop["hum_suelo_ideal_max"].as<float>() : 0.0f;
+        _configActual.crop.hum_suelo_crit_min  = crop.containsKey("hum_suelo_crit_min") ? crop["hum_suelo_crit_min"].as<float>() : 0.0f;
     }
 
     Serial.println("[LittleFS] Configuración cargada con éxito. Perfil: " + _configActual.crop_profile);
@@ -136,12 +140,15 @@ void FileManager::_crearConfiguracionPorDefecto() {
     _configActual.crop.co2_crit_max  = 3000;
     
     _configActual.crop.light_hours_on = 0;
+    _configActual.crop.hum_suelo_ideal_min = 0.0f;
+    _configActual.crop.hum_suelo_ideal_max = 0.0f;
+    _configActual.crop.hum_suelo_crit_min  = 0.0f;
 
     guardarConfiguracion(_configActual);
 }
 
 bool FileManager::guardarConfiguracion(const ConfiguracionCultivo& config) {
-    StaticJsonDocument<2048> doc;
+    DynamicJsonDocument doc(4096);
     
     doc["greenhouse_id"] = config.greenhouse_id;
     doc["crop_profile"]  = config.crop_profile;
@@ -170,6 +177,10 @@ bool FileManager::guardarConfiguracion(const ConfiguracionCultivo& config) {
     crop["co2_crit_max"]  = config.crop.co2_crit_max;
     
     crop["light_hours_on"] = config.crop.light_hours_on;
+    crop["hum_suelo_ideal_min"] = config.crop.hum_suelo_ideal_min;
+    crop["hum_suelo_ideal_max"] = config.crop.hum_suelo_ideal_max;
+    crop["hum_suelo_crit_min"]  = config.crop.hum_suelo_crit_min;
+
 
     const char* tmpPath = "/config.json.tmp";
     const char* oldPath = "/config.json.old";
@@ -203,7 +214,7 @@ bool FileManager::guardarConfiguracion(const ConfiguracionCultivo& config) {
 }
 
 bool FileManager::guardarConfiguracionJson(const String& jsonString) {
-    StaticJsonDocument<2048> doc;
+    DynamicJsonDocument doc(4096);
     DeserializationError error = deserializeJson(doc, jsonString);
     
     if (error) {
@@ -212,34 +223,49 @@ bool FileManager::guardarConfiguracionJson(const String& jsonString) {
     }
     
     ConfiguracionCultivo nuevaConfig;
-    nuevaConfig.greenhouse_id = doc["greenhouse_id"] | _configActual.greenhouse_id;
-    nuevaConfig.crop_profile  = doc["crop_profile"] | _configActual.crop_profile;
-    nuevaConfig.max_manual_time_ms = doc["max_manual_time_ms"] | _configActual.max_manual_time_ms;
+    nuevaConfig.greenhouse_id = doc.containsKey("greenhouse_id") ? doc["greenhouse_id"].as<String>() : _configActual.greenhouse_id;
+    if (doc.containsKey("crop_profile")) {
+        nuevaConfig.crop_profile = doc["crop_profile"].as<String>();
+    } else if (doc.containsKey("activeProfileName")) {
+        nuevaConfig.crop_profile = doc["activeProfileName"].as<String>();
+    } else {
+        nuevaConfig.crop_profile = _configActual.crop_profile;
+    }
+    nuevaConfig.max_manual_time_ms = doc.containsKey("max_manual_time_ms") ? doc["max_manual_time_ms"].as<unsigned long>() : _configActual.max_manual_time_ms;
     
-    JsonObject failsafe = doc["failsafes"];
-    nuevaConfig.failsafes.watchdog_timeout_ms       = failsafe["watchdog_timeout_ms"] | _configActual.failsafes.watchdog_timeout_ms;
-    nuevaConfig.failsafes.max_internal_temp_limit_c = failsafe["max_internal_temp_limit_c"] | _configActual.failsafes.max_internal_temp_limit_c;
+    if (doc.containsKey("failsafes")) {
+        JsonObject failsafe = doc["failsafes"];
+        nuevaConfig.failsafes.watchdog_timeout_ms = failsafe.containsKey("watchdog_timeout_ms") ? failsafe["watchdog_timeout_ms"].as<unsigned long>() : _configActual.failsafes.watchdog_timeout_ms;
+        nuevaConfig.failsafes.max_internal_temp_limit_c = failsafe.containsKey("max_internal_temp_limit_c") ? failsafe["max_internal_temp_limit_c"].as<float>() : _configActual.failsafes.max_internal_temp_limit_c;
+    } else {
+        nuevaConfig.failsafes = _configActual.failsafes;
+    }
     
     if (doc.containsKey("crop")) {
         JsonObject crop = doc["crop"];
-        nuevaConfig.crop.kingdom        = crop["kingdom"] | _configActual.crop.kingdom;
-        nuevaConfig.crop.temp_ideal_min = crop["temp_ideal_min"] | _configActual.crop.temp_ideal_min;
-        nuevaConfig.crop.temp_ideal_max = crop["temp_ideal_max"] | _configActual.crop.temp_ideal_max;
-        nuevaConfig.crop.temp_crit_min  = crop["temp_crit_min"] | _configActual.crop.temp_crit_min;
-        nuevaConfig.crop.temp_crit_max  = crop["temp_crit_max"] | _configActual.crop.temp_crit_max;
+        nuevaConfig.crop.kingdom = crop.containsKey("kingdom") ? crop["kingdom"].as<String>() : _configActual.crop.kingdom;
+        nuevaConfig.crop.temp_ideal_min = crop.containsKey("temp_ideal_min") ? crop["temp_ideal_min"].as<float>() : _configActual.crop.temp_ideal_min;
+        nuevaConfig.crop.temp_ideal_max = crop.containsKey("temp_ideal_max") ? crop["temp_ideal_max"].as<float>() : _configActual.crop.temp_ideal_max;
+        nuevaConfig.crop.temp_crit_min  = crop.containsKey("temp_crit_min") ? crop["temp_crit_min"].as<float>() : _configActual.crop.temp_crit_min;
+        nuevaConfig.crop.temp_crit_max  = crop.containsKey("temp_crit_max") ? crop["temp_crit_max"].as<float>() : _configActual.crop.temp_crit_max;
         
-        nuevaConfig.crop.temp_sustrato_ideal    = crop["temp_sustrato_ideal"] | _configActual.crop.temp_sustrato_ideal;
-        nuevaConfig.crop.temp_sustrato_crit_max = crop["temp_sustrato_crit_max"] | _configActual.crop.temp_sustrato_crit_max;
+        nuevaConfig.crop.temp_sustrato_ideal    = crop.containsKey("temp_sustrato_ideal") ? crop["temp_sustrato_ideal"].as<float>() : _configActual.crop.temp_sustrato_ideal;
+        nuevaConfig.crop.temp_sustrato_crit_max = crop.containsKey("temp_sustrato_crit_max") ? crop["temp_sustrato_crit_max"].as<float>() : _configActual.crop.temp_sustrato_crit_max;
         
-        nuevaConfig.crop.hum_ideal_min = crop["hum_ideal_min"] | _configActual.crop.hum_ideal_min;
-        nuevaConfig.crop.hum_ideal_max = crop["hum_ideal_max"] | _configActual.crop.hum_ideal_max;
-        nuevaConfig.crop.hum_crit_min  = crop["hum_crit_min"] | _configActual.crop.hum_crit_min;
+        nuevaConfig.crop.hum_ideal_min = crop.containsKey("hum_ideal_min") ? crop["hum_ideal_min"].as<float>() : _configActual.crop.hum_ideal_min;
+        nuevaConfig.crop.hum_ideal_max = crop.containsKey("hum_ideal_max") ? crop["hum_ideal_max"].as<float>() : _configActual.crop.hum_ideal_max;
+        nuevaConfig.crop.hum_crit_min  = crop.containsKey("hum_crit_min") ? crop["hum_crit_min"].as<float>() : _configActual.crop.hum_crit_min;
         
-        nuevaConfig.crop.co2_ideal_min = crop["co2_ideal_min"] | _configActual.crop.co2_ideal_min;
-        nuevaConfig.crop.co2_ideal_max = crop["co2_ideal_max"] | _configActual.crop.co2_ideal_max;
-        nuevaConfig.crop.co2_crit_max  = crop["co2_crit_max"] | _configActual.crop.co2_crit_max;
+        nuevaConfig.crop.co2_ideal_min = crop.containsKey("co2_ideal_min") ? crop["co2_ideal_min"].as<int>() : _configActual.crop.co2_ideal_min;
+        nuevaConfig.crop.co2_ideal_max = crop.containsKey("co2_ideal_max") ? crop["co2_ideal_max"].as<int>() : _configActual.crop.co2_ideal_max;
+        nuevaConfig.crop.co2_crit_max  = crop.containsKey("co2_crit_max") ? crop["co2_crit_max"].as<int>() : _configActual.crop.co2_crit_max;
         
-        nuevaConfig.crop.light_hours_on = crop["light_hours_on"] | _configActual.crop.light_hours_on;
+        nuevaConfig.crop.light_hours_on = crop.containsKey("light_hours_on") ? crop["light_hours_on"].as<int>() : _configActual.crop.light_hours_on;
+        
+        // Parámetros de humedad de suelo (Reino PLANTAE — requiere sensor capacitivo en ADC)
+        nuevaConfig.crop.hum_suelo_ideal_min = crop.containsKey("hum_suelo_ideal_min") ? crop["hum_suelo_ideal_min"].as<float>() : _configActual.crop.hum_suelo_ideal_min;
+        nuevaConfig.crop.hum_suelo_ideal_max = crop.containsKey("hum_suelo_ideal_max") ? crop["hum_suelo_ideal_max"].as<float>() : _configActual.crop.hum_suelo_ideal_max;
+        nuevaConfig.crop.hum_suelo_crit_min  = crop.containsKey("hum_suelo_crit_min")  ? crop["hum_suelo_crit_min"].as<float>()  : _configActual.crop.hum_suelo_crit_min;
     } else {
         nuevaConfig.crop = _configActual.crop;
     }

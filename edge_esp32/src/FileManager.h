@@ -43,6 +43,9 @@ struct CropProfile {
     float co2_ideal_max;
     float co2_crit_max;
     int light_hours_on;
+    float hum_suelo_ideal_min = 0.0f;
+    float hum_suelo_ideal_max = 0.0f;
+    float hum_suelo_crit_min  = 0.0f;
 };
 
 struct FailsafesConfig {

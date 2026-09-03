@@ -11,12 +11,14 @@ void HardwareController::begin() {
     pinMode(PIN_FOGGER, OUTPUT);
     pinMode(PIN_EXTRACTOR, OUTPUT);
     pinMode(PIN_LIGHT, OUTPUT);
+    pinMode(PIN_IRRIGATION, OUTPUT);
 
     digitalWrite(PIN_HEATER, LOW);
     digitalWrite(PIN_COOLER, LOW);
     digitalWrite(PIN_FOGGER, LOW);
     digitalWrite(PIN_EXTRACTOR, LOW);
     digitalWrite(PIN_LIGHT, LOW);
+    digitalWrite(PIN_IRRIGATION, LOW);
 
     _dht.setup(DHTPIN, DHTesp::DHT22);
     _dht2.setup(DHT2PIN, DHTesp::DHT22);
@@ -74,7 +76,7 @@ void HardwareController::setModoOperacion(ModoOperacion modo) {
     _modoActual = modo;
     if (modo == ModoOperacion::MANUAL) {
         _tiempoInicioManual = millis();
-        Serial.println(F("⚠️ [Hardware] Modo MANUAL activado por MQTT. Lógica local suspendida temporalmente."));
+        Serial.println(F("⚠️ [Hardware] Modo MANUAL activado por Dashboard / Firebase RTDB. Lógica local suspendida temporalmente."));
     } else {
         Serial.println(F("✅ [Hardware] Modo AUTO restaurado. Retomando control termodinámico (Rule Engine)."));
     }
@@ -118,6 +120,14 @@ void HardwareController::setCooler(bool estado) {
     _ejecutarAccion(PIN_COOLER, _actuadores.cooler_ON, estado, _last_cooler_switch, millis(), true);
 }
 
+void HardwareController::setIrrigation(bool estado) {
+    if (_modoActual == ModoOperacion::AUTO) {
+        setModoOperacion(ModoOperacion::MANUAL);
+    }
+    Serial.printf("[Hardware] setIrrigation(%s) manual ejecutado.\n", estado ? "ON" : "OFF");
+    _ejecutarAccion(PIN_IRRIGATION, _actuadores.irrigation_ON, estado, _last_irrigation_switch, millis(), true);
+}
+
 void HardwareController::leerSensores() {
     // 1. Leer DHT1
     float t = _dht.getTemperature();
@@ -156,15 +166,24 @@ void HardwareController::leerSensores() {
     if (adcRawAvg > 30 && adcRawAvg < 4080) {
         uint32_t voltageMv = esp_adc_cal_raw_to_voltage(adcRawAvg, &_adcChars);
         if (voltageMv > 50 && voltageMv < (V_REF_MV - 50)) {
-            _sensores.analogicoOk = true;
             float resistencia = NTC_R_SERIE / ((V_REF_MV / (float)voltageMv) - 1.0f);
             float tempK = 1.0f / (1.0f / (NTC_T_NOMINAL + 273.15f) + (1.0f / NTC_BETA) * log(resistencia / NTC_R_NOMINAL));
-            _sensores.valorAnalogico = tempK - 273.15f; 
+            float tempC = tempK - 273.15f; 
+            // Rango físico plausible para sonda NTC: 0.0°C a 75.0°C. Si está desconectada o en circuito abierto, da ~ -8°C
+            if (tempC >= 0.0f && tempC <= 75.0f) {
+                _sensores.analogicoOk = true;
+                _sensores.valorAnalogico = tempC;
+            } else {
+                _sensores.analogicoOk = false;
+                _sensores.valorAnalogico = -999.0f;
+            }
         } else {
             _sensores.analogicoOk = false;
+            _sensores.valorAnalogico = -999.0f;
         }
     } else {
         _sensores.analogicoOk = false;
+        _sensores.valorAnalogico = -999.0f;
     }
 
     // 4. Calcular Promedios con Fallback de Seguridad
@@ -338,6 +357,7 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
         bool req_cooler = false;
         bool req_fogger = false;
         bool req_light = false;
+        bool req_irrigation = false;
         EstadoOperacional proxEstado = EstadoOperacional::NORMAL;
 
         // Lectura segura de sensores (Ambiental ahora usa EWMA con fallback estricto)
@@ -353,6 +373,7 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
             req_fogger = false;
             req_extractor = false;
             req_light = false;
+            req_irrigation = false;
         } 
         // 2. Modo STANDBY / MONITOREO (Sin perfil biológico activo o plan detenido)
         else if (!_perfilActivo) {
@@ -362,6 +383,7 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
             req_fogger = false;
             req_extractor = false;
             req_light = false;
+            req_irrigation = false;
 
             // Failsafe de Emergencia Catastrófica (Incluso en Standby, si hay incendio o sobrecalentamiento > 35°C protegemos el hardware)
             float tempSustrato = _sensores.analogicoOk ? _sensores.ewma_sustrato : -999.0f;
@@ -409,13 +431,14 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
             // 2. Toxicidad de Gases (CO2)
             else if (co2Actual >= _config.crop.co2_crit_max) {
                 req_extractor = true;
-                if (proxEstado == EstadoOperacional::NORMAL) proxEstado = EstadoOperacional::NORMAL;
+                if (proxEstado == EstadoOperacional::NORMAL) proxEstado = EstadoOperacional::ENFRIANDO;
             }
-            // 3. Demanda de Frío Ambiental (con Banda Muerta / Histéresis)
+            // 3. Demanda de Frío Ambiental (Control Asimétrico Zero-Energy Deadband)
             else {
+                // Se enciende si supera el límite + histéresis; se apaga apenas entra a la zona ideal
                 bool demandaFrio = (_estadoActual == EstadoOperacional::ENFRIANDO)
-                    ? (tempActual >= (_config.crop.temp_ideal_max - HIST_TEMP))
-                    : (tempActual >= _config.crop.temp_ideal_max);
+                    ? (tempActual > _config.crop.temp_ideal_max)
+                    : (tempActual >= (_config.crop.temp_ideal_max + HIST_TEMP));
 
                 if (demandaFrio) {
                     req_cooler = true;
@@ -423,11 +446,12 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
                     req_heater = false;
                     proxEstado = EstadoOperacional::ENFRIANDO;
                 }
-                // 4. Demanda de Calor (Control Térmico con Histéresis y Lazo PID)
+                // 4. Demanda de Calor (Control Asimétrico con Lazo PID)
                 else {
+                    // Se enciende si cae del límite - histéresis; se apaga apenas entra a la zona ideal
                     bool demandaCalor = (_estadoActual == EstadoOperacional::CALENTANDO)
-                        ? (tempActual < (_config.crop.temp_ideal_min + HIST_TEMP))
-                        : (tempActual < _config.crop.temp_ideal_min);
+                        ? (tempActual < _config.crop.temp_ideal_min)
+                        : (tempActual <= (_config.crop.temp_ideal_min - HIST_TEMP));
 
                     if (demandaCalor) {
                         req_heater = true;
@@ -436,7 +460,7 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
                 }
             }
 
-            // 5. Control de Microclima Hídrico y Transpiración (Gobernado por VPD y Humedad con Histéresis)
+            // 5. Control de Microclima Hídrico y Transpiración (Gobernado por VPD y Humedad con Zero-Energy Band)
             if (humActual != -999.0f && proxEstado != EstadoOperacional::EMERGENCIA) {
                 float vpdActual = _sensores.ewmaInitialized ? _sensores.ewma_vpd : _sensores.vpd;
 
@@ -445,21 +469,22 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
                     ? calcularVPD(_config.crop.temp_ideal_max, _config.crop.hum_ideal_min)
                     : 1.20f;
 
-                // Demanda de Humidificación: Humedad baja O VPD que excede el límite superior de la receta
+                // Demanda de Humidificación: Se enciende bajo el límite - histéresis; se apaga al entrar a la zona ideal
                 bool demandaNiebla = (_estadoActual == EstadoOperacional::HUMIDIFICANDO)
-                    ? (humActual <= (_config.crop.hum_ideal_min + HIST_HUM) || (vpdActual > (vpdMaxReceta - 0.10f) && vpdActual > 0.0f))
-                    : (humActual <= _config.crop.hum_ideal_min || (vpdActual > vpdMaxReceta && vpdActual > 0.0f));
+                    ? (humActual < _config.crop.hum_ideal_min || (vpdActual > vpdMaxReceta && vpdActual > 0.0f))
+                    : (humActual <= (_config.crop.hum_ideal_min - HIST_HUM) || (vpdActual > (vpdMaxReceta + 0.10f) && vpdActual > 0.0f));
 
-                // Demanda de Extracción por Saturación: Humedad excesiva
+                // Demanda de Extracción por Saturación: Se enciende sobre el límite + histéresis; se apaga al entrar a la zona ideal
                 bool excesoHumedad = _actuadores.extractor_ON
-                    ? (humActual >= (_config.crop.hum_ideal_max - HIST_HUM))
-                    : (humActual >= _config.crop.hum_ideal_max);
+                    ? (humActual > _config.crop.hum_ideal_max)
+                    : (humActual >= (_config.crop.hum_ideal_max + HIST_HUM));
 
                 if (demandaNiebla) {
                     req_fogger = true;
                     if (proxEstado == EstadoOperacional::NORMAL) proxEstado = EstadoOperacional::HUMIDIFICANDO;
                 } else if (excesoHumedad) {
                     req_extractor = true;
+                    if (proxEstado == EstadoOperacional::NORMAL) proxEstado = EstadoOperacional::ENFRIANDO;
                 }
             }
 
@@ -474,6 +499,13 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
             if (horaDia >= 0 && horaDia < _config.crop.light_hours_on) {
                 req_light = true;
             }
+
+            // 8. Control de Riego Automatizado (Plantae)
+            // Lógica por pulsos con Anti-Flood (máx 30s) y Soak Time (10 min)
+            // NOTA: Requiere sensor de humedad de suelo físico dedicado (Capacitivo v1.2 en ADC).
+            // La sonda analógica actual (GPIO 34) mide temperatura de zona radicular (°C), por lo que el riego automático
+            // en bucle cerrado queda en reposo seguro (OFF) hasta la integración del canal ADC de suelo.
+            req_irrigation = false;
         }
 
         _estadoActual = proxEstado;
@@ -489,6 +521,9 @@ void HardwareController::procesarLogicaDeControl(unsigned long now, int horaDia)
         
         // Luz exenta de filtro de tiempo
         _ejecutarAccion(PIN_LIGHT, _actuadores.light_ON, req_light, _last_light_switch, now, true);
+
+        // Bomba de riego exenta de debounce largo en conmutación normal (usa soak time y anti-flood)
+        _ejecutarAccion(PIN_IRRIGATION, _actuadores.irrigation_ON, req_irrigation, _last_irrigation_switch, now, true);
 
         // Modulación inicial de calefactor para el tick actual
         actualizarModulacionSSR(now);

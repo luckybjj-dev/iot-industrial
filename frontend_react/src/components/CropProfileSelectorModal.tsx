@@ -447,11 +447,11 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
         localStorage.setItem('CUSTOM_PROFILES', JSON.stringify(newCustoms));
       }
 
-      const deviceProfile = generateDeviceProfile(finalPhase);
+      const deviceProfile = generateDeviceProfile(finalPhase, profile.kingdom);
       
       const currentPhaseIndex = profile.phases.findIndex(p => p.id === phase.id);
       const nextPhaseRaw = profile.phases[currentPhaseIndex + 1];
-      const nextPhaseConfig = nextPhaseRaw ? generateDeviceProfile({ ...nextPhaseRaw, duration_days: nextPhaseRaw.duration_days || 14, transition_hours: nextPhaseRaw.transition_hours || 48 }) : null;
+      const nextPhaseConfig = nextPhaseRaw ? generateDeviceProfile({ ...nextPhaseRaw, duration_days: nextPhaseRaw.duration_days || 14, transition_hours: nextPhaseRaw.transition_hours || 48 }, profile.kingdom) : null;
 
       const planState = {
         phaseStartTime: Date.now(),
@@ -466,8 +466,9 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
       
       setIsSaving(false);
       onClose();
-    } catch (e) {
-      alert('Error inyectando el perfil al ESP32');
+    } catch (e: any) {
+      console.error('Error inyectando el perfil:', e);
+      alert(`Error inyectando el perfil al ESP32: ${e?.message || e}`);
     } finally {
       setIsSaving(false);
     }
@@ -477,6 +478,9 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
 
   const renderEncyclopedia = () => {
     if (!profile) return null;
+    const currentTargets = isEditing && editedTargets ? editedTargets : phase?.targets;
+    const currentValidation = currentTargets ? validateThermodynamics(currentTargets, profile.kingdom) : { isValid: true, isWarning: false };
+
     return (
       <div className="bg-emerald-900/10 border border-emerald-500/20 p-4 rounded-xl flex gap-4">
         {profile.imageUrl && (
@@ -503,9 +507,9 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
                     </button>
                     <button 
                       onClick={handleSaveEditsOnly}
-                      disabled={editLightHours + editDarkHours !== 24}
+                      disabled={editLightHours + editDarkHours !== 24 || !currentValidation.isValid}
                       className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      title={editLightHours + editDarkHours !== 24 ? `La suma de horas debe ser 24h` : 'Guardar perfil localmente'}
+                      title={!currentValidation.isValid ? currentValidation.message : (editLightHours + editDarkHours !== 24 ? `La suma de horas debe ser 24h` : 'Guardar perfil localmente')}
                     >
                       <Save size={16} /> Guardar Edición
                     </button>
@@ -560,16 +564,29 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
       if (!t) return;
       const ambMin = t.temperature.day.min;
       const ambMax = t.temperature.day.max;
-      setEditedTargets({
-        ...t,
-        temperature: {
-          ...t.temperature,
-          substrate: {
-            min: ambMin + 1,
-            max: ambMax + 3
+      if (profile.kingdom === 'PLANTAE') {
+        setEditedTargets({
+          ...t,
+          temperature: {
+            ...t.temperature,
+            substrate: {
+              min: 14,
+              max: 18
+            }
           }
-        }
-      });
+        });
+      } else {
+        setEditedTargets({
+          ...t,
+          temperature: {
+            ...t.temperature,
+            substrate: {
+              min: ambMin + 1,
+              max: ambMax + 3
+            }
+          }
+        });
+      }
     };
 
     const renderField = (label: string, valueStr: string, editElement: React.ReactNode) => (
@@ -588,43 +605,39 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
           </div>
         </div>
 
-        {/* Banner de Validación Termodinámica */}
-        {profile.kingdom === 'FUNGI' && (
-          <div className={`p-3.5 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs transition-all ${
-            !thermoValidation.isValid
-              ? 'bg-red-500/10 border-red-500/30 text-red-300'
-              : thermoValidation.isWarning
-              ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-300'
-              : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-          }`}>
-            <div className="flex items-center gap-2.5 font-medium">
-              {!thermoValidation.isValid ? (
-                <AlertTriangle className="text-red-400 flex-shrink-0" size={18} />
-              ) : thermoValidation.isWarning ? (
-                <AlertTriangle className="text-yellow-400 flex-shrink-0" size={18} />
-              ) : (
-                <CheckCircle2 className="text-emerald-400 flex-shrink-0" size={18} />
-              )}
-              <span>
-                {!thermoValidation.isValid
-                  ? thermoValidation.message
-                  : thermoValidation.isWarning
-                  ? thermoValidation.message
-                  : 'Coherencia Termodinámica SCADA: Óptima (Sustrato compatible con termogénesis del micelio +2°C a +4°C).'}
-              </span>
-            </div>
-
-            {isEditing && (!thermoValidation.isValid || thermoValidation.isWarning || !t.temperature.substrate) && (
-              <button
-                type="button"
-                onClick={handleAutoCalculateSubstrate}
-                className="flex items-center gap-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 px-3 py-1.5 rounded-lg font-bold transition-colors w-fit flex-shrink-0 cursor-pointer shadow-sm"
-              >
-                <Zap size={14} /> Auto-Calcular Sustrato (+2°C metabólico)
-              </button>
+        {/* Banner de Validación Termodinámica y Agronómica Universal */}
+        <div className={`p-3.5 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs transition-all ${
+          !thermoValidation.isValid
+            ? 'bg-red-500/10 border-red-500/30 text-red-300'
+            : thermoValidation.isWarning
+            ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-300'
+            : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+        }`}>
+          <div className="flex items-center gap-2.5 font-medium">
+            {!thermoValidation.isValid ? (
+              <AlertTriangle className="text-red-400 flex-shrink-0" size={18} />
+            ) : thermoValidation.isWarning ? (
+              <AlertTriangle className="text-yellow-400 flex-shrink-0" size={18} />
+            ) : (
+              <CheckCircle2 className="text-emerald-400 flex-shrink-0" size={18} />
             )}
+            <span>
+              {thermoValidation.message || (profile.kingdom === 'PLANTAE' 
+                ? 'Coherencia Agronómica SCADA: Óptima (Zona radicular segura 12°C - 20°C).'
+                : 'Coherencia Termodinámica SCADA: Óptima (Sustrato compatible con termogénesis del micelio +2°C a +4°C).')}
+            </span>
           </div>
-        )}
+
+          {isEditing && (!thermoValidation.isValid || thermoValidation.isWarning || !t.temperature.substrate) && (
+            <button
+              type="button"
+              onClick={handleAutoCalculateSubstrate}
+              className="flex items-center gap-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 px-3 py-1.5 rounded-lg font-bold transition-colors w-fit flex-shrink-0 cursor-pointer shadow-sm"
+            >
+              <Zap size={14} /> {profile.kingdom === 'PLANTAE' ? 'Auto-Ajustar Zona Radicular (14°C - 18°C)' : 'Auto-Calcular Sustrato (+2°C metabólico)'}
+            </button>
+          )}
+        </div>
         
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {/* Temperatura */}
@@ -717,6 +730,25 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
             <div className="flex gap-2 items-center">
               <input type="number" min={0} value={editTransition} onChange={e => setEditTransition(Math.max(0, Number(e.target.value)))} className="w-16 bg-black text-white p-1 rounded border border-white/20 text-center" />
               <span className="text-neutral-400 text-xs">horas</span>
+            </div>
+          )}
+
+          {/* Humedad de Suelo (% VWC - Reino Plantae) */}
+          {profile.kingdom === 'PLANTAE' && renderField('Humedad Suelo (% VWC)', t.soilMoisture ? `${t.soilMoisture.min}% - ${t.soilMoisture.max}%` : '60% - 75%',
+            <div className="flex gap-2 items-center">
+              <input 
+                type="number" min={0} max={100} 
+                value={t.soilMoisture?.min ?? 60} 
+                onChange={e => setEditedTargets({...t, soilMoisture: { min: Math.max(0, Math.min(100, Number(e.target.value))), max: t.soilMoisture?.max ?? 75 }})} 
+                className="w-16 bg-black text-white p-1 rounded border border-white/20 text-center" 
+              />
+              <span>-</span>
+              <input 
+                type="number" min={0} max={100} 
+                value={t.soilMoisture?.max ?? 75} 
+                onChange={e => setEditedTargets({...t, soilMoisture: { min: t.soilMoisture?.min ?? 60, max: Math.max(0, Math.min(100, Number(e.target.value))) }})} 
+                className="w-16 bg-black text-white p-1 rounded border border-white/20 text-center" 
+              />
             </div>
           )}
         </div>
@@ -921,19 +953,27 @@ export const CropProfileSelectorModal: React.FC<CropProfileSelectorModalProps> =
           >
             Cerrar
           </button>
-          <button 
-            onClick={handleSaveInjection}
-            disabled={isSaving || !phase || isEditing}
-            title={isEditing ? 'Debes Guardar Edición antes de Inyectar' : 'Inyectar al ESP32'}
-            className="flex items-center gap-2 px-8 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            {isSaving ? (
-              <div className="animate-spin w-5 h-5 border-2 border-white/30 border-t-white rounded-full"></div>
-            ) : (
-              <Play fill="currentColor" size={20} />
-            )}
-            Inyectar Perfil al ESP32
-          </button>
+          {(() => {
+            const currentTargets = isEditing && editedTargets ? editedTargets : phase?.targets;
+            const currentValidation = currentTargets && profile ? validateThermodynamics(currentTargets, profile.kingdom) : { isValid: true, message: '' };
+            const isBlocked = isSaving || !phase || isEditing || !currentValidation.isValid;
+
+            return (
+              <button 
+                onClick={handleSaveInjection}
+                disabled={isBlocked}
+                title={isEditing ? 'Debes Guardar Edición antes de Inyectar' : (!currentValidation.isValid ? currentValidation.message : 'Inyectar al ESP32')}
+                className="flex items-center gap-2 px-8 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                {isSaving ? (
+                  <div className="animate-spin w-5 h-5 border-2 border-white/30 border-t-white rounded-full"></div>
+                ) : (
+                  <Play fill="currentColor" size={20} />
+                )}
+                Inyectar Perfil al ESP32
+              </button>
+            );
+          })()}
         </div>
 
       </div>

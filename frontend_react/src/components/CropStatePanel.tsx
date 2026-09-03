@@ -105,7 +105,11 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config, isOff
         if (!isActive) return;
 
         const allProfiles = getAllProfiles();
-        const profile = Object.values(allProfiles).find(p => p.commonName === activeProfileName);
+        const profile = Object.values(allProfiles).find(p => 
+            p.commonName.toLowerCase() === activeProfileName?.toLowerCase() ||
+            p.scientificName.toLowerCase() === activeProfileName?.toLowerCase() ||
+            p.id === activeProfileName
+        );
         
         if (!profile) {
             alert('No se pudo encontrar el perfil activo en la enciclopedia.');
@@ -113,7 +117,11 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config, isOff
         }
 
         const phases = profile.phases;
-        const currentIndex = phases.findIndex(p => p.name === activePhaseName);
+        const currentIndex = phases.findIndex(p => 
+            p.name.toLowerCase() === activePhaseName?.toLowerCase() ||
+            p.id.toLowerCase() === activePhaseName?.toLowerCase() ||
+            p.name.replace(/^\d+\.\s*/, '').toLowerCase() === activePhaseName?.replace(/^\d+\.\s*/, '').toLowerCase()
+        );
 
         if (currentIndex === -1) return;
 
@@ -204,11 +212,19 @@ const CropStatePanel: React.FC<CropStatePanelProps> = ({ deviceId, config, isOff
         if (!isActive || !planState?.phaseStartTime) return null;
         
         const allProfiles = getAllProfiles();
-        const profile = Object.values(allProfiles).find(p => p.commonName === activeProfileName);
+        const profile = Object.values(allProfiles).find(p => 
+            p.commonName.toLowerCase() === activeProfileName?.toLowerCase() ||
+            p.scientificName.toLowerCase() === activeProfileName?.toLowerCase() ||
+            p.id === activeProfileName
+        );
         if (!profile) return null;
 
         const phases = profile.phases;
-        const currentIndex = phases.findIndex(p => p.name === activePhaseName);
+        const currentIndex = phases.findIndex(p => 
+            p.name.toLowerCase() === activePhaseName?.toLowerCase() ||
+            p.id.toLowerCase() === activePhaseName?.toLowerCase() ||
+            p.name.replace(/^\d+\.\s*/, '').toLowerCase() === activePhaseName?.replace(/^\d+\.\s*/, '').toLowerCase()
+        );
         if (currentIndex === -1) return null;
 
         return (

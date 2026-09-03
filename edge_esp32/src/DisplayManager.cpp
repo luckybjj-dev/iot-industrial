@@ -33,7 +33,9 @@ void DisplayManager::render() {
         _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
         String name = _hw.getConfiguracion().crop_profile;
         if (name.length() > 14) name = name.substring(0, 14);
-        _tft.printf("CULT: %-14s", name.c_str());
+        _tft.print(F("CULT: "));
+        _tft.print(name);
+        for (int i = name.length(); i < 14; i++) _tft.print(' ');
     } else {
         _tft.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
         _tft.print(F("ESTADO: MONITOREO   "));
@@ -84,11 +86,15 @@ void DisplayManager::_drawSensores(const SensorData& s) {
         _tft.println(F("--     "));
     }
 
-    // Sensor Analógico (Sustrato NTC)
+    // Sensor Analógico (Sustrato NTC en Fungi / Zona Radicular en Plantae)
     _tft.setCursor(5, 50);
     _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
-    _tft.print(F("Sustr:  "));
-    if (s.analogicoOk) {
+    if (_hw.getConfiguracion().crop.kingdom == "PLANTAE") {
+        _tft.print(F("Raiz:   "));
+    } else {
+        _tft.print(F("Sustr:  "));
+    }
+    if (s.analogicoOk && (s.ewmaInitialized ? s.ewma_sustrato : s.valorAnalogico) > 0.0f) {
         _tft.setTextColor(ST77XX_MAGENTA, ST77XX_BLACK);
         _tft.print(s.ewmaInitialized ? s.ewma_sustrato : s.valorAnalogico, 1);
         _tft.println(F(" C    "));
@@ -140,7 +146,7 @@ void DisplayManager::_drawActuadores(const ActuadorData& a) {
         _tft.println(F("OF "));
     }
 
-    // Fila 2: Niebla (NBL) + Luz (LUZ)
+    // Fila 2: Niebla (NBL) + Luz (LUZ) + Riego (RIE)
     _tft.setCursor(5, 73);
     _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
     _tft.print(F("NBL:"));
@@ -159,6 +165,17 @@ void DisplayManager::_drawActuadores(const ActuadorData& a) {
     _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
     _tft.print(F("LUZ:"));
     if (a.light_ON) {
+        _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+        _tft.print(F("ON "));
+    } else {
+        _tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+        _tft.print(F("OF "));
+    }
+
+    _tft.setCursor(110, 73);
+    _tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
+    _tft.print(F("RIE:"));
+    if (a.irrigation_ON) {
         _tft.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
         _tft.println(F("ON "));
     } else {
@@ -249,7 +266,10 @@ void DisplayManager::_drawEstadoRed() {
             } else if (a.fogger_ON) {
                 _tft.setTextColor(ST77XX_CYAN, ST77XX_BLACK);
                 _tft.println(F("NBL: INYECCION ACTIVA   "));
-            } else if (!a.heater_ON && !a.cooler_ON && !a.fogger_ON && !a.extractor_ON && !a.light_ON) {
+            } else if (a.irrigation_ON) {
+                _tft.setTextColor(ST77XX_BLUE, ST77XX_BLACK);
+                _tft.println(F("RIE: BOMBA RIEGO ON     "));
+            } else if (!a.heater_ON && !a.cooler_ON && !a.fogger_ON && !a.extractor_ON && !a.light_ON && !a.irrigation_ON) {
                 _tft.setTextColor(ST77XX_CYAN, ST77XX_BLACK);
                 _tft.println(F("ACTUADORES: REPOSO (OF) "));
             } else if (a.light_ON) {

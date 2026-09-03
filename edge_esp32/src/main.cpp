@@ -126,6 +126,10 @@ void setup() {
     Serial.printf("[SISTEMA] Inicializando Hardware Watchdog (%u s)...\n", wdtSec);
     esp_task_wdt_init(wdtSec, true);
     esp_task_wdt_add(NULL); // Suscribir la tarea principal (loop) al Watchdog
+
+    // Forzar lectura de sensores y renderizado en pantalla inmediato en el arranque
+    hw.leerSensores();
+    display.render();
 }
 
 // ====================================================================

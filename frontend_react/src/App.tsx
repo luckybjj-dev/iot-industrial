@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { subscribeToAllDevices, subscribeToDeviceConfig, sendCommand, sendModeCommand, sendConfigRules, updateConfigField } from './services/firebaseService';
 import type { EstadoCamara, ConfiguracionCultivo, DeviceCropProfile } from './types/cultivo';
 import { MetricCard } from './components/MetricCard';
@@ -6,9 +6,14 @@ import { TelemetryDashboard } from './components/TelemetryDashboard';
 import { SemaforoEstabilidad } from './components/SemaforoEstabilidad';
 import { CropProfileSelectorModal } from './components/CropProfileSelectorModal';
 import CropStatePanel from './components/CropStatePanel';
-import { Thermometer, Droplets, Leaf, Activity, Wind, Power, Settings2, ShieldAlert, Sprout, X, Snowflake, LogOut } from 'lucide-react';
+import { Thermometer, Droplets, Droplet, Leaf, Activity, Wind, Power, Settings2, ShieldAlert, Sprout, X, Snowflake, LogOut, Users, Bell } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { Login } from './components/Login';
+import { LandingPage } from './components/LandingPage';
+import { AuthModal } from './components/AuthModal';
+import { NoDevicesView } from './components/NoDevicesView';
+import { LeadsModal } from './components/LeadsModal';
+import { NotificationSettingsModal } from './components/NotificationSettingsModal';
+import { sendSmartAlert } from './services/notificationService';
 
 /**
  * Componente principal de la aplicación SCADA.
@@ -20,13 +25,18 @@ import { Login } from './components/Login';
  *   para mantenerlos puros y reactivos a los props.
  */
 function Dashboard() {
-  const { logout, user } = useAuth();
+  const { logout, user, profile, isAdmin, assignedDevices } = useAuth();
   const [camaras, setCamaras] = useState<EstadoCamara[]>([]);
   const [configs, setConfigs] = useState<{ [deviceId: string]: ConfiguracionCultivo }>({});
   const [error, setError] = useState<string | null>(null);
   const [infoToast, setInfoToast] = useState<string | null>(null);
-  
-  // Estado optimista para hacer que la UI se sienta instantánea aunque el hardware demore
+
+  // Filtrado Multi-Tenancy: SuperAdmin ve todo, clientes solo sus nodos asignados
+  const visibleCamaras = useMemo(() => {
+    if (isAdmin) return camaras;
+    if (!assignedDevices || assignedDevices.length === 0) return [];
+    return camaras.filter(c => assignedDevices.includes(c.deviceId));
+  }, [camaras, isAdmin, assignedDevices]);
   const [optimisticModes, setOptimisticModes] = useState<Record<string, 'AUTO' | 'MANUAL'>>({});
   const [optimisticActuators, setOptimisticActuators] = useState<Record<string, Record<string, boolean>>>({});
   
@@ -36,6 +46,8 @@ function Dashboard() {
   
   // Modales
   const [editingRulesFor, setEditingRulesFor] = useState<string | null>(null);
+  const [isLeadsModalOpen, setIsLeadsModalOpen] = useState(false);
+  const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
   
   // Estado de desconexión por dispositivo (levantado desde TelemetryDashboard)
   const [deviceOfflineStatus, setDeviceOfflineStatus] = useState<Record<string, { isOffline: boolean, lastSeen: number | null }>>({});
@@ -227,6 +239,54 @@ function Dashboard() {
     }
   };
 
+  // ── SUPERVISOR DE ALARMAS Y NOTIFICACIONES TELEGRAM ────────────────────────
+  useEffect(() => {
+    if (!camaras || camaras.length === 0) return;
+
+    camaras.forEach((camara) => {
+      const d = camara.telemetria;
+      if (!d) return;
+
+      // 1. Alerta P0: Safe Mode
+      if (d.estado_operacional === 'SAFE_MODE' || camara.estado?.includes('SAFE_MODE')) {
+        sendSmartAlert(
+          `safe_mode_${camara.deviceId}`,
+          'P0',
+          `Cámara ${camara.deviceId} en SAFE_MODE`,
+          `🚨 El microcontrolador ESP32 entró en MODO SEGURO (SAFE_MODE).\nLos actuadores han sido colocados en estado de parada de seguridad.\nVerifica los sensores o la estabilidad del suministro eléctrico.`
+        ).catch(() => {});
+      }
+
+      // 2. Alerta P0: Emergencia Térmica Extrema (>34°C o Sustrato/Raíz >30°C)
+      const currentTemp = d.temp_promedio ?? d.temp_aire;
+      if (currentTemp !== null && currentTemp !== undefined && currentTemp > 34) {
+        sendSmartAlert(
+          `temp_emergency_${camara.deviceId}`,
+          'P0',
+          `EMERGENCIA TÉRMICA en ${camara.deviceId}`,
+          `🔥 Temperatura crítica detectada:\n• Aire: ${currentTemp.toFixed(1)}°C (Límite: 34°C)\n• Zona Raíz: ${d.temp_raiz !== null && d.temp_raiz !== undefined ? d.temp_raiz.toFixed(1) + '°C' : 'N/A'}\nRevisar extracción y refrigeración urgentemente.`
+        ).catch(() => {});
+      }
+
+      // 3. Alerta P1: Falla de redundancia de sensores DHT
+      if (d.dht_ok === false && d.dht2_ok === true) {
+        sendSmartAlert(
+          `dht1_fail_${camara.deviceId}`,
+          'P1',
+          `Falla en Sensor DHT1 (${camara.deviceId})`,
+          `⚠️ La sonda principal DHT1 falló o no responde.\nEl sistema continúa operando de forma transparente con la sonda de respaldo DHT2.`
+        ).catch(() => {});
+      } else if (d.dht_ok === true && d.dht2_ok === false) {
+        sendSmartAlert(
+          `dht2_fail_${camara.deviceId}`,
+          'P1',
+          `Falla en Sensor DHT2 (${camara.deviceId})`,
+          `⚠️ La sonda secundaria DHT2 falló o no responde.\nEl sistema continúa operando con la sonda principal DHT1.`
+        ).catch(() => {});
+      }
+    });
+  }, [camaras]);
+
   const handleSaveRules = async (deviceId: string, crop: DeviceCropProfile, profileName?: string, phaseName?: string, planState?: any) => {
     try {
       // Optimistic update para reflejar el perfil de inmediato sin esperar a F5
@@ -252,6 +312,10 @@ function Dashboard() {
     }
   };
 
+  if (!isAdmin && profile && (!assignedDevices || assignedDevices.length === 0)) {
+    return <NoDevicesView />;
+  }
+
   return (
     <div className="min-h-screen bg-[#050505] text-neutral-200 font-sans selection:bg-emerald-500/30">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -264,18 +328,47 @@ function Dashboard() {
               Supervisory Control & Data Acquisition
             </p>
           </div>
-          <div className="mt-4 md:mt-0 flex items-center gap-4">
+          <div className="mt-4 md:mt-0 flex flex-wrap items-center gap-3">
+             <span className={`text-[10px] font-mono uppercase px-3 py-1 rounded-full border flex items-center gap-1.5 ${
+               isAdmin 
+                 ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' 
+                 : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+             }`}>
+               {isAdmin ? '👑 Super Administrador' : '🌿 Operador de Cámara'}
+             </span>
              <div className="flex items-center gap-2">
-               <div className="h-3 w-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.7)]"></div>
-               <span className="text-sm font-bold text-neutral-400 tracking-widest uppercase hidden sm:inline-block">System Online</span>
+               <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.7)]"></div>
+               <span className="text-xs font-bold text-neutral-400 tracking-wider uppercase hidden sm:inline-block">
+                 {visibleCamaras.length} {visibleCamaras.length === 1 ? 'Nodo Activo' : 'Nodos Activos'}
+               </span>
              </div>
-             <div className="h-8 w-px bg-white/10"></div>
+             {isAdmin && (
+                <>
+                  <button
+                    onClick={() => setIsLeadsModalOpen(true)}
+                    className="flex items-center gap-1.5 text-amber-300 hover:text-white transition-colors text-xs font-bold tracking-widest uppercase bg-amber-500/10 hover:bg-amber-500/20 px-3.5 py-2 rounded-xl border border-amber-500/30 cursor-pointer"
+                    title="Ver solicitudes comerciales y prospectos"
+                  >
+                    <Users size={14} className="text-amber-400" />
+                    Prospectos
+                  </button>
+                  <button
+                    onClick={() => setIsTelegramModalOpen(true)}
+                    className="flex items-center gap-1.5 text-cyan-300 hover:text-white transition-colors text-xs font-bold tracking-widest uppercase bg-cyan-500/10 hover:bg-cyan-500/20 px-3.5 py-2 rounded-xl border border-cyan-500/30 cursor-pointer"
+                    title="Configurar Alertas Telegram & Push"
+                  >
+                    <Bell size={14} className="text-cyan-400" />
+                    Alertas Telegram
+                  </button>
+                </>
+              )}
+             <div className="h-6 w-px bg-white/10 hidden sm:block"></div>
              <button 
                 onClick={logout}
-                className="flex items-center gap-2 text-neutral-400 hover:text-white transition-colors text-xs font-bold tracking-widest uppercase bg-white/5 px-3 py-2 rounded-lg border border-white/10 hover:border-white/20"
+                className="flex items-center gap-2 text-neutral-400 hover:text-white transition-colors text-xs font-bold tracking-widest uppercase bg-white/5 px-3.5 py-2 rounded-xl border border-white/10 hover:border-white/20 cursor-pointer"
                 title={`Sesión iniciada como ${user?.email}`}
               >
-               <LogOut size={16} />
+               <LogOut size={15} />
                Salir
              </button>
           </div>
@@ -300,14 +393,14 @@ function Dashboard() {
           </div>
         )}
 
-        {camaras.length === 0 && !error ? (
+        {visibleCamaras.length === 0 && !error ? (
           <div className="flex flex-col items-center justify-center h-64 border border-white/5 bg-[#0a0a0a] rounded-3xl">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mb-6"></div>
-            <p className="text-neutral-500 font-mono text-sm tracking-widest uppercase">Conectando con Firebase RTDB...</p>
+            <p className="text-neutral-500 font-mono text-sm tracking-widest uppercase">Buscando telemetría de tus nodos asignados...</p>
           </div>
         ) : (
           <div className="space-y-12">
-            {camaras.map((camara) => {
+            {visibleCamaras.map((camara) => {
               const modo = optimisticModes[camara.deviceId] || camara.modo_operacion || 'AUTO';
               const config = configs[camara.deviceId];
               const rawCrop = config?.crop || (config as any)?.currentPhaseConfig;
@@ -340,6 +433,16 @@ function Dashboard() {
                 }
                 return undefined;
               };
+
+              const isPlantae = Boolean(
+                crop?.kingdom === 'PLANTAE' || 
+                (config as any)?.crop_profile?.startsWith('plantae_') || 
+                (config as any)?.activeProfileName?.toLowerCase().includes('plantae') || 
+                (config as any)?.activeProfileName?.toLowerCase().includes('frutilla') || 
+                (config as any)?.activeProfileName?.toLowerCase().includes('monterey') ||
+                (config as any)?.activeProfileName?.toLowerCase().includes('tomate') ||
+                (config as any)?.activeProfileName?.toLowerCase().includes('lechuga')
+              );
 
               return (
                 <div key={camara.deviceId} className="bg-[#0a0a0a] border border-white/5 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
@@ -414,92 +517,225 @@ function Dashboard() {
                           lastSeen={offlineStatus.lastSeen}
                         />
   
-                        {/* HERO CARDS - Métricas (Ocultas si el equipo está offline para no mostrar datos falsos/viejos) */}
+                        {/* HERO CARDS - Métricas */}
                         {!offlineStatus.isOffline && (
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-                          <MetricCard
-                            title="Temp. Ambiente Prom."
-                            value={camara.telemetria.temp_promedio?.toFixed(1) || '--'}
-                            unit="°C"
-                            icon={Thermometer}
-                            colorClass="text-amber-400"
-                            status={(() => {
-                              if (!camara.telemetria.dht_ok && !camara.telemetria.dht2_ok) return 'DANGER';
-                              if (!crop || camara.telemetria.temp_promedio == null) return 'STABLE';
-                              if (camara.telemetria.temp_promedio < crop.temp_crit_min || camara.telemetria.temp_promedio > crop.temp_crit_max) return 'DANGER';
-                              if (camara.telemetria.temp_promedio < crop.temp_ideal_min || camara.telemetria.temp_promedio > crop.temp_ideal_max) return 'WARNING';
-                              return 'STABLE';
-                            })()}
-                            target={getTarget('TEMP')}
-                            subtext={`DHT1: ${camara.telemetria.temp_dht1?.toFixed(1) || '--'}° | DHT2: ${camara.telemetria.temp_dht2?.toFixed(1) || '--'}°`}
-                          />
-                          <MetricCard
-                            title="Humedad Ambiente Prom."
-                            value={camara.telemetria.humedad_promedio?.toFixed(1) || '--'}
-                            unit="%"
-                            icon={Droplets}
-                            colorClass="text-cyan-400"
-                            status={(() => {
-                              if (!camara.telemetria.dht_ok && !camara.telemetria.dht2_ok) return 'DANGER';
-                              if (!crop || camara.telemetria.humedad_promedio == null) return 'STABLE';
-                              if (camara.telemetria.humedad_promedio < crop.hum_crit_min) return 'DANGER';
-                              if (camara.telemetria.humedad_promedio < crop.hum_ideal_min || camara.telemetria.humedad_promedio > crop.hum_ideal_max) return 'WARNING';
-                              return 'STABLE';
-                            })()}
-                            target={getTarget('HUMEDAD')}
-                            subtext={`DHT1: ${camara.telemetria.hum_dht1?.toFixed(1) || '--'}% | DHT2: ${camara.telemetria.hum_dht2?.toFixed(1) || '--'}%`}
-                          />
-                          <MetricCard
-                            title="Temp. Sustrato"
-                            value={camara.telemetria.sensor_analogico?.toFixed(1) || '--'}
-                            unit="°C"
-                            icon={Leaf}
-                            colorClass="text-emerald-400"
-                            status={(() => {
-                              if (!camara.telemetria.analogico_ok) return 'DANGER';
-                              if (!crop || camara.telemetria.sensor_analogico == null) return 'STABLE';
-                              if (camara.telemetria.sensor_analogico > crop.temp_sustrato_crit_max) return 'DANGER';
-                              if (camara.telemetria.sensor_analogico > crop.temp_sustrato_ideal + 1 || camara.telemetria.sensor_analogico < crop.temp_sustrato_ideal - 1) return 'WARNING';
-                              return 'STABLE';
-                            })()}
-                            target={crop ? `~ ${crop.temp_sustrato_ideal} °C` : undefined}
-                          />
-                        <MetricCard
-                          title="VPD (Déficit Presión)"
-                          value={camara.telemetria.vpd?.toFixed(2) || '--'}
-                          unit="kPa"
-                          icon={Activity}
-                          colorClass="text-purple-400"
-                          status={
-                            (() => {
-                              if (camara.telemetria.vpd === null || camara.telemetria.vpd === undefined || !crop) return 'STABLE';
-                              const calcVpd = (t: number, h: number) => {
-                                const svp = 0.61078 * Math.exp((17.27 * t) / (t + 237.3));
-                                const avp = svp * (h / 100.0);
-                                return svp - avp;
-                              };
-                              const minVpd = calcVpd(crop.temp_ideal_min, crop.hum_ideal_max);
-                              const maxVpd = calcVpd(crop.temp_ideal_max, crop.hum_ideal_min);
-                              return (camara.telemetria.vpd < minVpd || camara.telemetria.vpd > maxVpd) ? 'WARNING' : 'STABLE';
-                            })()
-                          }
-                          target={getTarget('VPD')}
-                        />
-                          <MetricCard
-                            title="Nivel CO2"
-                            value={camara.telemetria.co2_ppm?.toString() || '--'}
-                            unit="ppm"
-                            icon={Wind}
-                            colorClass="text-sky-400"
-                            status={(() => {
-                              if (!crop || camara.telemetria.co2_ppm == null) return 'STABLE';
-                              if (camara.telemetria.co2_ppm > crop.co2_crit_max) return 'DANGER';
-                              if (camara.telemetria.co2_ppm < crop.co2_ideal_min || camara.telemetria.co2_ppm > crop.co2_ideal_max) return 'WARNING';
-                              return 'STABLE';
-                            })()}
-                            target={getTarget('CO2')}
-                          />
-                          </div>
+                          isPlantae ? (
+                            /* LAYOUT PLANTAE: 2 Filas de 3 Columnas Proporcionales */
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                              {/* 1. Temp. Ambiente */}
+                              <MetricCard
+                                title="Temp. Ambiente Prom."
+                                value={camara.telemetria.temp_promedio?.toFixed(1) || '--'}
+                                unit="°C"
+                                icon={Thermometer}
+                                colorClass="text-amber-400"
+                                status={(() => {
+                                  if (!camara.telemetria.dht_ok && !camara.telemetria.dht2_ok) return 'DANGER';
+                                  if (!crop || camara.telemetria.temp_promedio == null) return 'STABLE';
+                                  if (camara.telemetria.temp_promedio < crop.temp_crit_min || camara.telemetria.temp_promedio > crop.temp_crit_max) return 'DANGER';
+                                  if (camara.telemetria.temp_promedio < crop.temp_ideal_min || camara.telemetria.temp_promedio > crop.temp_ideal_max) return 'WARNING';
+                                  if (camara.telemetria.estado_operacional === 'ENFRIANDO' || camara.telemetria.estado_operacional === 'CALENTANDO') return 'WARNING';
+                                  return 'STABLE';
+                                })()}
+                                target={getTarget('TEMP')}
+                                subtext={(() => {
+                                  const dhtStr = `DHT1: ${camara.telemetria.temp_dht1?.toFixed(1) || '--'}° | DHT2: ${camara.telemetria.temp_dht2?.toFixed(1) || '--'}°`;
+                                  if (camara.telemetria.estado_operacional === 'ENFRIANDO') return `❄️ Enfriando (${dhtStr})`;
+                                  if (camara.telemetria.estado_operacional === 'CALENTANDO') return `🔥 Calentando (${dhtStr})`;
+                                  return dhtStr;
+                                })()}
+                              />
+
+                              {/* 2. Humedad Ambiente */}
+                              <MetricCard
+                                title="Humedad Ambiente Prom."
+                                value={camara.telemetria.humedad_promedio?.toFixed(1) || '--'}
+                                unit="%"
+                                icon={Droplets}
+                                colorClass="text-cyan-400"
+                                status={(() => {
+                                  if (!camara.telemetria.dht_ok && !camara.telemetria.dht2_ok) return 'DANGER';
+                                  if (!crop || camara.telemetria.humedad_promedio == null) return 'STABLE';
+                                  if (camara.telemetria.humedad_promedio < crop.hum_crit_min) return 'DANGER';
+                                  if (camara.telemetria.humedad_promedio < crop.hum_ideal_min || camara.telemetria.humedad_promedio > crop.hum_ideal_max) return 'WARNING';
+                                  return 'STABLE';
+                                })()}
+                                target={getTarget('HUMEDAD')}
+                                subtext={`DHT1: ${camara.telemetria.hum_dht1?.toFixed(1) || '--'}% | DHT2: ${camara.telemetria.hum_dht2?.toFixed(1) || '--'}%`}
+                              />
+
+                              {/* 3. VPD */}
+                              <MetricCard
+                                title="VPD (Déficit Presión)"
+                                value={camara.telemetria.vpd?.toFixed(2) || '--'}
+                                unit="kPa"
+                                icon={Activity}
+                                colorClass="text-purple-400"
+                                status={
+                                  (() => {
+                                    if (camara.telemetria.vpd === null || camara.telemetria.vpd === undefined || !crop) return 'STABLE';
+                                    const calcVpd = (t: number, h: number) => {
+                                      const svp = 0.61078 * Math.exp((17.27 * t) / (t + 237.3));
+                                      const avp = svp * (h / 100.0);
+                                      return svp - avp;
+                                    };
+                                    const minVpd = calcVpd(crop.temp_ideal_min, crop.hum_ideal_max);
+                                    const maxVpd = calcVpd(crop.temp_ideal_max, crop.hum_ideal_min);
+                                    return (camara.telemetria.vpd < minVpd || camara.telemetria.vpd > maxVpd) ? 'WARNING' : 'STABLE';
+                                  })()
+                                }
+                                target={getTarget('VPD')}
+                              />
+
+                              {/* 4. Temp. Zona Radicular */}
+                              <MetricCard
+                                title="Temp. Zona Radicular"
+                                value={camara.telemetria.analogico_ok && camara.telemetria.sensor_analogico != null && camara.telemetria.sensor_analogico > 0 ? camara.telemetria.sensor_analogico.toFixed(1) : '--'}
+                                unit="°C"
+                                icon={Leaf}
+                                colorClass="text-emerald-400"
+                                status={(() => {
+                                  if (!camara.telemetria.analogico_ok || camara.telemetria.sensor_analogico == null || camara.telemetria.sensor_analogico <= 0) return 'STABLE';
+                                  if (!crop) return 'STABLE';
+                                  if (camara.telemetria.sensor_analogico > (crop.temp_sustrato_crit_max || 24)) return 'DANGER';
+                                  if (camara.telemetria.sensor_analogico > (crop.temp_sustrato_ideal || 16) + 2 || camara.telemetria.sensor_analogico < (crop.temp_sustrato_ideal || 16) - 2) return 'WARNING';
+                                  return 'STABLE';
+                                })()}
+                                target={crop ? `~ ${crop.temp_sustrato_ideal || 16} °C` : undefined}
+                                subtext={camara.telemetria.analogico_ok && camara.telemetria.sensor_analogico != null && camara.telemetria.sensor_analogico > 0 ? "Rango Seguro: 14°C - 18°C" : "Sonda No Conectada"}
+                              />
+
+                              {/* 5. Humedad de Suelo (% VWC) */}
+                              <MetricCard
+                                title="Humedad Suelo (% VWC)"
+                                value={camara.telemetria.humedad_suelo != null ? camara.telemetria.humedad_suelo.toFixed(1) : '--'}
+                                unit="% VWC"
+                                icon={Droplets}
+                                colorClass="text-blue-400"
+                                status={(() => {
+                                  if (camara.telemetria.humedad_suelo == null) return 'STABLE';
+                                  const humSuelo = camara.telemetria.humedad_suelo;
+                                  const min = crop?.hum_suelo_ideal_min || 60;
+                                  const max = crop?.hum_suelo_ideal_max || 75;
+                                  if (humSuelo < (crop?.hum_suelo_crit_min || 45)) return 'DANGER';
+                                  if (humSuelo < min || humSuelo > max) return 'WARNING';
+                                  return 'STABLE';
+                                })()}
+                                target={crop?.hum_suelo_ideal_min ? `${crop.hum_suelo_ideal_min} - ${crop.hum_suelo_ideal_max} %` : '60 - 75 %'}
+                                subtext={camara.telemetria.humedad_suelo != null ? "Capacidad de Campo Óptima" : "Sensor No Conectado"}
+                              />
+
+                              {/* 6. Nivel CO2 / Fotoperiodo */}
+                              <MetricCard
+                                title="Nivel CO2"
+                                value={camara.telemetria.co2_ppm?.toString() || '--'}
+                                unit="ppm"
+                                icon={Wind}
+                                colorClass="text-sky-400"
+                                status={(() => {
+                                  if (!crop || camara.telemetria.co2_ppm == null) return 'STABLE';
+                                  if (camara.telemetria.co2_ppm > crop.co2_crit_max) return 'DANGER';
+                                  if (camara.telemetria.co2_ppm < crop.co2_ideal_min || camara.telemetria.co2_ppm > crop.co2_ideal_max) return 'WARNING';
+                                  return 'STABLE';
+                                })()}
+                                target={getTarget('CO2')}
+                                subtext={crop?.light_hours_on ? `Fotoperiodo: ${crop.light_hours_on}h Luz` : undefined}
+                              />
+                            </div>
+                          ) : (
+                            /* LAYOUT CLÁSICO FUNGI: 5 Hero Cards en 1 Fila */
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                              <MetricCard
+                                title="Temp. Ambiente Prom."
+                                value={camara.telemetria.temp_promedio?.toFixed(1) || '--'}
+                                unit="°C"
+                                icon={Thermometer}
+                                colorClass="text-amber-400"
+                                status={(() => {
+                                  if (!camara.telemetria.dht_ok && !camara.telemetria.dht2_ok) return 'DANGER';
+                                  if (!crop || camara.telemetria.temp_promedio == null) return 'STABLE';
+                                  if (camara.telemetria.temp_promedio < crop.temp_crit_min || camara.telemetria.temp_promedio > crop.temp_crit_max) return 'DANGER';
+                                  if (camara.telemetria.temp_promedio < crop.temp_ideal_min || camara.telemetria.temp_promedio > crop.temp_ideal_max) return 'WARNING';
+                                  if (camara.telemetria.estado_operacional === 'ENFRIANDO' || camara.telemetria.estado_operacional === 'CALENTANDO') return 'WARNING';
+                                  return 'STABLE';
+                                })()}
+                                target={getTarget('TEMP')}
+                                subtext={(() => {
+                                  const dhtStr = `DHT1: ${camara.telemetria.temp_dht1?.toFixed(1) || '--'}° | DHT2: ${camara.telemetria.temp_dht2?.toFixed(1) || '--'}°`;
+                                  if (camara.telemetria.estado_operacional === 'ENFRIANDO') return `❄️ Enfriando (${dhtStr})`;
+                                  if (camara.telemetria.estado_operacional === 'CALENTANDO') return `🔥 Calentando (${dhtStr})`;
+                                  return dhtStr;
+                                })()}
+                              />
+                              <MetricCard
+                                title="Humedad Ambiente Prom."
+                                value={camara.telemetria.humedad_promedio?.toFixed(1) || '--'}
+                                unit="%"
+                                icon={Droplets}
+                                colorClass="text-cyan-400"
+                                status={(() => {
+                                  if (!camara.telemetria.dht_ok && !camara.telemetria.dht2_ok) return 'DANGER';
+                                  if (!crop || camara.telemetria.humedad_promedio == null) return 'STABLE';
+                                  if (camara.telemetria.humedad_promedio < crop.hum_crit_min) return 'DANGER';
+                                  if (camara.telemetria.humedad_promedio < crop.hum_ideal_min || camara.telemetria.humedad_promedio > crop.hum_ideal_max) return 'WARNING';
+                                  return 'STABLE';
+                                })()}
+                                target={getTarget('HUMEDAD')}
+                                subtext={`DHT1: ${camara.telemetria.hum_dht1?.toFixed(1) || '--'}% | DHT2: ${camara.telemetria.hum_dht2?.toFixed(1) || '--'}%`}
+                              />
+                              <MetricCard
+                                title="Temp. Sustrato"
+                                value={camara.telemetria.analogico_ok && camara.telemetria.sensor_analogico != null && camara.telemetria.sensor_analogico > 0 ? camara.telemetria.sensor_analogico.toFixed(1) : '--'}
+                                unit="°C"
+                                icon={Leaf}
+                                colorClass="text-emerald-400"
+                                status={(() => {
+                                  if (!camara.telemetria.analogico_ok || camara.telemetria.sensor_analogico == null || camara.telemetria.sensor_analogico <= 0) return 'STABLE';
+                                  if (!crop) return 'STABLE';
+                                  if (camara.telemetria.sensor_analogico > crop.temp_sustrato_crit_max) return 'DANGER';
+                                  if (camara.telemetria.sensor_analogico > crop.temp_sustrato_ideal + 1 || camara.telemetria.sensor_analogico < crop.temp_sustrato_ideal - 1) return 'WARNING';
+                                  return 'STABLE';
+                                })()}
+                                target={crop ? `~ ${crop.temp_sustrato_ideal} °C` : undefined}
+                                subtext={camara.telemetria.analogico_ok && camara.telemetria.sensor_analogico != null && camara.telemetria.sensor_analogico > 0 ? undefined : "Sonda No Conectada"}
+                              />
+                              <MetricCard
+                                title="VPD (Déficit Presión)"
+                                value={camara.telemetria.vpd?.toFixed(2) || '--'}
+                                unit="kPa"
+                                icon={Activity}
+                                colorClass="text-purple-400"
+                                status={
+                                  (() => {
+                                    if (camara.telemetria.vpd === null || camara.telemetria.vpd === undefined || !crop) return 'STABLE';
+                                    const calcVpd = (t: number, h: number) => {
+                                      const svp = 0.61078 * Math.exp((17.27 * t) / (t + 237.3));
+                                      const avp = svp * (h / 100.0);
+                                      return svp - avp;
+                                    };
+                                    const minVpd = calcVpd(crop.temp_ideal_min, crop.hum_ideal_max);
+                                    const maxVpd = calcVpd(crop.temp_ideal_max, crop.hum_ideal_min);
+                                    return (camara.telemetria.vpd < minVpd || camara.telemetria.vpd > maxVpd) ? 'WARNING' : 'STABLE';
+                                  })()
+                                }
+                                target={getTarget('VPD')}
+                              />
+                              <MetricCard
+                                title="Nivel CO2"
+                                value={camara.telemetria.co2_ppm?.toString() || '--'}
+                                unit="ppm"
+                                icon={Wind}
+                                colorClass="text-sky-400"
+                                status={(() => {
+                                  if (!crop || camara.telemetria.co2_ppm == null) return 'STABLE';
+                                  if (camara.telemetria.co2_ppm > crop.co2_crit_max) return 'DANGER';
+                                  if (camara.telemetria.co2_ppm < crop.co2_ideal_min || camara.telemetria.co2_ppm > crop.co2_ideal_max) return 'WARNING';
+                                  return 'STABLE';
+                                })()}
+                                target={getTarget('CO2')}
+                              />
+                            </div>
+                          )
                         )}
                       
                       {/* ACTUADORES & GRAFICO */}
@@ -631,6 +867,19 @@ function Dashboard() {
                                 return 'Fotoperiodo Activo';
                               }
                             },
+                            ...(isPlantae ? [{ 
+                              id: 'bomba_riego_on', 
+                              label: 'Bomba Riego', 
+                              icon: Droplet, 
+                              val: camara.telemetria.bomba_riego_on ?? false, 
+                              locked: camara.telemetria.bomba_riego_locked ?? false, 
+                              activeBg: 'bg-blue-500/20 text-blue-400 border-blue-500/40 shadow-[0_0_10px_rgba(59,130,246,0.2)]', 
+                              manualBg: 'bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] border-orange-400',
+                              getSublabel: (eff: boolean) => {
+                                if (modo === 'MANUAL' || !eff) return null;
+                                return 'Riego Pulsado Activo';
+                              }
+                            }] : []),
                           ].map((act) => {
                             const effectiveVal = optimisticActuators[camara.deviceId]?.[act.id] ?? act.val;
                             const sublabel = act.getSublabel ? act.getSublabel(effectiveVal) : null;
@@ -722,36 +971,46 @@ function Dashboard() {
             })}
           </div>
         )}
+
+        {/* Modal de Gestión de Prospectos para Administradores */}
+        <LeadsModal isOpen={isLeadsModalOpen} onClose={() => setIsLeadsModalOpen(false)} />
+
+        {/* Modal de Configuración de Alertas Telegram & Push */}
+        <NotificationSettingsModal isOpen={isTelegramModalOpen} onClose={() => setIsTelegramModalOpen(false)} />
       </div>
     </div>
   );
 }
 
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+function AppContent() {
   const { user, loading } = useAuth();
-  
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center border border-white/5">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mb-6"></div>
-        <p className="text-neutral-500 font-mono text-sm tracking-widest uppercase">Autenticando...</p>
+      <div className="min-h-screen bg-[#030303] flex flex-col items-center justify-center border border-white/5">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mb-6 shadow-[0_0_20px_rgba(16,185,129,0.3)]"></div>
+        <p className="text-neutral-500 font-mono text-xs tracking-widest uppercase">Iniciando AgriEdge OS...</p>
       </div>
     );
   }
-  
+
   if (!user) {
-    return <Login />;
+    return (
+      <>
+        <LandingPage onOpenLogin={() => setIsAuthModalOpen(true)} />
+        <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      </>
+    );
   }
-  
-  return <>{children}</>;
-};
+
+  return <Dashboard />;
+}
 
 function App() {
   return (
     <AuthProvider>
-      <ProtectedRoute>
-        <Dashboard />
-      </ProtectedRoute>
+      <AppContent />
     </AuthProvider>
   );
 }

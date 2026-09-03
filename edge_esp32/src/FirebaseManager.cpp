@@ -28,7 +28,7 @@ void FirebaseManager::begin() {
     _auth.user.password = FIREBASE_USER_PASSWORD;
 
     Firebase.begin(&_config, &_auth);
-    Firebase.reconnectWiFi(true); // RESTAURADO: Permite que Firebase mantenga vivo el WiFi durante los handshakes SSL
+    Firebase.reconnectWiFi(false); // Gestionado autónomamente por NetworkManager en FreeRTOS para evitar pánicos en Core 0
 
     Serial.println(F("[Firebase] Autenticando (Asincrono)..."));
 }
@@ -144,11 +144,17 @@ void FirebaseManager::publicarTelemetria() {
     json.set("fogger_on", a.fogger_ON);
     json.set("extractor_on", a.extractor_ON);
     json.set("light_on", a.light_ON);
+    json.set("bomba_riego_on", a.irrigation_ON);
+
+    if (s.analogicoOk && _hw.getConfiguracion().crop.kingdom == "PLANTAE") {
+        json.set("temp_raiz", (double)s.ewma_sustrato);
+    }
 
     unsigned long now = millis();
     json.set("heater_locked", !a.heater_ON && _hw.isHeaterLocked(now));
     json.set("fogger_locked", !a.fogger_ON && _hw.isFoggerLocked(now));
     json.set("extractor_locked", !a.extractor_ON && _hw.isExtractorLocked(now));
+    json.set("bomba_riego_locked", !a.irrigation_ON && _hw.isIrrigationLocked(now));
 
     json.set("dht_ok", s.dhtOk);
     json.set("dht2_ok", s.dht2Ok);
@@ -321,11 +327,12 @@ void FirebaseManager::_procesarPayloadStream(const String& path, const String& d
             _hw.setModoOperacion(ModoOperacion::AUTO);
         } else if (modo == "MANUAL") {
             _hw.setModoOperacion(ModoOperacion::MANUAL);
-            if (doc.containsKey("heater_on")) _hw.setHeater(doc["heater_on"] | false);
-            if (doc.containsKey("cooler_on")) _hw.setCooler(doc["cooler_on"] | false);
-            if (doc.containsKey("fogger_on")) _hw.setFogger(doc["fogger_on"] | false);
-            if (doc.containsKey("extractor_on")) _hw.setExtractor(doc["extractor_on"] | false);
-            if (doc.containsKey("light_on")) _hw.setLight(doc["light_on"] | false);
+            if (doc.containsKey("heater_on"))      _hw.setHeater(doc["heater_on"].as<bool>());
+            if (doc.containsKey("cooler_on"))      _hw.setCooler(doc["cooler_on"].as<bool>());
+            if (doc.containsKey("fogger_on"))      _hw.setFogger(doc["fogger_on"].as<bool>());
+            if (doc.containsKey("extractor_on"))   _hw.setExtractor(doc["extractor_on"].as<bool>());
+            if (doc.containsKey("light_on"))       _hw.setLight(doc["light_on"].as<bool>());
+            if (doc.containsKey("bomba_riego_on")) _hw.setIrrigation(doc["bomba_riego_on"].as<bool>());
         }
         
         if (doc.containsKey("max_manual_time_ms")) {
@@ -376,6 +383,8 @@ void FirebaseManager::_procesarPayloadStream(const String& path, const String& d
             _hw.setExtractor(val == "true" || val == "1");
         } else if (path.indexOf("light_on") >= 0) {
             _hw.setLight(val == "true" || val == "1");
+        } else if (path.indexOf("bomba_riego_on") >= 0) {
+            _hw.setIrrigation(val == "true" || val == "1");
         } else if (path.indexOf("max_manual_time_ms") >= 0) {
             ConfiguracionCultivo cfg = _hw.getConfiguracion();
             cfg.max_manual_time_ms = val.toInt();

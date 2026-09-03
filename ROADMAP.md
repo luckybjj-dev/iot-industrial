@@ -1,6 +1,6 @@
 # 🗺️ Roadmap de Desarrollo — AgriEdge OS
 
-> **Última actualización:** 14 de Agosto de 2026 (Post-Auditoría V3)
+> **Última actualización:** 29 de Agosto de 2026 (Landing Comercial + Autenticación Empresarial + Multi-Tenancy)
 
 ---
 
@@ -28,14 +28,14 @@
 ### ~~13. Backoff Exponencial y Eliminación de Heap Fragmentado (StaticJson)~~ ✅ COMPLETADO ([Informe 16](./informes/16-Resolucion-Deuda-Tecnica-Firmware-Control-Industrial.md))
 ### ~~14. Modo Standby / Monitoreo Determinista (Sin Perfil Activo)~~ ✅ COMPLETADO ([Informe 24](./informes/24-Implementacion-Modo-Standby-Monitoreo-Edge-SCADA.md))
 ### ~~15. Optimización de Setpoints, Termogénesis de Sustrato (+3°C), Control Dinámico de VPD y Diagnóstico SCADA~~ ✅ COMPLETADO ([Informe 25](./informes/25-Optimizacion-Setpoints-Sustrato-Termodinamico-VPD-Dinamico-SCADA.md))
+### ~~16. Optimización Científica del Reino Plantae (11 Especies) y Preparación Frutilla Monterey~~ ✅ COMPLETADO ([Informe 30](./informes/30-Informe-Oficial-Auditoria-Integral-Optimizacion-Plantae-Frutilla-Monterey.md))
+### ~~17. Persistencia Atómica LittleFS para Setpoints de Suelo y Limpieza de Logs~~ ✅ COMPLETADO ([Informe 30](./informes/30-Informe-Oficial-Auditoria-Integral-Optimizacion-Plantae-Frutilla-Monterey.md))
+### ~~18. Landing Page Comercial Pública, Autenticación Dual y Arquitectura Multi-Tenancy~~ ✅ COMPLETADO ([Informe 32](./informes/32-Implementacion-Landing-Comercial-Autenticacion-MultiTenancy.md))
+### ~~19. Alarmas y Notificaciones Push Inteligentes (Telegram Bot + Watchdog Telemétrico + Leads)~~ ✅ COMPLETADO ([Informe 33](./informes/33-Implementacion-Sistema-Notificaciones-Push-Telegram-Alertas-SCADA.md))
 
-### 16. Crop Steering Algorítmico Dinámico
+### 20. Crop Steering Algorítmico Dinámico
 - **Objetivo:** Automatizar curvas graduales diarias (ej. bajar 1°C/día para simular otoño en Shiitake).
 - **Estado:** Motor V2 implementado en React (`steeringEngine.ts`). Falta validación end-to-end con ESP32.
-
-### 17. Alarmas y Notificaciones Push
-- **Objetivo:** Firebase Cloud Functions → Telegram / WhatsApp / FCM.
-- **Impacto:** Alertas instantáneas si la cámara entra en `SAFE_MODE` o excede rangos críticos.
 
 ---
 

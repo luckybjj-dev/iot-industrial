@@ -1,0 +1,78 @@
+{
+  "rules": {
+    "telemetry": {
+      "$deviceId": {
+        ".read": true,
+        ".write": "auth != null",
+        "data": {
+          ".validate": "newData.hasChildren(['temp_aire', 'humedad_aire', 'modo_operacion'])",
+          "temp_aire": {
+            ".validate": "newData.isNumber() && newData.val() >= -20 && newData.val() <= 80"
+          },
+          "humedad_aire": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+          },
+          "co2_ppm": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000"
+          },
+          "modo_operacion": {
+            ".validate": "newData.isString() && (newData.val() === 'AUTO' || newData.val() === 'MANUAL')"
+          },
+          "fogger_on": { ".validate": "newData.isBoolean()" },
+          "extractor_on": { ".validate": "newData.isBoolean()" },
+          "heater_on": { ".validate": "newData.isBoolean()" },
+          "light_on": { ".validate": "newData.isBoolean()" }
+        }
+      }
+    },
+    "history": {
+      "$deviceId": {
+        ".read": true,
+        ".write": "auth != null",
+        "$pushId": {
+          ".validate": "newData.hasChildren(['timestamp'])",
+          "timestamp": {
+            ".validate": "newData.isNumber()"
+          }
+        }
+      }
+    },
+    "devices": {
+      "$deviceId": {
+        ".read": true,
+        "commands": {
+          ".write": true,
+          "modo_operacion": {
+            ".validate": "newData.isString() && (newData.val() === 'AUTO' || newData.val() === 'MANUAL')"
+          },
+          "fogger_on": { ".validate": "newData.isBoolean()" },
+          "extractor_on": { ".validate": "newData.isBoolean()" },
+          "heater_on": { ".validate": "newData.isBoolean()" },
+          "light_on": { ".validate": "newData.isBoolean()" },
+          "timestamp": { ".validate": "newData.isNumber()" }
+        }
+      }
+    },
+    "profiles": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "users": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "leads": {
+      ".read": "auth != null",
+      ".write": true,
+      "$leadId": {
+        ".validate": "newData.hasChildren(['name', 'email', 'createdAt'])"
+      }
+    },
+    "system": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}

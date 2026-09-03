@@ -120,20 +120,26 @@ El ESP32 opera como un **PLC Determinista Agnóstico (Stateless PLC)**:
 
 ```cpp
 struct CropProfile {
-    String kingdom;          // "FUNGI" o "PLANTAE"
-    float temp_ideal_min;    // Setpoint inferior temperatura (°C)
-    float temp_ideal_max;    // Setpoint superior temperatura (°C)
-    float temp_crit_max;     // Umbral de emergencia térmica (°C)
-    float hum_ideal_min;     // Setpoint inferior humedad (%)
-    float hum_ideal_max;     // Setpoint superior humedad (%)
-    float co2_ideal_min;     // Setpoint inferior CO2 (ppm)
-    float co2_ideal_max;     // Setpoint superior CO2 (ppm)
-    float co2_crit_max;      // Umbral de emergencia CO2 (ppm)
-    float light_hours_on;    // Fotoperiodo (horas de luz)
-    float temp_sustrato_ideal; // Objetivo sustrato NTC (°C)
-    unsigned long watchdog_timeout_ms; // Timeout watchdog (ms)
+    String kingdom;                    // "FUNGI" o "PLANTAE"
+    float temp_ideal_min;              // Setpoint inferior temperatura (°C)
+    float temp_ideal_max;              // Setpoint superior temperatura (°C)
+    float temp_crit_min;               // Umbral mínimo crítico temperatura (°C)
+    float temp_crit_max;               // Umbral de emergencia térmica (°C)
+    float temp_sustrato_ideal;         // Objetivo sustrato/raíz NTC (°C)
+    float temp_sustrato_crit_max;      // Umbral crítico sustrato/raíz (°C, 24°C Plantae / 32°C Fungi)
+    float hum_ideal_min;               // Setpoint inferior humedad (%)
+    float hum_ideal_max;               // Setpoint superior humedad (%)
+    float hum_crit_min;                // Umbral mínimo crítico humedad (%)
+    float co2_ideal_min;               // Setpoint inferior CO2 (ppm)
+    float co2_ideal_max;               // Setpoint superior CO2 (ppm)
+    float co2_crit_max;                // Umbral de emergencia CO2 (ppm)
+    int light_hours_on;                // Fotoperiodo (horas de luz)
+    float hum_suelo_ideal_min = 0.0f;  // Setpoint inferior humedad suelo (% VWC)
+    float hum_suelo_ideal_max = 0.0f;  // Setpoint superior humedad suelo (% VWC)
+    float hum_suelo_crit_min  = 0.0f;  // Umbral crítico inferior humedad suelo (% VWC)
 };
 ```
+
 
 ## 6. Estados Operacionales
 

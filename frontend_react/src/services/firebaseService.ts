@@ -2,6 +2,9 @@ import { ref, onValue, update, set, remove, query, limitToLast, orderByKey, get 
 import { database } from '../config/firebase';
 import type { EstadoCamara, TelemetriaFungi, HistorialData, ConfiguracionCultivo } from '../types/cultivo';
 
+// URL base del Firebase RTDB. Centralizada aquí para evitar repetición y facilitar migraciones.
+const FIREBASE_RTDB_BASE_URL = 'https://invernadero-industrial-default-rtdb.firebaseio.com';
+
 /**
  * Suscribirse a TODOS los dispositivos en tiempo real
  */
@@ -30,7 +33,7 @@ export const subscribeToAllDevices = (
   };
 
   const fetchDirect = () => {
-    fetch('https://invernadero-industrial-default-rtdb.firebaseio.com/telemetry.json')
+    fetch(`${FIREBASE_RTDB_BASE_URL}/telemetry.json`)
       .then(res => res.json())
       .then(data => {
         if (data) {
@@ -98,7 +101,7 @@ export const subscribeToDeviceConfig = (
   };
 
   const fetchConfigDirect = () => {
-    fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}.json`)
+    fetch(`${FIREBASE_RTDB_BASE_URL}/devices/${deviceId}.json`)
       .then(res => res.json())
       .then(data => {
         if (data) {
@@ -140,8 +143,14 @@ export const subscribeToDeviceConfig = (
 };
 
 /**
- * Enviar configuración dinámica (Rule Engine y Failsafes)
+ * Sanitiza recursivamente cualquier objeto para Firebase RTDB,
+ * eliminando claves con valor `undefined` que provocan errores fatales en el SDK.
  */
+export const sanitizeForFirebase = <T>(data: T): T => {
+  if (data === null || data === undefined) return data;
+  return JSON.parse(JSON.stringify(data, (_, v) => (v === undefined ? null : v)));
+};
+
 /**
  * Enviar configuración dinámica (Rule Engine y Failsafes)
  */
@@ -165,8 +174,8 @@ export const sendConfigRules = async (deviceId: string, config: any) => {
         light_hours_on: 0
       };
 
-      fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/plan_state.json`, { method: 'DELETE' }).catch(() => {});
-      fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands.json`, {
+      fetch(`${FIREBASE_RTDB_BASE_URL}/devices/${deviceId}/plan_state.json`, { method: 'DELETE' }).catch(() => {});
+      fetch(`${FIREBASE_RTDB_BASE_URL}/devices/${deviceId}/commands.json`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ activePhaseName: null, activeProfileName: "STANDBY", crop: standbyCrop })
@@ -203,31 +212,32 @@ export const sendConfigRules = async (deviceId: string, config: any) => {
 
     // 1. Enviar de inmediato por REST para garantizar entrega instantánea (< 150ms)
     if (Object.keys(updates).length > 0) {
-      fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands.json`, {
+      const sanitizedUpdates = sanitizeForFirebase(updates);
+      fetch(`${FIREBASE_RTDB_BASE_URL}/devices/${deviceId}/commands.json`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
+        body: JSON.stringify(sanitizedUpdates)
       }).catch(err => console.warn('[Firebase] REST commands fallback:', err));
 
-      promises.push(update(configRef, updates).catch(err => console.warn('[Firebase] SDK update:', err)));
+      promises.push(update(configRef, sanitizedUpdates).catch(err => console.warn('[Firebase] SDK update:', err)));
     }
     
     // Si viene la configuración completa del plan de steering (con currentPhaseConfig)
     if (config.currentPhaseConfig) {
       const planRef = ref(database, `devices/${deviceId}/plan_state`);
-      const planState = {
-          activeProfileName: config.activeProfileName,
-          activePhaseName: config.activePhaseName,
-          phaseStartTime: config.phaseStartTime,
-          duration_days: config.duration_days,
-          transition_hours: config.transition_hours,
+      const planState = sanitizeForFirebase({
+          activeProfileName: config.activeProfileName || 'Desconocido',
+          activePhaseName: config.activePhaseName || 'Desconocida',
+          phaseStartTime: config.phaseStartTime || Date.now(),
+          duration_days: config.duration_days || 14,
+          transition_hours: config.transition_hours || 0,
           currentPhaseConfig: config.currentPhaseConfig,
           nextPhaseConfig: config.nextPhaseConfig || null,
           isPaused: config.isPaused || false,
           transitioningTo: config.transitioningTo || null
-      };
+      });
 
-      fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/plan_state.json`, {
+      fetch(`${FIREBASE_RTDB_BASE_URL}/devices/${deviceId}/plan_state.json`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(planState)
@@ -253,14 +263,14 @@ export const sendConfigRules = async (deviceId: string, config: any) => {
  */
 export const sendCommand = async (deviceId: string, actuator: string, state: boolean) => {
   // 1. Asegurar modo MANUAL en su subruta
-  fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands/modo_operacion.json`, {
+  fetch(`${FIREBASE_RTDB_BASE_URL}/devices/${deviceId}/commands/modo_operacion.json`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify('MANUAL')
   }).catch(() => {});
 
   // 2. Enviar exclusivamente el estado del actuador individual a su subruta
-  fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands/${actuator}.json`, {
+  fetch(`${FIREBASE_RTDB_BASE_URL}/devices/${deviceId}/commands/${actuator}.json`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(state)
@@ -286,7 +296,7 @@ export const sendCommand = async (deviceId: string, actuator: string, state: boo
  */
 export const sendModeCommand = async (deviceId: string, mode: 'AUTO' | 'MANUAL') => {
   // REST directo inmediato a la subruta de modo
-  fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands/modo_operacion.json`, {
+  fetch(`${FIREBASE_RTDB_BASE_URL}/devices/${deviceId}/commands/modo_operacion.json`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(mode)
@@ -299,9 +309,10 @@ export const sendModeCommand = async (deviceId: string, mode: 'AUTO' | 'MANUAL')
       cooler_on: false,
       fogger_on: false,
       extractor_on: false,
-      light_on: false
+      light_on: false,
+      bomba_riego_on: false
     };
-    fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/commands.json`, {
+    fetch(`${FIREBASE_RTDB_BASE_URL}/devices/${deviceId}/commands.json`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(cleanState)
@@ -343,7 +354,7 @@ export const fetchDeviceHistory = async (deviceId: string, limit: number = 300):
 
   // Fallback REST directo de alta resiliencia
   try {
-    const res = await fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/history/${deviceId}.json?orderBy="$key"&limitToLast=${limit}`);
+    const res = await fetch(`${FIREBASE_RTDB_BASE_URL}/history/${deviceId}.json?orderBy="$key"&limitToLast=${limit}`);
     if (res.ok) {
       const data = await res.json();
       if (data && typeof data === 'object') {
@@ -381,12 +392,13 @@ export const subscribeToPlanState = (
   const planRef = ref(database, `devices/${deviceId}/plan_state`);
 
   const fetchPlanDirect = () => {
-    fetch(`https://invernadero-industrial-default-rtdb.firebaseio.com/devices/${deviceId}/plan_state.json`)
+    fetch(`${FIREBASE_RTDB_BASE_URL}/devices/${deviceId}/plan_state.json`)
       .then(res => res.json())
       .then(data => {
         callback(data || null);
       })
       .catch(err => console.warn('[Firebase] Polling REST plan_state:', err));
+
   };
 
   // 1. Carga inicial ultra rápida vía REST (< 50ms)
